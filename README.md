@@ -11,7 +11,13 @@ npm run build      # 本番ビルド → dist/
 ```
 
 ## 構成（機能ごとに分割済み）
-- `src/App.jsx` … Reactコンポーネント本体（App と各画面：Summary / Detail / 各フォーム / Cards / ThemeEditor / FormatSheet など）
+- `src/App.jsx` … アプリのルート（App）とタブバー（TabBtn）
+- `src/edit.jsx` … デザイン編集モードの Context と Editable ラッパー
+- `src/components/summary.jsx` … サマリ画面
+- `src/components/detail.jsx` … 詳細（履歴/項目別/表/年間）
+- `src/components/cards.jsx` … カード（残債/一覧）
+- `src/components/forms.jsx` … 入力フォーム（給与/カード/口座）
+- `src/components/settings.jsx` … 設定・デザイン設定・要素別書式
 - `src/theme.js` … 配色・フォント定義・`DEFAULT_THEME`・`themeVars`・`ovStyle`・編集モード用定数・`TARGET_LABELS`
 - `src/utils.js` … 整形関数（yen/num/日付）・データモデル（`ACCOUNT_TYPES`/`acctRole`/`migrateEntry`/`buildStructure`）・初期データ（seed）
 - `src/styles.js` … スタイル定義（`styles`）とキーフレーム注入
