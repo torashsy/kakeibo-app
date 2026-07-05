@@ -107,9 +107,13 @@ export default function App() {
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
   // デザイン編集モード中は、内側の本来の操作(記録の編集を開く等)へクリックが
-  // 貫通しないよう、ここで一括して止めて対象(data-edit-id)だけを選ぶ
+  // 貫通しないよう、ここで一括して止めて対象(data-edit-id)だけを選ぶ。
+  // ただし、ビュー切替のようなナビゲーション操作(data-nav-ok)や、
+  // まだ書式編集の対象がない画面(カード/設定)では通常通り操作できるようにする。
   const pickFormat = (e) => {
     if (!editMode) return;
+    if (tab === "cards" || tab === "settings" || tab === "design") return;
+    if (e.target.closest("[data-nav-ok]")) return;
     e.stopPropagation();
     e.preventDefault();
     const el = e.target.closest("[data-edit-id]");
