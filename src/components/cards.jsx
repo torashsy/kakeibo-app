@@ -3,7 +3,7 @@ import { MUTED, RED } from '../theme.js';
 import { yen, num, ymLabel, uid, addMonth } from '../utils.js';
 import { styles } from '../styles.js';
 
-export function Cards({ cards, debt, ym, onSaveCards, onSaveDebt }) {
+export function Cards({ cards, debt, ym, entries, onSaveCards, onSaveDebt, onRemoveCard }) {
   const [view, setView] = useState("debt");
   return (
     <div style={{ padding: "4px 2px 8px" }}>
@@ -11,7 +11,7 @@ export function Cards({ cards, debt, ym, onSaveCards, onSaveDebt }) {
         <button style={{ ...styles.viewToggleBtn, ...(view === "debt" ? styles.viewToggleActive : {}) }} onClick={() => setView("debt")}>残債</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "list" ? styles.viewToggleActive : {}) }} onClick={() => setView("list")}>カード一覧</button>
       </div>
-      {view === "debt" ? <DebtTable cards={cards} debt={debt} ym={ym} onSaveDebt={onSaveDebt} /> : <CardList cards={cards} onSaveCards={onSaveCards} />}
+      {view === "debt" ? <DebtTable cards={cards} debt={debt} ym={ym} onSaveDebt={onSaveDebt} /> : <CardList cards={cards} onSaveCards={onSaveCards} onRemoveCard={onRemoveCard} />}
     </div>
   );
 }
@@ -60,7 +60,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   );
 }
 
-export function CardList({ cards, onSaveCards }) {
+export function CardList({ cards, onSaveCards, onRemoveCard }) {
   const [edit, setEdit] = useState(null);
   const commit = () => {
     if (!edit.name.trim()) return;
@@ -94,7 +94,7 @@ export function CardList({ cards, onSaveCards }) {
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="正式名称や用途など" style={styles.textInput} />
             <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新する" : "追加する"}</button>
-            {edit.id && <button style={styles.deleteBtn} onClick={() => { onSaveCards(cards.filter((c) => c.id !== edit.id)); setEdit(null); }}>このカードを削除</button>}
+            {edit.id && <button style={styles.deleteBtn} onClick={() => { onRemoveCard({ id: edit.id, name: edit.name }); setEdit(null); }}>このカードを削除</button>}
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
           </div>
         </div>

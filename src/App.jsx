@@ -64,6 +64,26 @@ export default function App() {
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
   const updateEntry = (e) => setEntries((prev) => { const n = prev.map((x) => (x.id === e.id ? e : x)); save("entries", n); return n; });
   const removeEntry = (id) => setEntries((prev) => { const n = prev.filter((x) => x.id !== id); save("entries", n); return n; });
+  const removeEntriesMatching = (pred) => setEntries((prev) => { const n = prev.filter((x) => !pred(x)); save("entries", n); return n; });
+
+  // カード/口座/給与項目の削除は、紐づく記録も一緒に消さないと
+  // 「詳細」からは消えたのに「サマリ」の集計にだけ残り続ける、というズレが起きるため
+  // 件数を確認のうえカスケード削除する
+  const removeCard = (card) => {
+    const count = entries.filter((e) => e.cat === "card" && e.item === card.name).length;
+    if (count > 0 && !window.confirm(`「${card.name}」の記録が${count}件あります。カードを削除すると、それらの記録も一緒に削除されます。よろしいですか？`)) return;
+    commitCards(cards.filter((c) => c.id !== card.id));
+    if (count > 0) removeEntriesMatching((e) => e.cat === "card" && e.item === card.name);
+    if (debt[card.name]) { const nd = { ...debt }; delete nd[card.name]; commitDebt(nd); }
+  };
+  const removeConfigItem = (key, name) => {
+    const pred = key === "accounts" ? (e) => e.cat === "account" && e.account === name : (e) => e.cat === "salary" && e.item === name;
+    const count = entries.filter(pred).length;
+    const label = key === "accounts" ? "口座" : "給与系の項目";
+    if (count > 0 && !window.confirm(`「${name}」の記録が${count}件あります。${label}を削除すると、それらの記録も一緒に削除されます。よろしいですか？`)) return;
+    commitConfig({ ...config, [key]: (config[key] || []).filter((x) => x !== name) });
+    if (count > 0) removeEntriesMatching(pred);
+  };
   const replaceSalary = (targetYm, rows) => {
     setEntries((prev) => {
       const kept = prev.filter((x) => !(x.ym === targetYm && x.cat === "salary"));
@@ -130,8 +150,8 @@ export default function App() {
       <Editable tag="main" id="app.bg" base={styles.main} onClickCapture={pickFormat}>
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
-        {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} onSaveCards={commitCards} onSaveDebt={commitDebt} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} />}
+        {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} editMode={editMode} onToggleEdit={() => { setEditMode(true); setTab("summary"); }} />}
       </Editable>
 

@@ -2,12 +2,12 @@ import React, { useEffect, useState } from "react";
 import { ACCENT, MUTED, RED, FONT_CHOICES, DEFAULT_THEME, TARGET_LABELS } from '../theme.js';
 import { styles } from '../styles.js';
 
-export function Settings({ config, onSave, entries, cards, debt, onOpenDesign }) {
+export function Settings({ config, onSave, entries, cards, debt, onOpenDesign, onRemoveItem }) {
   const [c, setC] = useState(config);
   useEffect(() => setC(config), [config]);
   const groups = [{ key: "accounts", title: "口座" }, { key: "salaryItems", title: "給与系の項目" }];
   const addItem = (key) => { const name = (prompt(`新しい${groups.find((g) => g.key === key).title}の名前`) || "").trim(); if (!name) return; const next = { ...c, [key]: [...(c[key] || []), name] }; setC(next); onSave(next); };
-  const removeItem = (key, i) => { const next = { ...c, [key]: c[key].filter((_, idx) => idx !== i) }; setC(next); onSave(next); };
+  const removeItem = (key, i) => onRemoveItem(key, c[key][i]);
   const exportJSON = () => { const blob = new Blob([JSON.stringify({ entries, config: c, cards, debt }, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); };
   const exportCSV = () => { const lines = ["ym,cat,item,account,amount"]; for (const e of entries) lines.push([e.ym, e.cat, `"${e.item || ""}"`, `"${e.account || ""}"`, e.amount].join(",")); const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url); };
   return (
