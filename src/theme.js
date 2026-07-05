@@ -52,7 +52,7 @@ export const ovStyle = (ov) => {
 export const EDIT_OUTLINE = { outline: "1.5px dashed #B58B4F", outlineOffset: 1, cursor: "pointer", borderRadius: 4 };
 
 // 子要素で覆われるコンテナは、角のチップから選べるようにする
-export const CONTAINER_IDS = new Set(["hero.bg", "sum.bg", "card.bg", "app.bg"]);
+export const CONTAINER_IDS = new Set(["hero.bg", "sum.bg", "card.bg", "app.bg", "detail.cardBg"]);
 
 export const themeVars = (t) => ({
   "--accent": t.accent, "--accent-soft": t.accentSoft, "--ink": t.ink, "--paper": t.paper,
@@ -71,7 +71,7 @@ export const themeVars = (t) => ({
 
 export const TARGET_LABELS = {
   "hero.bg": "サマリ上部の背景", "sum.bg": "集計セルの背景", "card.bg": "残高カードの背景",
-  "bal.row": "残高の行", "app.bg": "全体の背景", "card.acctHead": "口座の見出し", "card.groupHead": "グループ見出し",
+  "bal.row": "残高の行", "app.bg": "全体の背景", "card.acctHead": "口座の見出し", "card.groupHead": "グループ見出し", "detail.cardBg": "明細カードの背景",
   "table.th": "表の見出し", "table.group": "表のグループ見出し", "table.acct": "表の口座見出し",
   "table.subtotal": "表の小計", "table.rowlabel": "表の項目名", "table.cell": "表の数値セル", "table.totalcell": "表の合計セル",
   "hero.value": "収支の金額", "hero.label": "「今月の収支」見出し", "hero.sub": "収支の内訳",

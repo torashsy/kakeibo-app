@@ -101,19 +101,19 @@ export function DetailCards({ S, config, cards, onEdit }) {
     {/* 給与系 */}
     <div style={{ marginBottom: 18 }}>
       <Editable id="card.groupHead" base={styles.detailHead}><span>給与系</span></Editable>
-      <div style={styles.detailCard}>
+      <Editable id="detail.cardBg" base={styles.detailCard}>
         {salaryItems.map((it) => <ItemRow key={it} label={it} node={S.get("salary", it, "")} gkey={"salary|" + it} {...rowProps} />)}
         <Editable id="detail.subtotal" base={styles.subtotalRow}><span>給与計</span><span>{yen(salaryTotal)}</span></Editable>
-      </div>
+      </Editable>
     </div>
 
     {/* カード */}
     <div style={{ marginBottom: 18 }}>
       <Editable id="card.groupHead" base={styles.detailHead}><span>カード</span></Editable>
-      <div style={styles.detailCard}>
+      <Editable id="detail.cardBg" base={styles.detailCard}>
         {(cards || []).map((c) => <ItemRow key={c.id} label={c.name} node={S.get("card", c.name, "")} gkey={"card|" + c.name} {...rowProps} />)}
         <Editable id="detail.subtotal" base={styles.subtotalRow}><span>カード計</span><span>{yen(cardTotal)}</span></Editable>
-      </div>
+      </Editable>
     </div>
 
     {/* 口座: 口座ごとにまとめる */}
@@ -122,10 +122,10 @@ export function DetailCards({ S, config, cards, onEdit }) {
       {S.accounts.map((acc) => {
         const accTotal = S.flowTypes.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
         return (
-          <div key={acc} style={{ ...styles.detailCard, marginBottom: 10 }}>
+          <Editable key={acc} id="detail.cardBg" base={{ ...styles.detailCard, marginBottom: 10 }}>
             <Editable id="card.acctHead" base={styles.subGroupHead}><span>{acc}</span><span style={styles.subGroupTotal}>{yen(accTotal)}</span></Editable>
             {S.flowTypes.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
-          </div>
+          </Editable>
         );
       })}
     </div>
@@ -133,10 +133,10 @@ export function DetailCards({ S, config, cards, onEdit }) {
     {/* 口座残高 */}
     <div style={{ marginBottom: 18 }}>
       <Editable id="card.groupHead" base={styles.detailHead}><span>口座残高</span></Editable>
-      <div style={styles.detailCard}>
+      <Editable id="detail.cardBg" base={styles.detailCard}>
         {S.accounts.map((acc) => <ItemRow key={acc} label={acc} node={S.get("account", "残高", acc)} gkey={`bal|${acc}`} {...rowProps} />)}
         <Editable id="detail.subtotal" base={styles.subtotalRow}><span>残高計</span><span>{yen(balTotalAll)}</span></Editable>
-      </div>
+      </Editable>
     </div>
   </>;
 }
