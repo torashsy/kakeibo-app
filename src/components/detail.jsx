@@ -31,20 +31,20 @@ export function DetailList({ monthEntries, onEdit }) {
   return (
     <div>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>追加した記録の一覧です。行をタップすると編集・削除できます。</div>
-      <div style={styles.detailCard}>
+      <Editable id="detail.cardBg" base={styles.detailCard}>
         {list.map((e) => (
           <button key={e.id} style={styles.listRow} onClick={() => onEdit(e)}>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-              <span style={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</span>
+              <Editable id="detail.item" tag="span" base={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</Editable>
               <span style={{ ...styles.catTag, color: catColor[e.cat], borderColor: catColor[e.cat] }}>{catLabel[e.cat]}</span>
             </span>
             <span style={styles.editRowRight}>
-              <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</span>
+              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
               <span style={styles.chev}>›</span>
             </span>
           </button>
         ))}
-      </div>
+      </Editable>
     </div>
   );
 }
@@ -254,18 +254,18 @@ export function YearTable({ entries, ym, config, cards }) {
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{fyStart}年4月〜{fyStart + 1}年3月の12か月。横スクロールできます。</div>
       <div style={styles.tableScroll}>
         <table style={styles.table}>
-          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th key={mo} style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>年間計</th></tr></thead>
+          <thead><tr><Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thSticky }}>項目</Editable>{months.map((mo) => <Editable tag="th" id="table.th" key={mo} base={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</Editable>)}<Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thTotal }}>年間計</Editable></tr></thead>
           <tbody>
             {rows.map((r, i) => {
-              if (r.kind === "head") return <tr key={i}><td colSpan={months.length + 2} style={styles.tdGroup}>{r.label}</td></tr>;
-              if (r.kind === "acct") return <tr key={i}><td colSpan={months.length + 2} style={styles.tdAcct}>{r.label}</td></tr>;
+              if (r.kind === "head") return <tr key={i}><Editable tag="td" id="table.group" colSpan={months.length + 2} base={styles.tdGroup}>{r.label}</Editable></tr>;
+              if (r.kind === "acct") return <tr key={i}><Editable tag="td" id="table.acct" colSpan={months.length + 2} base={styles.tdAcct}>{r.label}</Editable></tr>;
               const isSub = r.kind === "sub";
               const yearTotal = months.reduce((a, mo) => a + r.get(mo), 0);
               return (
                 <tr key={i}>
-                  <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</td>
-                  {months.map((mo) => { const v = r.get(mo); return <td key={mo} style={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "#F4F8F6" } : {}), ...(v === 0 ? { color: "#D5D1C8" } : {}) }}>{v === 0 ? "·" : num(v)}</td>; })}
-                  <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}) }}>{num(yearTotal)}</td>
+                  <Editable tag="td" id={isSub ? "table.subtotal" : "table.rowlabel"} base={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</Editable>
+                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "#F4F8F6" } : {}), ...(v === 0 ? { color: "#D5D1C8" } : {}) }}>{v === 0 ? "·" : num(v)}</Editable>; })}
+                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}) }}>{num(yearTotal)}</Editable>
                 </tr>
               );
             })}
