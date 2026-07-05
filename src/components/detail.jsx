@@ -36,7 +36,7 @@ export function DetailList({ monthEntries, onEdit }) {
           <button key={e.id} style={styles.listRow} onClick={() => onEdit(e)}>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
               <Editable id="detail.item" tag="span" base={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</Editable>
-              <span style={{ ...styles.catTag, color: catColor[e.cat], borderColor: catColor[e.cat] }}>{catLabel[e.cat]}</span>
+              <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
             </span>
             <span style={styles.editRowRight}>
               <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>

@@ -143,7 +143,7 @@ export function ThemeEditor({ theme, onSave, onBack, onToggleEdit }) {
         {sliderRow("numSize", "数字の大きさ", 12, 22, "px")}
       </div>
 
-      <button style={{ ...styles.backupBtn, marginTop: 16, color: RED, borderColor: "#E7C9C0" }} onClick={() => onSave({ ...DEFAULT_THEME })}>初期設定に戻す</button>
+      <button style={{ ...styles.backupBtn, marginTop: 16, color: RED, border: "1px solid #E7C9C0" }} onClick={() => onSave({ ...DEFAULT_THEME })}>初期設定に戻す</button>
     </div>
   );
 }
@@ -165,14 +165,14 @@ export function FormatSheet({ id, theme, onSave, onClose }) {
         <label style={styles.fieldLabel}>文字の揃え</label>
         <div style={styles.kindRow}>
           {[["", "既定"], ["left", "左"], ["center", "中央"], ["right", "右"]].map(([v, l]) => (
-            <button key={v} style={{ ...styles.kindBtn, ...((ov.align || "") === v ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : {}) }} onClick={() => setOv({ align: v })}>{l}</button>
+            <button key={v} style={{ ...styles.kindBtn, ...((ov.align || "") === v ? { background: ACCENT, color: "#fff", border: `1px solid ${ACCENT}` } : {}) }} onClick={() => setOv({ align: v })}>{l}</button>
           ))}
         </div>
 
         <label style={styles.fieldLabel}>太さ</label>
         <div style={styles.kindRow}>
           {[["", "既定"], [400, "細"], [600, "中"], [700, "太"], [800, "極太"]].map(([v, l]) => (
-            <button key={v} style={{ ...styles.kindBtn, ...((ov.weight || "") === v ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : {}) }} onClick={() => setOv({ weight: v })}>{l}</button>
+            <button key={v} style={{ ...styles.kindBtn, ...((ov.weight || "") === v ? { background: ACCENT, color: "#fff", border: `1px solid ${ACCENT}` } : {}) }} onClick={() => setOv({ weight: v })}>{l}</button>
           ))}
         </div>
 

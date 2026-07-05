@@ -155,8 +155,8 @@ export function AccountForm({ ym, config, editing, onClose, onAdd, onUpdate, onD
           <>
             <label style={styles.fieldLabel}>方向</label>
             <div style={styles.kindRow}>
-              <button style={{ ...styles.kindBtn, ...(dir === "out" ? { background: RED, color: "#fff", borderColor: RED } : {}) }} onClick={() => setDir("out")}>投資へ入れる（−）</button>
-              <button style={{ ...styles.kindBtn, ...(dir === "in" ? { background: GREEN, color: "#fff", borderColor: GREEN } : {}) }} onClick={() => setDir("in")}>投資から戻す（＋）</button>
+              <button style={{ ...styles.kindBtn, ...(dir === "out" ? { background: RED, color: "#fff", border: `1px solid ${RED}` } : {}) }} onClick={() => setDir("out")}>投資へ入れる（−）</button>
+              <button style={{ ...styles.kindBtn, ...(dir === "in" ? { background: GREEN, color: "#fff", border: `1px solid ${GREEN}` } : {}) }} onClick={() => setDir("in")}>投資から戻す（＋）</button>
             </div>
           </>
         )}
