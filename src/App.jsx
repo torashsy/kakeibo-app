@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT } from './utils.js';
+import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, computeSummary } from './utils.js';
 import { styles } from './styles.js';
 import { EditCtx, Editable } from './edit.jsx';
 import { Summary } from './components/summary.jsx';
@@ -96,24 +96,7 @@ export default function App() {
   const months = useMemo(() => { const s = new Set(entries.map((e) => e.ym)); s.add(ym); return Array.from(s).sort(); }, [entries, ym]);
   const monthEntries = useMemo(() => entries.filter((e) => e.ym === ym), [entries, ym]);
 
-  const summary = useMemo(() => {
-    let gross = 0, deduction = 0, cardTotal = 0, cashIn = 0, cashOut = 0, invest = 0; const balances = {};
-    for (const e of monthEntries) {
-      if (e.cat === "salary") { if (e.item === "控除") deduction += e.amount; else gross += e.amount; }
-      else if (e.cat === "card") cardTotal += Math.abs(e.amount);
-      else if (e.cat === "account") {
-        const role = acctRole(e.item);
-        if (role === "bal") balances[e.account] = e.amount;
-        else if (role === "transfer") invest += e.amount;        // 符号そのまま(入=−, 戻し=＋ を利用者が符号で表現)
-        else if (role === "in") cashIn += Math.abs(e.amount);
-        else if (role === "out") cashOut += Math.abs(e.amount);
-      }
-    }
-    const income = gross + deduction + cashIn, expense = cardTotal + cashOut;
-    const net = income - expense + invest;   // 投資振替は符号のまま加算(−なら支出方向、＋なら収入方向)
-    const balTotal = Object.values(balances).reduce((a, b) => a + b, 0);
-    return { gross, deduction, cardTotal, cashIn, cashOut, invest, income, expense, net, balances, balTotal };
-  }, [monthEntries]);
+  const summary = useMemo(() => computeSummary(monthEntries), [monthEntries]);
 
   const prevBalTotal = useMemo(() => {
     const pym = addMonth(ym, -1); const b = {};

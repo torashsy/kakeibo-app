@@ -49,6 +49,27 @@ export const ACCOUNT_TYPES = [
 export const acctRole = (item) => (ACCOUNT_TYPES.find((t) => t.id === item)?.role) || (item === "入金" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
 
 
+// 1ヶ月分の記録から収支サマリを計算する(サマリ画面・年間の貯蓄率グラフで共用)
+export function computeSummary(monthEntries) {
+  let gross = 0, deduction = 0, cardTotal = 0, cashIn = 0, cashOut = 0, invest = 0; const balances = {};
+  for (const e of monthEntries) {
+    if (e.cat === "salary") { if (e.item === "控除") deduction += e.amount; else gross += e.amount; }
+    else if (e.cat === "card") cardTotal += Math.abs(e.amount);
+    else if (e.cat === "account") {
+      const role = acctRole(e.item);
+      if (role === "bal") balances[e.account] = e.amount;
+      else if (role === "transfer") invest += e.amount;        // 符号そのまま(入=−, 戻し=＋ を利用者が符号で表現)
+      else if (role === "in") cashIn += Math.abs(e.amount);
+      else if (role === "out") cashOut += Math.abs(e.amount);
+    }
+  }
+  const income = gross + deduction + cashIn, expense = cardTotal + cashOut;
+  const net = income - expense + invest;   // 投資振替は符号のまま加算(−なら支出方向、＋なら収入方向)
+  const balTotal = Object.values(balances).reduce((a, b) => a + b, 0);
+  return { gross, deduction, cardTotal, cashIn, cashOut, invest, income, expense, net, balances, balTotal };
+}
+
+
 export const DEFAULT_CARDS = [
   { id: uid(), name: "SMCC Gold", brand: "VISA", note: "三井住友ゴールドNL" },
   { id: uid(), name: "smcc", brand: "VISA", note: "三井住友NL" },

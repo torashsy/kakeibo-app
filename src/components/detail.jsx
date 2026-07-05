@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { ACCENT, INK, MUTED, RED, GREEN } from '../theme.js';
-import { yen, num, buildStructure } from '../utils.js';
+import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
+import { yen, num, buildStructure, computeSummary } from '../utils.js';
 import { styles } from '../styles.js';
 import { Editable } from '../edit.jsx';
 
@@ -250,25 +250,70 @@ export function YearTable({ entries, ym, config, cards }) {
   const mlabel = (mo) => parseInt(mo.split("-")[1], 10) + "月";
   return (
     <div style={{ marginTop: 4 }}>
+      <SavingsChart entries={entries} months={months} ym={ym} />
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{fyStart}年4月〜{fyStart + 1}年3月の12か月。横スクロールできます。</div>
       <div style={styles.tableScroll}>
         <table style={styles.table}>
-          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th key={mo} style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</th>)}</tr></thead>
+          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th key={mo} style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>年間計</th></tr></thead>
           <tbody>
             {rows.map((r, i) => {
-              if (r.kind === "head") return <tr key={i}><td colSpan={months.length + 1} style={styles.tdGroup}>{r.label}</td></tr>;
-              if (r.kind === "acct") return <tr key={i}><td colSpan={months.length + 1} style={styles.tdAcct}>{r.label}</td></tr>;
+              if (r.kind === "head") return <tr key={i}><td colSpan={months.length + 2} style={styles.tdGroup}>{r.label}</td></tr>;
+              if (r.kind === "acct") return <tr key={i}><td colSpan={months.length + 2} style={styles.tdAcct}>{r.label}</td></tr>;
               const isSub = r.kind === "sub";
+              const yearTotal = months.reduce((a, mo) => a + r.get(mo), 0);
               return (
                 <tr key={i}>
                   <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</td>
                   {months.map((mo) => { const v = r.get(mo); return <td key={mo} style={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "#F4F8F6" } : {}), ...(v === 0 ? { color: "#D5D1C8" } : {}) }}>{v === 0 ? "·" : num(v)}</td>; })}
+                  <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}) }}>{num(yearTotal)}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// 年度内の月ごとの貯蓄率(収支÷収入)を並べた簡易チャート
+function SavingsChart({ entries, months, ym }) {
+  const rates = useMemo(() => months.map((mo) => {
+    const s = computeSummary(entries.filter((e) => e.ym === mo));
+    return { mo, rate: s.income > 0 ? s.net / s.income : null };
+  }), [entries, months]);
+  const withData = rates.filter((r) => r.rate != null);
+  if (!withData.length) return null;
+  const avg = withData.reduce((a, r) => a + r.rate, 0) / withData.length;
+  const maxAbs = Math.max(0.2, ...withData.map((r) => Math.abs(r.rate)));
+  const W = 442, H = 132, padBottom = 20, topH = (H - padBottom) * 0.62, midY = topH, barAreaH = H - padBottom - 12;
+  const colW = W / months.length;
+  return (
+    <div style={{ ...styles.detailCard, marginBottom: 14, padding: "12px 6px 6px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 6px 8px" }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: MUTED }}>貯蓄率の推移（収支 ÷ 収入）</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: avg >= 0 ? GREEN : RED }}>平均 {Math.round(avg * 100)}%</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+        <line x1={0} y1={midY} x2={W} y2={midY} stroke={LINE} strokeWidth={1} />
+        {rates.map((r, i) => {
+          if (r.rate == null) return null;
+          const w = colW * 0.56;
+          const x = i * colW + (colW - w) / 2;
+          const h = Math.max(2, Math.min(barAreaH / 2, (Math.abs(r.rate) / maxAbs) * (barAreaH / 2)));
+          const y = r.rate >= 0 ? midY - h : midY;
+          const color = r.rate >= 0 ? GREEN : RED;
+          return (
+            <g key={r.mo}>
+              <rect x={x} y={y} width={w} height={h} fill={color} rx={2} opacity={r.mo === ym ? 1 : 0.5} />
+              <text x={x + w / 2} y={r.rate >= 0 ? y - 3 : y + h + 11} fontSize="9" textAnchor="middle" fill={MUTED}>{Math.round(r.rate * 100)}%</text>
+            </g>
+          );
+        })}
+        {months.map((mo, i) => (
+          <text key={mo} x={i * colW + colW / 2} y={H - 5} fontSize="9.5" textAnchor="middle" fill={mo === ym ? ACCENT : MUTED} fontWeight={mo === ym ? 700 : 400}>{parseInt(mo.split("-")[1], 10)}月</text>
+        ))}
+      </svg>
     </div>
   );
 }
