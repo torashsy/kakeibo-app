@@ -103,8 +103,18 @@ export default function App() {
 
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
+  // デザイン編集モード中は、内側の本来の操作(記録の編集を開く等)へクリックが
+  // 貫通しないよう、ここで一括して止めて対象(data-edit-id)だけを選ぶ
+  const pickFormat = (e) => {
+    if (!editMode) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const el = e.target.closest("[data-edit-id]");
+    setFmtTarget(el ? el.getAttribute("data-edit-id") : "app.bg");
+  };
+
   return (
-    <EditCtx.Provider value={{ editMode, overrides: theme.overrides || {}, pick: (id) => setFmtTarget(id) }}>
+    <EditCtx.Provider value={{ editMode, overrides: theme.overrides || {} }}>
     <div style={{ ...styles.app, ...themeVars(theme) }}>
       <header style={styles.header}>
         <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><span style={styles.cloud}>☁ 同期</span></div>
@@ -117,7 +127,7 @@ export default function App() {
         )}
       </header>
 
-      <Editable tag="main" id="app.bg" base={styles.main}>
+      <Editable tag="main" id="app.bg" base={styles.main} onClickCapture={pickFormat}>
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} onSaveCards={commitCards} onSaveDebt={commitDebt} />}
