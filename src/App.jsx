@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo, createContext, useContext } from "react";
+import { ACCENT, ACCENT_SOFT, INK, PAPER, LINE, MUTED, RED, GREEN, FONT_CHOICES, fontStack, DEFAULT_THEME, ovStyle, EDIT_OUTLINE, CONTAINER_IDS, themeVars, TARGET_LABELS } from './theme.js';
+import { yen, num, ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, ACCOUNT_TYPES, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, buildStructure } from './utils.js';
+import { styles } from './styles.js';
 
 // 編集モードのコンテキスト(要素タップで書式編集)
 const EditCtx = createContext({ editMode: false, overrides: {}, pick: () => {} });
+
 // 編集可能な要素をラップ: overrideを適用し、編集モードならタップで書式編集
 function Editable({ id, base, tag = "div", children, ...rest }) {
   const { editMode, overrides, pick } = useContext(EditCtx);
@@ -19,168 +23,12 @@ function Editable({ id, base, tag = "div", children, ...rest }) {
   return <Tag {...rest} style={style} onClick={onClick}>{children}</Tag>;
 }
 
+
 // 家計簿Webアプリ v2
 // 入力3カテゴリ: 給与系 / カード / 口座、連続追加、カード残債・一覧(編集可)
 // データは window.storage でクラウド保存(スマホ・PC共有)
 
-// 色はCSS変数を参照(テーマで差し替え可能)。フォールバック値も持たせる。
-const ACCENT = "var(--accent)", ACCENT_SOFT = "var(--accent-soft)", INK = "var(--ink)", PAPER = "var(--paper)";
-const LINE = "var(--line)", MUTED = "var(--muted)", RED = "var(--expense)", GREEN = "var(--income)";
 
-// ユーザーが細かく調整できるデザイン設定
-const FONT_CHOICES = [
-  { id: "gothic", label: "ゴシック", stack: "'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif" },
-  { id: "mincho", label: "明朝", stack: "'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif" },
-  { id: "maru", label: "丸ゴシック", stack: "'Hiragino Maru Gothic ProN','Rounded Mplus 1c',sans-serif" },
-  { id: "system", label: "システム", stack: "system-ui,-apple-system,sans-serif" },
-  { id: "mono", label: "等幅", stack: "'SF Mono','Consolas',monospace" },
-];
-const fontStack = (id) => (FONT_CHOICES.find((f) => f.id === id) || FONT_CHOICES[0]).stack;
-
-const DEFAULT_THEME = {
-  accent: "#2F6F5B", accentSoft: "#E6F0EC", ink: "#1C2321", paper: "#FBFAF7",
-  line: "#E4E1D9", muted: "#8A8577", income: "#2F6F5B", expense: "#B5462F",
-  cardBg: "#FFFFFF",
-  thBg: "#F7F5EF", groupBg: "#EDEAE2", acctBg: "#F1F5F3", subtotalBg: "#F4F1EA", totalCellBg: "#FAF9F5",
-  numAlign: "right", labelAlign: "left",
-  radius: 14, rowPad: 12, numSize: 15,
-  heroBg: "#2F6F5B", heroText: "#FFFFFF",
-  font: "gothic", numFont: "gothic", baseSize: 15, heavy: 800, tracking: 0,
-  tabBg: "#FFFFFF", tabActive: "#2F6F5B",
-  tabularNums: true,
-  overrides: {},  // 要素別の書式上書き { targetId: {align,color,size,weight,bg} }
-};
-
-// 要素別オーバーライドをCSSに変換
-const ovStyle = (ov) => {
-  if (!ov) return {};
-  const s = {};
-  if (ov.align) s.textAlign = ov.align;
-  if (ov.color) s.color = ov.color;
-  if (ov.size) s.fontSize = ov.size + "px";
-  if (ov.weight) s.fontWeight = ov.weight;
-  if (ov.bg) s.background = ov.bg;
-  if (ov.justify) s.justifyContent = ov.justify;
-  if (ov.radius != null) s.borderRadius = ov.radius + "px";
-  if (ov.pad != null) s.padding = ov.pad + "px";
-  if (ov.tracking != null) s.letterSpacing = ov.tracking + "px";
-  if (ov.borderColor) s.border = `${ov.borderWidth != null ? ov.borderWidth : 1}px solid ${ov.borderColor}`;
-  return s;
-};
-// 編集モードで要素を囲む点線
-const EDIT_OUTLINE = { outline: "1.5px dashed #B58B4F", outlineOffset: 1, cursor: "pointer", borderRadius: 4 };
-// 子要素で覆われるコンテナは、角のチップから選べるようにする
-const CONTAINER_IDS = new Set(["hero.bg", "sum.bg", "card.bg", "app.bg"]);
-const themeVars = (t) => ({
-  "--accent": t.accent, "--accent-soft": t.accentSoft, "--ink": t.ink, "--paper": t.paper,
-  "--line": t.line, "--muted": t.muted, "--income": t.income, "--expense": t.expense,
-  "--card-bg": t.cardBg, "--th-bg": t.thBg, "--group-bg": t.groupBg, "--acct-bg": t.acctBg,
-  "--subtotal-bg": t.subtotalBg, "--total-cell-bg": t.totalCellBg,
-  "--num-align": t.numAlign, "--label-align": t.labelAlign,
-  "--radius": t.radius + "px", "--row-pad": t.rowPad + "px", "--num-size": t.numSize + "px",
-  "--hero-bg": t.heroBg, "--hero-text": t.heroText,
-  "--font": fontStack(t.font), "--num-font": fontStack(t.numFont),
-  "--base-size": (t.baseSize || 15) + "px", "--heavy": t.heavy, "--tracking": (t.tracking || 0) + "px",
-  "--tab-bg": t.tabBg, "--tab-active": t.tabActive,
-  "--num-variant": t.tabularNums ? "tabular-nums" : "normal",
-});
-
-const yen = (n) => (n < 0 ? "-" : "") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
-const num = (n) => (n == null ? "" : Math.round(n).toLocaleString("ja-JP"));
-const ymLabel = (ym) => { const [y, m] = ym.split("-"); return `${y}年${parseInt(m, 10)}月`; };
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const addMonth = (ym, d) => { const [y, m] = ym.split("-").map(Number); const dt = new Date(y, m - 1 + d, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
-
-// 旧バージョン(kindベース)のデータを新形式(catベース)に変換して救済する
-function migrateEntry(e) {
-  if (!e || typeof e !== "object") return null;
-  const id = e.id || uid();
-  // すでに新形式でも、臨時収入が給与系に紛れていたら口座の受取へ移す
-  if (e.cat) {
-    if (e.cat === "salary" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "受取", account: e.account || "", amount: Math.abs(e.amount) };
-    return { ...e, id };
-  }
-  // 旧形式: kind = income/deduction/expense/card/transfer/balance
-  const k = e.kind;
-  if (k === "income" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "受取", account: e.account || "", amount: Math.abs(e.amount) };
-  if (k === "salary" || k === "income") return { id, ym: e.ym, cat: "salary", item: e.item || "給与", account: "", amount: e.amount };
-  if (k === "deduction") return { id, ym: e.ym, cat: "salary", item: "控除", account: "", amount: -Math.abs(e.amount) };
-  if (k === "card") return { id, ym: e.ym, cat: "card", item: e.item, account: "", amount: Math.abs(e.amount) };
-  if (k === "balance") return { id, ym: e.ym, cat: "account", item: "残高", account: e.account || "", amount: e.amount };
-  if (k === "expense") return { id, ym: e.ym, cat: "account", item: "引出", account: e.account || "", amount: -Math.abs(e.amount) };
-  if (k === "transfer") return { id, ym: e.ym, cat: "account", item: e.amount >= 0 ? "受取" : "引出", account: e.account || "", amount: e.amount };
-  // 判別不能なものは無視(壊れたデータで落ちないように)
-  return null;
-}
-
-const DEFAULT_CONFIG = { accounts: ["ゆうちょ", "住信SBI", "JRE BANK"], salaryItems: ["給与", "手当", "賞与", "控除"] };
-
-// 口座記録の種類。role: bal=残高記録 / in=収入に算入 / out=支出に算入 / transfer=符号そのまま収支に算入
-const ACCOUNT_TYPES = [
-  { id: "残高", role: "bal", hint: "口座の残高を記録します" },
-  { id: "預入", role: "in", hint: "口座への預け入れ。収入に入ります" },
-  { id: "引出", role: "out", hint: "口座からの引き出し。支出に入ります" },
-  { id: "受取", role: "in", hint: "送金などの受け取り。収入に入ります" },
-  { id: "送金", role: "out", hint: "他所への送金。支出に入ります" },
-  { id: "投資振替", role: "transfer", hint: "投資/ハイブリッド口座への振替。入れた分は支出、戻した分は収入" },
-];
-const acctRole = (item) => (ACCOUNT_TYPES.find((t) => t.id === item)?.role) || (item === "入金" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
-
-const DEFAULT_CARDS = [
-  { id: uid(), name: "SMCC Gold", brand: "VISA", note: "三井住友ゴールドNL" },
-  { id: uid(), name: "smcc", brand: "VISA", note: "三井住友NL" },
-  { id: uid(), name: "JAL navi", brand: "JCB", note: "JALカードNavi" },
-  { id: uid(), name: "VIEW", brand: "VISA", note: "ビューゴールド" },
-  { id: uid(), name: "JCB Gold", brand: "JCB", note: "" },
-  { id: uid(), name: "SAISON", brand: "AMEX", note: "セゾン" },
-  { id: uid(), name: "EPOS", brand: "VISA", note: "エポス" },
-  { id: uid(), name: "TOBU", brand: "VISA", note: "東武" },
-  { id: uid(), name: "PayPay", brand: "JCB", note: "PayPayカード" },
-  { id: uid(), name: "MDC", brand: "VISA", note: "大丸松坂屋" },
-];
-
-const SEED_ENTRIES = [
-  { ym: "2026-04", cat: "account", item: "残高", account: "ゆうちょ", amount: 48924 },
-  { ym: "2026-04", cat: "account", item: "残高", account: "住信SBI", amount: 47495 },
-  { ym: "2026-04", cat: "account", item: "残高", account: "JRE BANK", amount: 1199 },
-  { ym: "2026-05", cat: "salary", item: "給与", account: "", amount: 286720 },
-  { ym: "2026-05", cat: "salary", item: "手当", account: "", amount: 2068 },
-  { ym: "2026-05", cat: "salary", item: "控除", account: "", amount: -49953 },
-  { ym: "2026-05", cat: "card", item: "SMCC Gold", account: "", amount: 66065 },
-  { ym: "2026-05", cat: "card", item: "smcc", account: "", amount: 294 },
-  { ym: "2026-05", cat: "card", item: "JAL navi", account: "", amount: 51943 },
-  { ym: "2026-05", cat: "card", item: "VIEW", account: "", amount: 143560 },
-  { ym: "2026-05", cat: "card", item: "SAISON", account: "", amount: 135270 },
-  { ym: "2026-05", cat: "card", item: "PayPay", account: "", amount: 19550 },
-  { ym: "2026-05", cat: "card", item: "MDC", account: "", amount: 2025 },
-  { ym: "2026-05", cat: "account", item: "残高", account: "ゆうちょ", amount: 18503 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "ゆうちょ", amount: 52563 },
-  { ym: "2026-05", cat: "account", item: "引出", account: "ゆうちょ", amount: -6165 },
-  { ym: "2026-05", cat: "account", item: "残高", account: "住信SBI", amount: 5296 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "住信SBI", amount: 63172 },
-  { ym: "2026-05", cat: "account", item: "残高", account: "JRE BANK", amount: 20399 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "JRE BANK", amount: 19760 },
-  { ym: "2026-06", cat: "salary", item: "給与", account: "", amount: 286720 },
-  { ym: "2026-06", cat: "salary", item: "手当", account: "", amount: 4136 },
-  { ym: "2026-06", cat: "salary", item: "賞与", account: "", amount: 134073 },
-  { ym: "2026-06", cat: "salary", item: "控除", account: "", amount: -50034 },
-  { ym: "2026-06", cat: "card", item: "SMCC Gold", account: "", amount: 97508 },
-  { ym: "2026-06", cat: "card", item: "smcc", account: "", amount: 294 },
-  { ym: "2026-06", cat: "card", item: "EPOS", account: "", amount: 15322 },
-  { ym: "2026-06", cat: "card", item: "PayPay", account: "", amount: 5314 },
-  { ym: "2026-06", cat: "account", item: "残高", account: "ゆうちょ", amount: 155596 },
-  { ym: "2026-06", cat: "account", item: "残高", account: "住信SBI", amount: 5660 },
-  { ym: "2026-06", cat: "account", item: "引出", account: "住信SBI", amount: -25000 },
-  { ym: "2026-06", cat: "account", item: "投資振替", account: "住信SBI", amount: -94000 },
-  { ym: "2026-06", cat: "account", item: "残高", account: "JRE BANK", amount: 20399 },
-];
-
-const SEED_DEBT = {
-  "SMCC Gold": { "2026-06": 55140, "2026-07": 54804, "2026-08": 47975, "2026-09": 44041, "2026-10": 37845, "2026-11": 34866, "2026-12": 34480 },
-  "smcc": { "2026-06": 294, "2026-07": 294, "2026-08": 294 },
-  "JAL navi": { "2026-06": 37284, "2026-07": 37284, "2026-08": 4740 },
-  "VIEW": { "2026-06": 37100 },
-};
 
 export default function App() {
   const [entries, setEntries] = useState([]);
@@ -325,6 +173,7 @@ export default function App() {
   );
 }
 
+
 // 選択した要素の書式を編集するシート
 function FormatSheet({ id, theme, onSave, onClose }) {
   const ov = (theme.overrides && theme.overrides[id]) || {};
@@ -400,16 +249,6 @@ function FormatSheet({ id, theme, onSave, onClose }) {
   );
 }
 
-const TARGET_LABELS = {
-  "hero.bg": "サマリ上部の背景", "sum.bg": "集計セルの背景", "card.bg": "残高カードの背景",
-  "bal.row": "残高の行", "app.bg": "全体の背景", "card.acctHead": "口座の見出し", "card.groupHead": "グループ見出し",
-  "table.th": "表の見出し", "table.group": "表のグループ見出し", "table.acct": "表の口座見出し",
-  "table.subtotal": "表の小計", "table.rowlabel": "表の項目名", "table.cell": "表の数値セル", "table.totalcell": "表の合計セル",
-  "hero.value": "収支の金額", "hero.label": "「今月の収支」見出し", "hero.sub": "収支の内訳",
-  "sum.cell": "サマリの4セル", "bal.row": "残高の行", "sec.title": "見出し",
-  "detail.item": "項目名", "detail.total": "項目の金額", "detail.subtotal": "小計行",
-  "table.th": "表の見出し", "table.group": "表のグループ見出し", "themeSection": "見出し",
-};
 
 function Summary({ summary, prevBalTotal }) {
   const hasBal = Object.keys(summary.balances).length > 0;
@@ -447,31 +286,11 @@ function Summary({ summary, prevBalTotal }) {
     </div>
   );
 }
+
 function SumCell({ label, value, color }) {
   return <Editable id="sum.bg" base={styles.sumCell}><div style={styles.sumCellLabel}>{label}</div><Editable id="sum.cell" base={{ ...styles.sumCellValue, color }}>{yen(value)}</Editable></Editable>;
 }
 
-// 月データを、元incomeと同じ並びの「項目リスト」に整える(0円項目も含む)
-function buildStructure(monthEntries, config, cards) {
-  const byKey = {}; // key -> {item, account, cat, entries[]}
-  const push = (cat, item, account, e) => {
-    const key = cat + "|" + item + "|" + (account || "");
-    if (!byKey[key]) byKey[key] = { cat, item, account: account || "", entries: [] };
-    if (e) byKey[key].entries.push(e);
-  };
-  // 先に器を用意(0円でも表示するため)
-  (config.salaryItems || []).forEach((it) => push("salary", it, ""));
-  (cards || []).forEach((c) => push("card", c.name, ""));
-  const accounts = config.accounts || [];
-  const flowTypes = ["預入", "受取", "引出", "送金", "投資振替"];
-  accounts.forEach((a) => flowTypes.forEach((t) => push("account", t, a)));
-  accounts.forEach((a) => push("account", "残高", a));
-  // 実データを流し込む(器に無い項目=旧データも動的に追加)
-  for (const e of monthEntries) push(e.cat, e.item, e.cat === "account" ? e.account : "", e);
-  const totalOf = (key) => byKey[key].entries.reduce((a, e) => a + e.amount, 0);
-  const get = (cat, item, account) => byKey[cat + "|" + item + "|" + (account || "")] || { entries: [], cat, item, account: account || "" };
-  return { byKey, totalOf, get, accounts, flowTypes };
-}
 
 function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
   const [view, setView] = useState("card");
@@ -491,6 +310,7 @@ function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
     </div>
   );
 }
+
 
 // 履歴: この月の全記録を1件ずつ一覧。タップで編集・削除。
 function DetailList({ monthEntries, onEdit }) {
@@ -518,6 +338,7 @@ function DetailList({ monthEntries, onEdit }) {
     </div>
   );
 }
+
 
 // 1項目の行(0円/単一/折りたたみ)を描画。インデント一定。
 function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
@@ -552,6 +373,7 @@ function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
     </div>
   );
 }
+
 
 function DetailCards({ S, config, cards, onEdit }) {
   const [open, setOpen] = useState({});
@@ -611,6 +433,7 @@ function DetailCards({ S, config, cards, onEdit }) {
     </div>
   </>;
 }
+
 
 // 表: 項目別と同じ並び + 小計。行=項目、列=1件目..計。
 function DetailTable({ S, config, cards, onEdit }) {
@@ -680,6 +503,7 @@ function DetailTable({ S, config, cards, onEdit }) {
   );
 }
 
+
 // 年間表: 12か月を横に並べて各項目の月次合計を表示
 function YearTable({ entries, ym, config, cards }) {
   const salaryItems = config.salaryItems || [];
@@ -746,6 +570,7 @@ function YearTable({ entries, ym, config, cards }) {
   );
 }
 
+
 function Cards({ cards, debt, ym, onSaveCards, onSaveDebt }) {
   const [view, setView] = useState("debt");
   return (
@@ -758,6 +583,7 @@ function Cards({ cards, debt, ym, onSaveCards, onSaveDebt }) {
     </div>
   );
 }
+
 function DebtTable({ cards, debt, ym, onSaveDebt }) {
   const monthsCols = useMemo(() => Array.from({ length: 12 }, (_, i) => addMonth(ym, i)), [ym]);
   const remaining = (name) => { const s = debt[name] || {}; return Object.entries(s).filter(([m]) => m >= ym).reduce((a, [, v]) => a + (v || 0), 0); };
@@ -801,6 +627,7 @@ function DebtTable({ cards, debt, ym, onSaveDebt }) {
     </div>
   );
 }
+
 function CardList({ cards, onSaveCards }) {
   const [edit, setEdit] = useState(null);
   const commit = () => {
@@ -844,6 +671,7 @@ function CardList({ cards, onSaveCards }) {
   );
 }
 
+
 function PickCategory({ onClose, onPick }) {
   const cats = [
     { id: "salary", label: "給与系", desc: "給与・手当・賞与・控除をまとめて", color: GREEN, icon: "¥" },
@@ -867,6 +695,7 @@ function PickCategory({ onClose, onPick }) {
     </div>
   );
 }
+
 
 // 給与系の1件を編集・削除する(項目名は固定、金額のみ変更)
 function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
@@ -895,6 +724,7 @@ function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
   );
 }
 
+
 function SalaryForm({ ym, config, entries, onClose, onSave }) {
   const existing = useMemo(() => entries.filter((e) => e.ym === ym && e.cat === "salary"), [entries, ym]);
   const [rows, setRows] = useState(config.salaryItems.map((it) => { const f = existing.find((e) => e.item === it); return { item: it, amount: f ? Math.abs(f.amount).toString() : "" }; }));
@@ -922,6 +752,7 @@ function SalaryForm({ ym, config, entries, onClose, onSave }) {
     </div>
   );
 }
+
 
 function CardForm({ ym, cards, editing, onClose, onAdd, onUpdate, onDelete }) {
   const [item, setItem] = useState(editing ? editing.item : "");
@@ -961,6 +792,7 @@ function CardForm({ ym, cards, editing, onClose, onAdd, onUpdate, onDelete }) {
     </div>
   );
 }
+
 
 function AccountForm({ ym, config, editing, onClose, onAdd, onUpdate, onDelete }) {
   const [type, setType] = useState(editing ? editing.item : "残高");
@@ -1022,6 +854,7 @@ function AccountForm({ ym, config, editing, onClose, onAdd, onUpdate, onDelete }
   );
 }
 
+
 function Settings({ config, onSave, entries, cards, debt, onOpenDesign }) {
   const [c, setC] = useState(config);
   useEffect(() => setC(config), [config]);
@@ -1060,6 +893,7 @@ function Settings({ config, onSave, entries, cards, debt, onOpenDesign }) {
     </div>
   );
 }
+
 
 // デザイン設定エディタ: 配色・表の色・文字揃え・角丸・行高などを細かく調整
 function ThemeEditor({ theme, onSave, onBack, onToggleEdit }) {
@@ -1169,130 +1003,13 @@ function ThemeEditor({ theme, onSave, onBack, onToggleEdit }) {
   );
 }
 
+
 function TabBtn({ active, onClick, label, icon }) {
   return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><span style={{ fontSize: 17 }}>{icon}</span><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
 }
 
-const styles = {
-  app: { maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: PAPER, color: INK, fontFamily: "var(--font)", fontSize: "var(--base-size)", letterSpacing: "var(--tracking)", position: "relative", paddingBottom: 76, WebkitFontSmoothing: "antialiased" },
-  header: { position: "sticky", top: 0, zIndex: 5, background: PAPER, padding: "14px 18px 10px", borderBottom: `1px solid ${LINE}` },
-  brandRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline" },
-  brand: { fontSize: 15, fontWeight: 800, letterSpacing: "0.05em" },
-  cloud: { fontSize: 11, color: MUTED },
-  monthPicker: { display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 8 },
-  monthArrow: { border: "none", background: "transparent", color: ACCENT, fontSize: 24, width: 36, height: 36, cursor: "pointer" },
-  monthSelect: { border: "none", background: "transparent", fontSize: 19, fontWeight: 800, textAlign: "center", color: INK, appearance: "none", WebkitAppearance: "none", textAlignLast: "center", cursor: "pointer", fontFamily: "inherit" },
-  main: { padding: "12px 16px" },
-  heroCard: { background: "var(--hero-bg)", borderRadius: "var(--radius)", padding: "20px 20px 18px", color: "var(--hero-text)", boxShadow: "0 8px 24px rgba(47,111,91,0.22)", marginBottom: 14 },
-  heroLabel: { fontSize: 12, opacity: 0.85, letterSpacing: "0.08em" },
-  heroValue: { fontSize: 34, fontWeight: "var(--heavy)", marginTop: 4, letterSpacing: "-0.02em", color: "var(--hero-text)" },
-  heroSub: { fontSize: 12.5, opacity: 0.9, marginTop: 6 },
-  sumGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 6 },
-  sumCell: { background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "12px 14px" },
-  sumCellLabel: { fontSize: 12, color: MUTED },
-  sumCellValue: { fontSize: 18, fontWeight: "var(--heavy)", marginTop: 3, fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)" },
-  noteRow: { display: "flex", justifyContent: "flex-end", fontSize: 12, padding: "8px 4px 2px" },
-  checkCard: { borderRadius: 12, padding: "11px 14px", marginTop: 12, lineHeight: 1.5 },
-  sectionTitle: { fontSize: 13, fontWeight: 700, margin: "18px 4px 8px" },
-  balCard: { background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "6px 14px" },
-  balRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0" },
-  balAcc: { fontSize: 14 },
-  balVal: { fontSize: "var(--num-size)", fontWeight: 600, fontVariantNumeric: "var(--num-variant)", fontFamily: "var(--num-font)" },
-  viewToggle: { display: "inline-flex", background: "#EFEDE6", borderRadius: 10, padding: 3, marginBottom: 12 },
-  viewToggleBtn: { border: "none", background: "transparent", padding: "6px 11px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: MUTED, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
-  viewToggleActive: { background: "#fff", color: ACCENT, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" },
-  detailHead: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13.5, fontWeight: 800, color: ACCENT, margin: "0 4px 7px" },
-  detailCard: { background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "4px 14px 8px" },
-  detailRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 6px" },
-  editRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "12px 2px", background: "transparent", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  editRowRight: { display: "flex", alignItems: "center", gap: 6 },
-  chev: { color: MUTED, fontSize: 18, lineHeight: 1 },
-  detailSubHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 2px 2px" },
-  editSubRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "8px 2px 8px 22px", background: "#FBFAF7", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  itemRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "var(--row-pad) 2px", background: "transparent", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  itemRowLeft: { display: "flex", alignItems: "center", gap: 6 },
-  chevSpacer: { display: "inline-block", width: 16 },
-  subGroupHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 2px 6px", fontSize: 12, fontWeight: 700, color: MUTED, borderBottom: `1px solid ${LINE}` },
-  subGroupTotal: { fontSize: 13, fontWeight: 700, color: INK, fontVariantNumeric: "tabular-nums" },
-  subtotalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 2px", marginTop: 2, borderTop: `1.5px solid ${LINE}`, fontSize: 13.5, fontWeight: 800, color: INK, fontVariantNumeric: "tabular-nums" },
-  tdSubLabel: { fontWeight: 800, background: "var(--subtotal-bg)" },
-  tdSubTotal: { fontWeight: 800, background: "var(--subtotal-bg)", borderLeft: `1px solid ${LINE}` },
-  collapseRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "12px 2px", background: "transparent", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  countBadge: { fontSize: 11, color: MUTED, background: "#EFEDE6", borderRadius: 6, padding: "1px 7px", fontWeight: 600 },
-  listRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "var(--row-pad) 2px", background: "transparent", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  catTag: { fontSize: 10.5, fontWeight: 700, border: "1px solid", borderRadius: 5, padding: "1px 6px" },
-  detailItem: { fontSize: 14 },
-  detailTotal: { fontSize: "var(--num-size)", fontWeight: 700, fontVariantNumeric: "var(--num-variant)", fontFamily: "var(--num-font)" },
-  chipRow: { display: "flex", flexWrap: "wrap", gap: 6, paddingBottom: 8 },
-  chip: { border: `1px solid ${LINE}`, background: PAPER, borderRadius: 8, padding: "4px 9px", fontSize: 12, color: INK, cursor: "pointer", fontVariantNumeric: "tabular-nums", fontFamily: "inherit" },
-  chipGhost: { border: "none", background: "transparent", color: MUTED, fontSize: 12, cursor: "pointer", padding: 0 },
-  tableScroll: { overflowX: "auto", border: `1px solid ${LINE}`, borderRadius: 12, background: "#fff", WebkitOverflowScrolling: "touch" },
-  table: { borderCollapse: "collapse", fontSize: 12.5, fontVariantNumeric: "var(--num-variant)", fontFamily: "var(--num-font)", minWidth: "100%" },
-  th: { padding: "8px 10px", fontSize: 11, fontWeight: 700, color: MUTED, background: "var(--th-bg)", borderBottom: `1px solid ${LINE}`, whiteSpace: "nowrap", textAlign: "right" },
-  thSticky: { position: "sticky", left: 0, zIndex: 2, textAlign: "left", background: "var(--th-bg)", minWidth: 96 },
-  thTotal: { borderLeft: `1px solid ${LINE}`, textAlign: "right" },
-  td: { padding: "8px 10px", borderBottom: `1px solid ${PAPER}`, whiteSpace: "nowrap" },
-  tdSticky: { position: "sticky", left: 0, background: "var(--card-bg)", zIndex: 1, fontWeight: 600, minWidth: 96, borderRight: `1px solid ${LINE}`, textAlign: "var(--label-align)" },
-  tdNum: { padding: "6px 10px", borderBottom: `1px solid ${PAPER}`, textAlign: "var(--num-align)", whiteSpace: "nowrap", fontSize: "var(--num-size)" },
-  tdTotalCell: { fontWeight: 700, borderLeft: `1px solid ${LINE}`, background: "var(--total-cell-bg)" },
-  tdGroup: { padding: "6px 10px", fontSize: 11.5, fontWeight: 800, color: INK, position: "sticky", left: 0, background: "var(--group-bg)" },
-  tdAcct: { padding: "5px 10px", fontSize: 11, fontWeight: 700, color: ACCENT, position: "sticky", left: 0, background: "var(--acct-bg)" },
-  cellBtn: { border: "none", background: "transparent", color: "inherit", fontSize: 12.5, cursor: "pointer", fontVariantNumeric: "tabular-nums", padding: 0, minWidth: 20, fontFamily: "inherit" },
-  debtSummary: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", border: `1px solid ${LINE}`, borderRadius: 14, padding: "12px 16px", marginBottom: 10 },
-  cardListRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "12px 2px", borderBottom: `1px solid ${PAPER}`, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  brandTag: { fontSize: 11, color: MUTED, border: `1px solid ${LINE}`, borderRadius: 6, padding: "3px 8px" },
-  settingRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", fontSize: 14, borderBottom: `1px solid ${PAPER}` },
-  addBtn: { border: `1px solid ${ACCENT}`, background: ACCENT_SOFT, color: ACCENT, borderRadius: 8, padding: "5px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
-  removeBtn: { border: "none", background: "transparent", color: MUTED, fontSize: 12, cursor: "pointer" },
-  backupBtn: { display: "block", width: "100%", border: `1px solid ${LINE}`, background: "#fff", color: ACCENT, borderRadius: 10, padding: "11px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 8, fontFamily: "inherit" },
-  themeSection: { fontSize: 12.5, fontWeight: 800, color: ACCENT, margin: "18px 4px 7px" },
-  navRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "14px 14px", marginBottom: 18, background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  backLink: { border: "none", background: "transparent", color: ACCENT, fontSize: 14, fontWeight: 700, cursor: "pointer", padding: "2px 2px 10px", fontFamily: "inherit" },
-  editBanner: { position: "fixed", bottom: 58, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: "#4A3B28", color: "#fff", zIndex: 7 },
-  editDone: { border: "none", background: "#fff", color: "#4A3B28", borderRadius: 8, padding: "6px 16px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" },
-  fmtGrid: { display: "flex", gap: 10 },
-  fmtCell: { display: "flex", alignItems: "center", gap: 8, background: "#fff", border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 10px" },
-  miniClear: { border: "none", background: "transparent", color: MUTED, fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
-  ovChip: { position: "absolute", top: -9, left: 6, background: "#4A3B28", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5, zIndex: 3, cursor: "pointer" },
-  themeRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 2px", borderBottom: `1px solid ${PAPER}` },
-  themeLabel: { fontSize: 13.5 },
-  colorInput: { width: 34, height: 26, border: `1px solid ${LINE}`, borderRadius: 6, padding: 0, background: "none", cursor: "pointer" },
-  alignBtn: { border: `1px solid ${LINE}`, background: "#fff", borderRadius: 7, padding: "5px 11px", fontSize: 12.5, cursor: "pointer", color: INK, fontFamily: "inherit" },
-  alignBtnActive: { background: ACCENT, color: "#fff", borderColor: ACCENT },
-  fab: { position: "fixed", right: "max(18px, calc(50% - 240px + 18px))", bottom: 90, width: 58, height: 58, borderRadius: "50%", background: ACCENT, color: "#fff", border: "none", boxShadow: "0 8px 22px rgba(47,111,91,0.4)", cursor: "pointer", zIndex: 6, display: "flex", alignItems: "center", justifyContent: "center" },
-  tabs: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, display: "flex", background: "var(--tab-bg)", borderTop: `1px solid ${LINE}`, zIndex: 6 },
-  tabBtn: { flex: 1, border: "none", background: "transparent", padding: "9px 0 11px", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", fontFamily: "inherit" },
-  sheetBackdrop: { position: "fixed", inset: 0, background: "rgba(28,35,33,0.35)", zIndex: 20, display: "flex", alignItems: "flex-end", justifyContent: "center" },
-  sheet: { width: "100%", maxWidth: 480, background: PAPER, borderRadius: "20px 20px 0 0", padding: "10px 18px calc(20px + env(safe-area-inset-bottom))", maxHeight: "92vh", overflowY: "auto", animation: "slideUp 0.22s ease" },
-  miniSheet: { width: "100%", maxWidth: 480, background: PAPER, borderRadius: "20px 20px 0 0", padding: "18px 18px calc(20px + env(safe-area-inset-bottom))", animation: "slideUp 0.22s ease" },
-  sheetHandle: { width: 40, height: 4, borderRadius: 2, background: LINE, margin: "4px auto 12px" },
-  sheetTitle: { fontSize: 16, fontWeight: 800, marginBottom: 14 },
-  pickRow: { display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 4px", background: "transparent", border: "none", borderBottom: `1px solid ${LINE}`, cursor: "pointer", fontFamily: "inherit" },
-  pickIcon: { width: 40, height: 40, borderRadius: 12, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 },
-  kindRow: { display: "flex", gap: 6, marginBottom: 8 },
-  kindBtn: { flex: 1, border: `1px solid ${LINE}`, background: "#fff", borderRadius: 10, padding: "9px 4px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", color: INK, fontFamily: "inherit" },
-  fieldLabel: { display: "block", fontSize: 12, color: MUTED, fontWeight: 700, margin: "12px 2px 6px" },
-  amountWrap: { display: "flex", alignItems: "center", background: "#fff", border: `1.5px solid ${ACCENT}`, borderRadius: 12, padding: "6px 14px" },
-  yenMark: { fontSize: 22, color: MUTED, marginRight: 6 },
-  amountInput: { flex: 1, border: "none", outline: "none", fontSize: 28, fontWeight: 800, background: "transparent", color: INK, width: "100%", fontFamily: "inherit" },
-  signHint: { fontSize: 11.5, color: MUTED, margin: "6px 2px 0" },
-  salaryRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
-  takeHomeRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 2px 0", marginTop: 4, borderTop: `1px solid ${LINE}`, fontSize: 14, fontWeight: 700 },
-  optionRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 },
-  typeRow: { display: "flex", gap: 6, marginBottom: 8, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" },
-  typeChip: { flexShrink: 0, border: `1px solid ${LINE}`, background: "#fff", borderRadius: 20, padding: "6px 12px", fontSize: 12.5, cursor: "pointer", color: INK, fontFamily: "inherit", whiteSpace: "nowrap" },
-  optionChip: { border: `1px solid ${LINE}`, background: "#fff", borderRadius: 20, padding: "6px 13px", fontSize: 13, cursor: "pointer", color: INK, fontFamily: "inherit" },
-  optionChipActive: { background: ACCENT, color: "#fff", borderColor: ACCENT },
-  textInput: { width: "100%", border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, outline: "none", background: "#fff", color: INK, boxSizing: "border-box", fontFamily: "inherit" },
-  flash: { background: ACCENT_SOFT, color: ACCENT, borderRadius: 10, padding: "9px 12px", fontSize: 13, fontWeight: 600, marginBottom: 10 },
-  saveBtn: { width: "100%", border: "none", background: ACCENT, color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 800, cursor: "pointer", marginTop: 18, fontFamily: "inherit" },
-  saveBtnHalf: { flex: 1, border: "none", background: ACCENT, color: "#fff", borderRadius: 12, padding: "13px 8px", fontSize: 13.5, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" },
-  deleteBtn: { width: "100%", border: "none", background: "transparent", color: RED, borderRadius: 12, padding: "12px", fontSize: 13.5, cursor: "pointer", marginTop: 4, fontFamily: "inherit" },
-  cancelBtn: { width: "100%", border: "none", background: "transparent", color: MUTED, borderRadius: 12, padding: "10px", fontSize: 13.5, cursor: "pointer", fontFamily: "inherit" },
-};
 
-if (typeof document !== "undefined" && !document.getElementById("kakeibo-kf")) {
-  const s = document.createElement("style"); s.id = "kakeibo-kf";
-  s.textContent = "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}";
-  document.head.appendChild(s);
-}
+
+
+
+

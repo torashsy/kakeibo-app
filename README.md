@@ -10,9 +10,12 @@ npm run dev        # http://localhost:5173
 npm run build      # 本番ビルド → dist/
 ```
 
-## 構成
-- `src/App.jsx` … アプリ本体（UI・集計・デザイン設定すべて）
-- `src/storage.js` … 保存層。`window.storage` 互換。既定は localStorage。
+## 構成（機能ごとに分割済み）
+- `src/App.jsx` … Reactコンポーネント本体（App と各画面：Summary / Detail / 各フォーム / Cards / ThemeEditor / FormatSheet など）
+- `src/theme.js` … 配色・フォント定義・`DEFAULT_THEME`・`themeVars`・`ovStyle`・編集モード用定数・`TARGET_LABELS`
+- `src/utils.js` … 整形関数（yen/num/日付）・データモデル（`ACCOUNT_TYPES`/`acctRole`/`migrateEntry`/`buildStructure`）・初期データ（seed）
+- `src/styles.js` … スタイル定義（`styles`）とキーフレーム注入
+- `src/storage.js` … 保存層。`window.storage` 互換。既定は localStorage
 - `src/main.jsx` … エントリポイント
 
 ## データモデル（localStorage / キーは `kakeibo:` 接頭辞）
