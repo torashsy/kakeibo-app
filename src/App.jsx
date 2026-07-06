@@ -2,11 +2,10 @@ import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
 import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, computeSummary } from './utils.js';
 import { styles } from './styles.js';
-import { EditCtx, Editable } from './edit.jsx';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
 import { Cards } from './components/cards.jsx';
-import { Settings, ThemeEditor, FormatSheet } from './components/settings.jsx';
+import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
 
 export default function App() {
@@ -20,8 +19,6 @@ export default function App() {
   const [ym, setYm] = useState("2026-06");
   const [sheet, setSheet] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [editMode, setEditMode] = useState(false);       // デザイン編集モード
-  const [fmtTarget, setFmtTarget] = useState(null);      // 書式編集中の要素id
 
   useEffect(() => {
     (async () => {
@@ -106,22 +103,7 @@ export default function App() {
 
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
-  // デザイン編集モード中は、内側の本来の操作(記録の編集を開く等)へクリックが
-  // 貫通しないよう、ここで一括して止めて対象(data-edit-id)だけを選ぶ。
-  // ただし、ビュー切替のようなナビゲーション操作(data-nav-ok)や、
-  // まだ書式編集の対象がない画面(カード/設定)では通常通り操作できるようにする。
-  const pickFormat = (e) => {
-    if (!editMode) return;
-    if (tab === "cards" || tab === "settings" || tab === "design") return;
-    if (e.target.closest("[data-nav-ok]")) return;
-    e.stopPropagation();
-    e.preventDefault();
-    const el = e.target.closest("[data-edit-id]");
-    setFmtTarget(el ? el.getAttribute("data-edit-id") : "app.bg");
-  };
-
   return (
-    <EditCtx.Provider value={{ editMode, overrides: theme.overrides || {} }}>
     <div style={{ ...styles.app, ...themeVars(theme) }}>
       <header style={styles.header}>
         <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><span style={styles.cloud}>☁ 同期</span></div>
@@ -134,22 +116,15 @@ export default function App() {
         )}
       </header>
 
-      <Editable tag="main" id="app.bg" base={styles.main} onClickCapture={pickFormat}>
+      <main style={styles.main}>
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
-        {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} editMode={editMode} onToggleEdit={() => { setEditMode(true); setTab("summary"); }} />}
-      </Editable>
+        {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
+      </main>
 
-      {(tab === "summary" || tab === "detail") && !editMode && <button style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
-
-      {editMode && (
-        <div style={styles.editBanner}>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>デザイン編集モード：整えたい部分をタップ</span>
-          <button style={styles.editDone} onClick={() => { setEditMode(false); setFmtTarget(null); }}>完了</button>
-        </div>
-      )}
+      {(tab === "summary" || tab === "detail") && <button style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
 
       <nav style={styles.tabs}>
         <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} label="サマリ" icon="◧" />
@@ -163,9 +138,7 @@ export default function App() {
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {fmtTarget && <FormatSheet id={fmtTarget} theme={theme} onSave={commitTheme} onClose={() => setFmtTarget(null)} />}
     </div>
-    </EditCtx.Provider>
   );
 }
 

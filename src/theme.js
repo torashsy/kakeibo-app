@@ -4,78 +4,77 @@ export const ACCENT = "var(--accent)", ACCENT_SOFT = "var(--accent-soft)", INK =
 export const LINE = "var(--line)", MUTED = "var(--muted)", RED = "var(--expense)", GREEN = "var(--income)";
 
 
-// ユーザーが細かく調整できるデザイン設定
-export const FONT_CHOICES = [
-  { id: "gothic", label: "ゴシック", stack: "'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif" },
-  { id: "mincho", label: "明朝", stack: "'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif" },
-  { id: "maru", label: "丸ゴシック", stack: "'Hiragino Maru Gothic ProN','Rounded Mplus 1c',sans-serif" },
-  { id: "system", label: "システム", stack: "system-ui,-apple-system,sans-serif" },
-  { id: "mono", label: "等幅", stack: "'SF Mono','Consolas',monospace" },
+// 全体で使う1つのフォントスタック(以前の「フォント選択」機能は廃止)
+const FONT_STACK = "'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif";
+
+
+// ユーザーが選べるのは「アクセント色」と「ダークモード」だけ
+export const DEFAULT_THEME = {
+  accent: "#2F6F5B",
+  dark: false,
+};
+
+// アクセント色のプリセット(設定画面で選べる)
+export const ACCENT_PRESETS = [
+  { id: "green", label: "グリーン", color: "#2F6F5B" },
+  { id: "blue", label: "ブルー", color: "#2F5D8A" },
+  { id: "indigo", label: "インディゴ", color: "#4B4E8A" },
+  { id: "plum", label: "プラム", color: "#8A3F66" },
+  { id: "terra", label: "テラコッタ", color: "#B5563A" },
+  { id: "graphite", label: "グラファイト", color: "#3A3F45" },
 ];
 
-export const fontStack = (id) => (FONT_CHOICES.find((f) => f.id === id) || FONT_CHOICES[0]).stack;
 
-
-export const DEFAULT_THEME = {
-  accent: "#2F6F5B", accentSoft: "#E6F0EC", ink: "#1C2321", paper: "#FBFAF7",
-  line: "#E4E1D9", muted: "#8A8577", income: "#2F6F5B", expense: "#B5462F",
-  cardBg: "#FFFFFF",
-  thBg: "#F7F5EF", groupBg: "#EDEAE2", acctBg: "#F1F5F3", subtotalBg: "#F4F1EA", totalCellBg: "#FAF9F5",
-  numAlign: "right", labelAlign: "left",
-  radius: 14, rowPad: 12, numSize: 15,
-  heroBg: "#2F6F5B", heroText: "#FFFFFF",
-  font: "gothic", numFont: "gothic", baseSize: 15, heavy: 800, tracking: 0,
-  tabBg: "#FFFFFF", tabActive: "#2F6F5B",
-  tabularNums: true,
-  overrides: {},  // 要素別の書式上書き { targetId: {align,color,size,weight,bg} }
+// --- 色ユーティリティ ---------------------------------------------------
+const clamp = (n) => Math.max(0, Math.min(255, Math.round(n)));
+const hexToRgb = (hex) => {
+  const h = hex.replace("#", "");
+  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
 };
+const rgbToHex = (r, g, b) => "#" + [r, g, b].map((n) => clamp(n).toString(16).padStart(2, "0")).join("");
+// a を b に t(0..1) だけ混ぜる
+const mix = (a, b, t) => { const [r1, g1, b1] = hexToRgb(a), [r2, g2, b2] = hexToRgb(b); return rgbToHex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t); };
 
 
-// 要素別オーバーライドをCSSに変換
-export const ovStyle = (ov) => {
-  if (!ov) return {};
-  const s = {};
-  if (ov.align) s.textAlign = ov.align;
-  if (ov.color) s.color = ov.color;
-  if (ov.size) s.fontSize = ov.size + "px";
-  if (ov.weight) s.fontWeight = ov.weight;
-  if (ov.bg) s.background = ov.bg;
-  if (ov.justify) s.justifyContent = ov.justify;
-  if (ov.radius != null) s.borderRadius = ov.radius + "px";
-  if (ov.pad != null) s.padding = ov.pad + "px";
-  if (ov.tracking != null) s.letterSpacing = ov.tracking + "px";
-  if (ov.borderColor) s.border = `${ov.borderWidth != null ? ov.borderWidth : 1}px solid ${ov.borderColor}`;
-  return s;
-};
+// アクセント色 + ダーク/ライトから、画面全体のパレット(CSS変数)を生成する
+export const themeVars = (t) => {
+  const accent = (t && t.accent) || DEFAULT_THEME.accent;
+  const dark = !!(t && t.dark);
+  const WHITE = "#FFFFFF";
 
-// 編集モードで要素を囲む点線
-export const EDIT_OUTLINE = { outline: "1.5px dashed #B58B4F", outlineOffset: 1, cursor: "pointer", borderRadius: 4 };
+  const p = dark
+    ? {
+        paper: "#16181A", ink: "#E9E7E1", line: "#34383C", muted: "#9A968C",
+        cardBg: "#22262A", thBg: "#2A2E32", groupBg: "#2E3338",
+        subtotalBg: "#262B2E", totalCellBg: "#23282B", tabBg: "#1B1E20",
+        base: "#16181A",
+        income: mix(accent, WHITE, 0.28), expense: "#E0765C",
+        accentSoft: mix(accent, "#16181A", 0.74),
+        acctBg: mix(accent, "#16181A", 0.82),
+      }
+    : {
+        paper: "#FBFAF7", ink: "#1C2321", line: "#E4E1D9", muted: "#8A8577",
+        cardBg: "#FFFFFF", thBg: "#F7F5EF", groupBg: "#EDEAE2",
+        subtotalBg: "#F4F1EA", totalCellBg: "#FAF9F5", tabBg: "#FFFFFF",
+        base: "#FFFFFF",
+        income: accent, expense: "#B5462F",
+        accentSoft: mix(accent, WHITE, 0.86),
+        acctBg: mix(accent, WHITE, 0.90),
+      };
 
-// 子要素で覆われるコンテナは、角のチップから選べるようにする
-export const CONTAINER_IDS = new Set(["hero.bg", "sum.bg", "card.bg", "app.bg", "detail.cardBg"]);
-
-export const themeVars = (t) => ({
-  "--accent": t.accent, "--accent-soft": t.accentSoft, "--ink": t.ink, "--paper": t.paper,
-  "--line": t.line, "--muted": t.muted, "--income": t.income, "--expense": t.expense,
-  "--card-bg": t.cardBg, "--th-bg": t.thBg, "--group-bg": t.groupBg, "--acct-bg": t.acctBg,
-  "--subtotal-bg": t.subtotalBg, "--total-cell-bg": t.totalCellBg,
-  "--num-align": t.numAlign, "--label-align": t.labelAlign,
-  "--radius": t.radius + "px", "--row-pad": t.rowPad + "px", "--num-size": t.numSize + "px",
-  "--hero-bg": t.heroBg, "--hero-text": t.heroText,
-  "--font": fontStack(t.font), "--num-font": fontStack(t.numFont),
-  "--base-size": (t.baseSize || 15) + "px", "--heavy": t.heavy, "--tracking": (t.tracking || 0) + "px",
-  "--tab-bg": t.tabBg, "--tab-active": t.tabActive,
-  "--num-variant": t.tabularNums ? "tabular-nums" : "normal",
-});
-
-
-export const TARGET_LABELS = {
-  "hero.bg": "サマリ上部の背景", "sum.bg": "集計セルの背景", "card.bg": "残高カードの背景",
-  "bal.row": "残高の行", "app.bg": "全体の背景", "card.acctHead": "口座の見出し", "card.groupHead": "グループ見出し", "detail.cardBg": "明細カードの背景",
-  "table.th": "表の見出し", "table.group": "表のグループ見出し", "table.acct": "表の口座見出し",
-  "table.subtotal": "表の小計", "table.rowlabel": "表の項目名", "table.cell": "表の数値セル", "table.totalcell": "表の合計セル",
-  "hero.value": "収支の金額", "hero.label": "「今月の収支」見出し", "hero.sub": "収支の内訳",
-  "sum.cell": "サマリの4セル", "bal.row": "残高の行", "sec.title": "見出し",
-  "detail.item": "項目名", "detail.total": "項目の金額", "detail.subtotal": "小計行",
-  "table.th": "表の見出し", "table.group": "表のグループ見出し", "themeSection": "見出し",
+  return {
+    "--accent": accent, "--accent-soft": p.accentSoft, "--ink": p.ink, "--paper": p.paper,
+    "--line": p.line, "--muted": p.muted, "--income": p.income, "--expense": p.expense,
+    "--card-bg": p.cardBg, "--th-bg": p.thBg, "--group-bg": p.groupBg, "--acct-bg": p.acctBg,
+    "--subtotal-bg": p.subtotalBg, "--total-cell-bg": p.totalCellBg,
+    "--num-align": "right", "--label-align": "left",
+    "--radius": "14px", "--row-pad": "12px", "--num-size": "15px",
+    "--hero-bg": accent, "--hero-text": "#FFFFFF",
+    "--font": FONT_STACK, "--num-font": FONT_STACK,
+    "--base-size": "15px", "--heavy": 800, "--tracking": "0px",
+    "--tab-bg": p.tabBg, "--tab-active": accent,
+    "--num-variant": "tabular-nums",
+    colorScheme: dark ? "dark" : "light",
+  };
 };

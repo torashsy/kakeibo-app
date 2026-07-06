@@ -10,10 +10,10 @@ export function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
   return (
     <div style={{ padding: "4px 2px 8px" }}>
       <div style={styles.viewToggle}>
-        <button data-nav-ok="true" style={{ ...styles.viewToggleBtn, ...(view === "list" ? styles.viewToggleActive : {}) }} onClick={() => setView("list")}>履歴</button>
-        <button data-nav-ok="true" style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>項目別</button>
-        <button data-nav-ok="true" style={{ ...styles.viewToggleBtn, ...(view === "table" ? styles.viewToggleActive : {}) }} onClick={() => setView("table")}>表</button>
-        <button data-nav-ok="true" style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "list" ? styles.viewToggleActive : {}) }} onClick={() => setView("list")}>履歴</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>項目別</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "table" ? styles.viewToggleActive : {}) }} onClick={() => setView("table")}>表</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
       </div>
       {view === "list" && <DetailList monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
@@ -67,8 +67,8 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
     <div>
       <button style={styles.itemRow} onClick={() => toggle(gkey)}>
         <span style={styles.itemRowLeft}>
-          <span data-nav-ok="true" style={{ ...styles.chev, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", width: 16 }}>›</span>
-          <Editable id="detail.item" tag="span" base={styles.detailItem}>{label}</Editable><span data-nav-ok="true" style={styles.countBadge}>{its.length}件</span>
+          <span style={{ ...styles.chev, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", width: 16 }}>›</span>
+          <Editable id="detail.item" tag="span" base={styles.detailItem}>{label}</Editable><span style={styles.countBadge}>{its.length}件</span>
         </span>
         <Editable id="detail.total" tag="span" base={styles.detailTotal}>{yen(total)}</Editable>
       </button>
