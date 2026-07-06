@@ -118,6 +118,14 @@ export const styles = {
 
 if (typeof document !== "undefined" && !document.getElementById("kakeibo-kf")) {
   const s = document.createElement("style"); s.id = "kakeibo-kf";
-  s.textContent = "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}";
+  s.textContent = [
+    "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}",
+    // モバイルで文字が太く/大きく描画されすぎるのを防ぐ(PCの見た目に寄せる)。
+    // font-synthesis:none で擬似ボールドを無効化、font-smoothing で細く滑らかに。
+    "html{-webkit-text-size-adjust:100%;text-size-adjust:100%}",
+    "body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-synthesis:none}",
+    // iOSが金額の数字を電話番号扱いで自動リンク化(青文字)するのを無効化し、元の文字色を保つ。
+    "a[href^='tel:'],a[href^='sms:'],a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-weight:inherit!important}",
+  ].join("");
   document.head.appendChild(s);
 }
