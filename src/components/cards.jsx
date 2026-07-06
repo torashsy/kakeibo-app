@@ -30,7 +30,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   };
   return (
     <div>
-      <div style={styles.debtSummary}><span style={{ fontSize: 13, color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={{ fontSize: 22, fontWeight: 800, color: RED }}>{yen(totalRemaining)}</span></div>
+      <div style={styles.debtSummary}><span style={{ fontSize: 13, color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={{ fontSize: 22, fontWeight: 600, color: RED }}>{yen(totalRemaining)}</span></div>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>各月の支払予定額。セルをタップで編集。横スクロール可。</div>
       <div style={styles.tableScroll}>
         <table style={styles.table}>

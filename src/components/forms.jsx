@@ -17,7 +17,7 @@ export function PickCategory({ onClose, onPick }) {
         {cats.map((c) => (
           <button key={c.id} style={styles.pickRow} onClick={() => onPick(c.id)}>
             <span style={{ ...styles.pickIcon, background: c.color }}>{c.icon}</span>
-            <span style={{ textAlign: "left", flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>{c.label}</span><span style={{ display: "block", fontSize: 12, color: MUTED, marginTop: 2 }}>{c.desc}</span></span>
+            <span style={{ textAlign: "left", flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 600 }}>{c.label}</span><span style={{ display: "block", fontSize: 12, color: MUTED, marginTop: 2 }}>{c.desc}</span></span>
             <span style={{ color: MUTED, fontSize: 20 }}>›</span>
           </button>
         ))}
@@ -73,7 +73,7 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
             </div>
           </div>
         ))}
-        <div style={styles.takeHomeRow}><span>手取り見込み</span><span style={{ fontWeight: 800, color: GREEN }}>{yen(takeHome)}</span></div>
+        <div style={styles.takeHomeRow}><span>手取り見込み</span><span style={{ fontWeight: 600, color: GREEN }}>{yen(takeHome)}</span></div>
         <button style={styles.saveBtn} onClick={() => onSave(rows)}>保存する</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
       </div>

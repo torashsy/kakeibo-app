@@ -24,7 +24,7 @@ export function Summary({ summary, prevBalTotal }) {
       <Editable id="card.bg" base={styles.balCard}>
         {!hasBal && <div style={{ color: MUTED, fontSize: 13, padding: "6px 2px" }}>この月の残高記録はまだありません</div>}
         {Object.entries(summary.balances).map(([acc, v]) => <Editable key={acc} id="bal.row" base={styles.balRow}><span style={styles.balAcc}>{acc}</span><span style={styles.balVal}>{yen(v)}</span></Editable>)}
-        {hasBal && <div style={{ ...styles.balRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 10 }}><span style={{ ...styles.balAcc, fontWeight: 700 }}>合計</span><span style={{ ...styles.balVal, fontWeight: 700 }}>{yen(summary.balTotal)}</span></div>}
+        {hasBal && <div style={{ ...styles.balRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 10 }}><span style={{ ...styles.balAcc, fontWeight: 600 }}>合計</span><span style={{ ...styles.balVal, fontWeight: 600 }}>{yen(summary.balTotal)}</span></div>}
         {balChange != null && <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED, fontSize: 13 }}>前月からの増減</span><span style={{ ...styles.balVal, color: balChange >= 0 ? GREEN : RED, fontSize: 14 }}>{yen(balChange)}</span></div>}
       </Editable>
       {balChange != null && (() => {

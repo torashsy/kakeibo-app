@@ -17,7 +17,7 @@ export function Settings({ config, onSave, entries, cards, debt, onOpenDesign, o
       {/* デザイン設定への導線 */}
       <button style={styles.navRow} onClick={onOpenDesign}>
         <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <span style={{ fontSize: 14.5, fontWeight: 700 }}>テーマ</span>
+          <span style={{ fontSize: 14.5, fontWeight: 600 }}>テーマ</span>
           <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>アクセント色・ダークモード</span>
         </span>
         <span style={{ color: MUTED, fontSize: 20 }}>›</span>

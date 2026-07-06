@@ -39,7 +39,7 @@ export function DetailList({ monthEntries, onEdit }) {
               <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
             </span>
             <span style={styles.editRowRight}>
-              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
+              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
               <span style={styles.chev}>›</span>
             </span>
           </button>
@@ -275,8 +275,8 @@ export function YearTable({ entries, ym, config, cards }) {
               return (
                 <tr key={i}>
                   <Editable tag="td" id={isSub ? "table.subtotal" : "table.rowlabel"} base={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</Editable>
-                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 800 } : {})) }}>{v === 0 ? "" : num(v)}</Editable>; })}
-                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 800 } : {}) }}>{num(yearTotal)}</Editable>
+                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 600 } : {})) }}>{v === 0 ? "" : num(v)}</Editable>; })}
+                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 600 } : {}) }}>{num(yearTotal)}</Editable>
                 </tr>
               );
             })}
@@ -302,8 +302,8 @@ function SavingsChart({ entries, months, ym }) {
   return (
     <div style={{ ...styles.detailCard, marginBottom: 14, padding: "12px 6px 6px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 6px 8px" }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: MUTED }}>貯蓄率の推移（収支 ÷ 収入）</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: avg >= 0 ? GREEN : RED }}>平均 {Math.round(avg * 100)}%</span>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: MUTED }}>貯蓄率の推移（収支 ÷ 収入）</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: avg >= 0 ? GREEN : RED }}>平均 {Math.round(avg * 100)}%</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
         <line x1={0} y1={midY} x2={W} y2={midY} stroke={LINE} strokeWidth={1} />
