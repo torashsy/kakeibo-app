@@ -7,6 +7,7 @@ import { Detail } from './components/detail.jsx';
 import { Cards } from './components/cards.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
+import { Icon } from './icons.jsx';
 
 export default function App() {
   const [entries, setEntries] = useState([]);
@@ -127,10 +128,10 @@ export default function App() {
       {(tab === "summary" || tab === "detail") && <button style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
 
       <nav style={styles.tabs}>
-        <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} label="サマリ" icon="◧" />
-        <TabBtn active={tab === "detail"} onClick={() => setTab("detail")} label="詳細" icon="≣" />
-        <TabBtn active={tab === "cards"} onClick={() => setTab("cards")} label="カード" icon="▤" />
-        <TabBtn active={tab === "settings" || tab === "design"} onClick={() => setTab("settings")} label="設定" icon="⚙" />
+        <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} label="サマリ" icon="summary" />
+        <TabBtn active={tab === "detail"} onClick={() => setTab("detail")} label="詳細" icon="detail" />
+        <TabBtn active={tab === "cards"} onClick={() => setTab("cards")} label="カード" icon="card" />
+        <TabBtn active={tab === "settings" || tab === "design"} onClick={() => setTab("settings")} label="設定" icon="settings" />
       </nav>
 
       {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); setSheet(cat); }} />}
@@ -143,5 +144,5 @@ export default function App() {
 }
 
 function TabBtn({ active, onClick, label, icon }) {
-  return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><span style={{ fontSize: 17 }}>{icon}</span><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
+  return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><Icon name={icon} size={22} strokeWidth={active ? 2.1 : 1.8} /><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
 }

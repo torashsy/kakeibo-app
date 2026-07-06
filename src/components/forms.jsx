@@ -2,12 +2,13 @@ import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, ACCOUNT_TYPES, acctRole } from '../utils.js';
 import { styles } from '../styles.js';
+import { Icon } from '../icons.jsx';
 
 export function PickCategory({ onClose, onPick }) {
   const cats = [
-    { id: "salary", label: "給与系", desc: "給与・手当・賞与・控除をまとめて", color: GREEN, icon: "¥" },
-    { id: "card", label: "カード", desc: "カードの請求額を記録", color: RED, icon: "▤" },
-    { id: "account", label: "口座", desc: "入金・出金・残高を記録", color: ACCENT, icon: "◫" },
+    { id: "salary", label: "給与系", desc: "給与・手当・賞与・控除をまとめて", color: GREEN, icon: "yen" },
+    { id: "card", label: "カード", desc: "カードの請求額を記録", color: RED, icon: "card" },
+    { id: "account", label: "口座", desc: "入金・出金・残高を記録", color: ACCENT, icon: "bank" },
   ];
   return (
     <div style={styles.sheetBackdrop} onClick={onClose}>
@@ -16,7 +17,7 @@ export function PickCategory({ onClose, onPick }) {
         <div style={styles.sheetTitle}>何を記録しますか？</div>
         {cats.map((c) => (
           <button key={c.id} style={styles.pickRow} onClick={() => onPick(c.id)}>
-            <span style={{ ...styles.pickIcon, background: c.color }}>{c.icon}</span>
+            <span style={{ ...styles.pickIcon, background: c.color }}><Icon name={c.icon} size={22} /></span>
             <span style={{ textAlign: "left", flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 600 }}>{c.label}</span><span style={{ display: "block", fontSize: 12, color: MUTED, marginTop: 2 }}>{c.desc}</span></span>
             <span style={{ color: MUTED, fontSize: 20 }}>›</span>
           </button>
