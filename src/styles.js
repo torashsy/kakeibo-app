@@ -125,8 +125,9 @@ if (typeof document !== "undefined" && !document.getElementById("kakeibo-kf")) {
     "html{-webkit-text-size-adjust:100%;text-size-adjust:100%}",
     "body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-synthesis:none}",
     // iOS/Androidが金額の数字を電話番号扱いで自動リンク化(青文字)する対策。
-    // アプリは表示用の<a>を持たないので、#root内の全リンクは元の文字色を継承させて青を打ち消す。
-    "#root a,a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-weight:inherit!important}",
+    // アプリは表示用の<a>を持たないので、#root内の全リンクの色を元の文字色に戻す。
+    // iOSは色を -webkit-text-fill-color で塗るため、それも継承させないと青が残る。
+    "#root a,a[href^='tel:'],a[x-apple-data-detectors],[x-apple-data-detectors]{color:inherit!important;-webkit-text-fill-color:inherit!important;text-decoration:none!important;font-weight:inherit!important}",
   ].join("");
   document.head.appendChild(s);
 }
