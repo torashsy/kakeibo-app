@@ -33,7 +33,21 @@ export function migrateEntry(e) {
 }
 
 
-export const DEFAULT_CONFIG = { accounts: ["ゆうちょ", "住信SBI", "JRE BANK"], salaryItems: ["給与", "手当", "賞与", "控除"] };
+// 入出金・振替の種類(残高を除く)。口座ごとに表示する種類を絞り込める。
+export const ALL_FLOW_TYPES = ["預入", "受取", "引出", "送金", "投資振替"];
+
+export const DEFAULT_CONFIG = {
+  accounts: ["ゆうちょ", "NEOBANK", "JRE BANK"],
+  salaryItems: ["給与", "手当", "賞与", "控除"],
+  // 口座ごとに表示する入出金・振替の種類(未指定の口座は全種類を表示)
+  accountFlows: {
+    "ゆうちょ": ["預入", "受取", "引出", "送金"],   // 投資振替は使わない
+    "JRE BANK": ["受取", "送金", "投資振替"],        // 預入・引出は使わない
+  },
+};
+
+// その口座で表示する入出金・振替の種類を返す(未設定なら全種類)
+export const flowTypesFor = (account, config) => (config && config.accountFlows && config.accountFlows[account]) || ALL_FLOW_TYPES;
 
 
 // 口座記録の種類。role: bal=残高記録 / in=収入に算入 / out=支出に算入 / transfer=符号そのまま収支に算入
@@ -86,7 +100,7 @@ export const DEFAULT_CARDS = [
 
 export const SEED_ENTRIES = [
   { ym: "2026-04", cat: "account", item: "残高", account: "ゆうちょ", amount: 48924 },
-  { ym: "2026-04", cat: "account", item: "残高", account: "住信SBI", amount: 47495 },
+  { ym: "2026-04", cat: "account", item: "残高", account: "NEOBANK", amount: 47495 },
   { ym: "2026-04", cat: "account", item: "残高", account: "JRE BANK", amount: 1199 },
   { ym: "2026-05", cat: "salary", item: "給与", account: "", amount: 286720 },
   { ym: "2026-05", cat: "salary", item: "手当", account: "", amount: 2068 },
@@ -101,8 +115,8 @@ export const SEED_ENTRIES = [
   { ym: "2026-05", cat: "account", item: "残高", account: "ゆうちょ", amount: 18503 },
   { ym: "2026-05", cat: "account", item: "受取", account: "ゆうちょ", amount: 52563 },
   { ym: "2026-05", cat: "account", item: "引出", account: "ゆうちょ", amount: -6165 },
-  { ym: "2026-05", cat: "account", item: "残高", account: "住信SBI", amount: 5296 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "住信SBI", amount: 63172 },
+  { ym: "2026-05", cat: "account", item: "残高", account: "NEOBANK", amount: 5296 },
+  { ym: "2026-05", cat: "account", item: "受取", account: "NEOBANK", amount: 63172 },
   { ym: "2026-05", cat: "account", item: "残高", account: "JRE BANK", amount: 20399 },
   { ym: "2026-05", cat: "account", item: "受取", account: "JRE BANK", amount: 19760 },
   { ym: "2026-06", cat: "salary", item: "給与", account: "", amount: 286720 },
@@ -114,9 +128,9 @@ export const SEED_ENTRIES = [
   { ym: "2026-06", cat: "card", item: "EPOS", account: "", amount: 15322 },
   { ym: "2026-06", cat: "card", item: "PayPay", account: "", amount: 5314 },
   { ym: "2026-06", cat: "account", item: "残高", account: "ゆうちょ", amount: 155596 },
-  { ym: "2026-06", cat: "account", item: "残高", account: "住信SBI", amount: 5660 },
-  { ym: "2026-06", cat: "account", item: "引出", account: "住信SBI", amount: -25000 },
-  { ym: "2026-06", cat: "account", item: "投資振替", account: "住信SBI", amount: -94000 },
+  { ym: "2026-06", cat: "account", item: "残高", account: "NEOBANK", amount: 5660 },
+  { ym: "2026-06", cat: "account", item: "引出", account: "NEOBANK", amount: -25000 },
+  { ym: "2026-06", cat: "account", item: "投資振替", account: "NEOBANK", amount: -94000 },
   { ym: "2026-06", cat: "account", item: "残高", account: "JRE BANK", amount: 20399 },
 ];
 
@@ -141,12 +155,12 @@ export function buildStructure(monthEntries, config, cards) {
   (config.salaryItems || []).forEach((it) => push("salary", it, ""));
   (cards || []).forEach((c) => push("card", c.name, ""));
   const accounts = config.accounts || [];
-  const flowTypes = ["預入", "受取", "引出", "送金", "投資振替"];
-  accounts.forEach((a) => flowTypes.forEach((t) => push("account", t, a)));
+  const flowsFor = (a) => flowTypesFor(a, config);
+  accounts.forEach((a) => flowsFor(a).forEach((t) => push("account", t, a)));
   accounts.forEach((a) => push("account", "残高", a));
   // 実データを流し込む(器に無い項目=旧データも動的に追加)
   for (const e of monthEntries) push(e.cat, e.item, e.cat === "account" ? e.account : "", e);
   const totalOf = (key) => byKey[key].entries.reduce((a, e) => a + e.amount, 0);
   const get = (cat, item, account) => byKey[cat + "|" + item + "|" + (account || "")] || { entries: [], cat, item, account: account || "" };
-  return { byKey, totalOf, get, accounts, flowTypes };
+  return { byKey, totalOf, get, accounts, flowsFor, flowTypes: ALL_FLOW_TYPES };
 }

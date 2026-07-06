@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, num, buildStructure, computeSummary } from '../utils.js';
+import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils.js';
 import { styles } from '../styles.js';
 import { Editable } from '../edit.jsx';
 
@@ -120,11 +120,12 @@ export function DetailCards({ S, config, cards, onEdit }) {
     <div style={{ marginBottom: 8 }}>
       <Editable id="card.groupHead" base={styles.detailHead}><span>口座（入出金・振替）</span></Editable>
       {S.accounts.map((acc) => {
-        const accTotal = S.flowTypes.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
+        const flows = S.flowsFor(acc);
+        const accTotal = flows.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
         return (
           <Editable key={acc} id="detail.cardBg" base={{ ...styles.detailCard, marginBottom: 10 }}>
             <Editable id="card.acctHead" base={styles.subGroupHead}><span>{acc}</span><span style={styles.editRowRight}><span style={styles.subGroupTotal}>{yen(accTotal)}</span><span style={styles.chevRSpacer} /></span></Editable>
-            {S.flowTypes.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
+            {flows.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
           </Editable>
         );
       })}
@@ -166,9 +167,9 @@ export function DetailTable({ S, config, cards, onEdit }) {
   head("口座（入出金・振替）");
   S.accounts.forEach((acc) => {
     rows.push({ kind: "acct", label: acc });
-    S.flowTypes.forEach((t) => addItem(t, S.get("account", t, acc), true));
+    S.flowsFor(acc).forEach((t) => addItem(t, S.get("account", t, acc), true));
   });
-  const flowTotal = S.accounts.reduce((a, acc) => a + S.flowTypes.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0), 0);
+  const flowTotal = S.accounts.reduce((a, acc) => a + S.flowsFor(acc).reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0), 0);
   sub("入出金・振替 計", flowTotal);
 
   // 口座残高
@@ -212,7 +213,6 @@ export function YearTable({ entries, ym, config, cards }) {
   const salaryItems = config.salaryItems || [];
   const cardList = cards || [];
   const accounts = config.accounts || [];
-  const flowTypes = ["預入", "受取", "引出", "送金", "投資振替"];
   // 起点は当年4月〜翌3月(年度)。ym の年から年度開始を決める。
   const [y, m] = ym.split("-").map(Number);
   const fyStart = m >= 4 ? y : y - 1;
@@ -229,8 +229,17 @@ export function YearTable({ entries, ym, config, cards }) {
   }, [entries]);
   const val = (mo, cat, item, account) => sums[`${mo}|${cat}|${item}|${account || ""}`] || 0;
 
+  // 月ごとの収支(サマリと同じ計算)
+  const netByMonth = useMemo(() => {
+    const map = {};
+    for (const mo of months) map[mo] = computeSummary(entries.filter((e) => e.ym === mo)).net;
+    return map;
+  }, [entries, fyStart]);
+
   // 行定義
   const rows = [];
+  rows.push({ kind: "head", label: "収支" });
+  rows.push({ kind: "net", label: "月間収支", get: (mo) => netByMonth[mo] || 0 });
   rows.push({ kind: "head", label: "給与系" });
   salaryItems.forEach((it) => rows.push({ kind: "row", label: it, get: (mo) => val(mo, "salary", it, "") }));
   rows.push({ kind: "sub", label: "給与計", get: (mo) => salaryItems.reduce((a, it) => a + val(mo, "salary", it, ""), 0) });
@@ -240,9 +249,9 @@ export function YearTable({ entries, ym, config, cards }) {
   rows.push({ kind: "head", label: "口座（入出金・振替）" });
   accounts.forEach((acc) => {
     rows.push({ kind: "acct", label: acc });
-    flowTypes.forEach((t) => rows.push({ kind: "row", label: t, indent: true, get: (mo) => val(mo, "account", t, acc) }));
+    flowTypesFor(acc, config).forEach((t) => rows.push({ kind: "row", label: t, indent: true, get: (mo) => val(mo, "account", t, acc) }));
   });
-  rows.push({ kind: "sub", label: "入出金・振替 計", get: (mo) => accounts.reduce((a, acc) => a + flowTypes.reduce((b, t) => b + val(mo, "account", t, acc), 0), 0) });
+  rows.push({ kind: "sub", label: "入出金・振替 計", get: (mo) => accounts.reduce((a, acc) => a + flowTypesFor(acc, config).reduce((b, t) => b + val(mo, "account", t, acc), 0), 0) });
   rows.push({ kind: "head", label: "口座残高" });
   accounts.forEach((acc) => rows.push({ kind: "row", label: acc, get: (mo) => val(mo, "account", "残高", acc) }));
   rows.push({ kind: "sub", label: "残高計", get: (mo) => accounts.reduce((a, acc) => a + val(mo, "account", "残高", acc), 0) });
@@ -259,13 +268,15 @@ export function YearTable({ entries, ym, config, cards }) {
             {rows.map((r, i) => {
               if (r.kind === "head") return <tr key={i}><Editable tag="td" id="table.group" colSpan={months.length + 2} base={styles.tdGroup}>{r.label}</Editable></tr>;
               if (r.kind === "acct") return <tr key={i}><Editable tag="td" id="table.acct" colSpan={months.length + 2} base={styles.tdAcct}>{r.label}</Editable></tr>;
-              const isSub = r.kind === "sub";
+              const isNet = r.kind === "net";
+              const isSub = r.kind === "sub" || isNet;
               const yearTotal = months.reduce((a, mo) => a + r.get(mo), 0);
+              const signColor = (v) => (v > 0 ? GREEN : v < 0 ? RED : "var(--zero)");
               return (
                 <tr key={i}>
                   <Editable tag="td" id={isSub ? "table.subtotal" : "table.rowlabel"} base={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</Editable>
-                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : {}) }}>{v === 0 ? "" : num(v)}</Editable>; })}
-                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}) }}>{num(yearTotal)}</Editable>
+                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 800 } : {})) }}>{v === 0 ? "" : num(v)}</Editable>; })}
+                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 800 } : {}) }}>{num(yearTotal)}</Editable>
                 </tr>
               );
             })}
