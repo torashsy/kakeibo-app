@@ -52,6 +52,9 @@ export const themeVars = (t) => {
         income: mix(accent, WHITE, 0.28), expense: "#E0765C",
         accentSoft: mix(accent, "#16181A", 0.74),
         acctBg: mix(accent, "#16181A", 0.82),
+        colHl: mix(accent, "#16181A", 0.80),        // 年間表の「今月」列の淡いハイライト
+        zero: "#5A5D60",                             // 0円セルの控えめな文字色
+        expenseSoft: mix("#E0765C", "#16181A", 0.80), // 警告カードの背景
       }
     : {
         paper: "#FBFAF7", ink: "#1C2321", line: "#E4E1D9", muted: "#8A8577",
@@ -61,6 +64,9 @@ export const themeVars = (t) => {
         income: accent, expense: "#B5462F",
         accentSoft: mix(accent, WHITE, 0.86),
         acctBg: mix(accent, WHITE, 0.90),
+        colHl: mix(accent, WHITE, 0.92),
+        zero: "#C9C5BC",
+        expenseSoft: "#FBEEE9",
       };
 
   return {
@@ -68,6 +74,7 @@ export const themeVars = (t) => {
     "--line": p.line, "--muted": p.muted, "--income": p.income, "--expense": p.expense,
     "--card-bg": p.cardBg, "--th-bg": p.thBg, "--group-bg": p.groupBg, "--acct-bg": p.acctBg,
     "--subtotal-bg": p.subtotalBg, "--total-cell-bg": p.totalCellBg,
+    "--col-hl": p.colHl, "--zero": p.zero, "--expense-soft": p.expenseSoft,
     "--num-align": "right", "--label-align": "left",
     "--radius": "14px", "--row-pad": "12px", "--num-size": "15px",
     "--hero-bg": accent, "--hero-text": "#FFFFFF",

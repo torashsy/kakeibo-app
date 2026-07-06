@@ -31,7 +31,7 @@ export function Summary({ summary, prevBalTotal }) {
         const diff = balChange - summary.net;
         const ok = Math.abs(diff) < 1;
         return (
-          <div style={{ ...styles.checkCard, background: ok ? ACCENT_SOFT : "#FBEEE9" }}>
+          <div style={{ ...styles.checkCard, background: ok ? ACCENT_SOFT : "var(--expense-soft)" }}>
             {ok ? <span style={{ color: ACCENT, fontSize: 12.5 }}>✓ 残高の増減と収支が一致しています</span>
               : <span style={{ color: RED, fontSize: 12.5 }}>⚠ 残高増減と収支に {yen(Math.abs(diff))} のズレがあります（入力もれの可能性）</span>}
           </div>

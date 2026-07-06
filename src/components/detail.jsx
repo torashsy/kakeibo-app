@@ -52,7 +52,7 @@ export function DetailList({ monthEntries, onEdit }) {
 export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
   const its = node.entries; const total = its.reduce((a, e) => a + e.amount, 0);
   if (its.length === 0) {
-    return <div style={styles.itemRow}><span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={{ ...styles.detailItem, color: "#BBB6AC" }}>{label}</span></span><span style={{ ...styles.detailTotal, color: "#C9C5BC" }}>¥0</span></div>;
+    return <div style={styles.itemRow}><span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={{ ...styles.detailItem, color: "var(--zero)" }}>{label}</span></span><span style={{ ...styles.detailTotal, color: "var(--zero)" }}>¥0</span></div>;
   }
   if (its.length === 1) {
     return (
@@ -195,9 +195,9 @@ export function DetailTable({ S, config, cards, onEdit }) {
               const zero = its.length === 0;
               return (
                 <tr key={i}>
-                  <Editable tag="td" id="table.rowlabel" base={{ ...styles.td, ...styles.tdSticky, ...(r.indent ? { paddingLeft: 20 } : {}), ...(zero ? { color: "#C9C5BC" } : {}) }}>{r.label}</Editable>
+                  <Editable tag="td" id="table.rowlabel" base={{ ...styles.td, ...styles.tdSticky, ...(r.indent ? { paddingLeft: 20 } : {}), ...(zero ? { color: "var(--zero)" } : {}) }}>{r.label}</Editable>
                   {cols.map((c) => { const e = its[c - 1]; return <Editable tag="td" id="table.cell" key={c} base={styles.tdNum}>{e ? <button style={styles.cellBtn} onClick={() => onEdit(e)}>{num(e.amount)}</button> : ""}</Editable>; })}
-                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(zero ? { color: "#C9C5BC" } : {}) }}>{zero ? "0" : num(total)}</Editable>
+                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(zero ? { color: "var(--zero)" } : {}) }}>{zero ? "0" : num(total)}</Editable>
                 </tr>
               );
             })}
@@ -264,7 +264,7 @@ export function YearTable({ entries, ym, config, cards }) {
               return (
                 <tr key={i}>
                   <Editable tag="td" id={isSub ? "table.subtotal" : "table.rowlabel"} base={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</Editable>
-                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "#F4F8F6" } : {}), ...(v === 0 ? { color: "#D5D1C8" } : {}) }}>{v === 0 ? "·" : num(v)}</Editable>; })}
+                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : {}) }}>{v === 0 ? "·" : num(v)}</Editable>; })}
                   <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}) }}>{num(yearTotal)}</Editable>
                 </tr>
               );
