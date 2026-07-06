@@ -8,20 +8,22 @@ export const LINE = "var(--line)", MUTED = "var(--muted)", RED = "var(--expense)
 const FONT_STACK = "'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif";
 
 
-// ユーザーが選べるのは「アクセント色」と「ダークモード」だけ
+// ユーザーが選べるのは「アクセント色」と「ダークモード」だけ。
+// ダークを基本(既定)とする。
 export const DEFAULT_THEME = {
-  accent: "#2F6F5B",
-  dark: false,
+  accent: "#1F8A66",
+  dark: true,
 };
 
-// アクセント色のプリセット(設定画面で選べる)
+// アクセント色のプリセット(設定画面で選べる)。
+// 白文字が乗るヒーロー等でも読めるよう、やや深めの発色に統一。
 export const ACCENT_PRESETS = [
-  { id: "green", label: "グリーン", color: "#2F6F5B" },
-  { id: "blue", label: "ブルー", color: "#2F5D8A" },
-  { id: "indigo", label: "インディゴ", color: "#4B4E8A" },
-  { id: "plum", label: "プラム", color: "#8A3F66" },
-  { id: "terra", label: "テラコッタ", color: "#B5563A" },
-  { id: "graphite", label: "グラファイト", color: "#3A3F45" },
+  { id: "emerald", label: "エメラルド", color: "#1F8A66" },
+  { id: "teal", label: "ティール", color: "#1C8A93" },
+  { id: "blue", label: "ブルー", color: "#2F6FBF" },
+  { id: "indigo", label: "インディゴ", color: "#5257C7" },
+  { id: "violet", label: "バイオレット", color: "#8A57C2" },
+  { id: "rose", label: "ローズ", color: "#C24368" },
 ];
 
 
@@ -43,30 +45,31 @@ export const themeVars = (t) => {
   const dark = !!(t && t.dark);
   const WHITE = "#FFFFFF";
 
+  // ベージュ系をやめ、クールでニュートラルなグレーを基調にする(ダーク基本)
   const p = dark
     ? {
-        paper: "#16181A", ink: "#E9E7E1", line: "#34383C", muted: "#9A968C",
-        cardBg: "#22262A", thBg: "#2A2E32", groupBg: "#2E3338",
-        subtotalBg: "#262B2E", totalCellBg: "#23282B", tabBg: "#1B1E20",
-        base: "#16181A",
-        income: mix(accent, WHITE, 0.28), expense: "#E0765C",
-        accentSoft: mix(accent, "#16181A", 0.74),
-        acctBg: mix(accent, "#16181A", 0.82),
-        colHl: mix(accent, "#16181A", 0.80),        // 年間表の「今月」列の淡いハイライト
-        zero: "#5A5D60",                             // 0円セルの控えめな文字色
-        expenseSoft: mix("#E0765C", "#16181A", 0.80), // 警告カードの背景
+        paper: "#0F1216", ink: "#EAECEF", line: "#262B31", muted: "#868E99",
+        cardBg: "#171B20", thBg: "#1C2127", groupBg: "#21272E",
+        subtotalBg: "#1A1F25", totalCellBg: "#181D22", tabBg: "#12161A",
+        base: "#0F1216",
+        income: mix(accent, WHITE, 0.26), expense: "#F2765C",
+        accentSoft: mix(accent, "#0F1216", 0.78),
+        acctBg: mix(accent, "#0F1216", 0.85),
+        colHl: mix(accent, "#0F1216", 0.82),        // 年間表の「今月」列の淡いハイライト
+        zero: "#4A515A",                             // 0円セルの控えめな文字色
+        expenseSoft: mix("#F2765C", "#0F1216", 0.82), // 警告カードの背景
       }
     : {
-        paper: "#FBFAF7", ink: "#1C2321", line: "#E4E1D9", muted: "#8A8577",
-        cardBg: "#FFFFFF", thBg: "#F7F5EF", groupBg: "#EDEAE2",
-        subtotalBg: "#F4F1EA", totalCellBg: "#FAF9F5", tabBg: "#FFFFFF",
+        paper: "#F6F7F9", ink: "#171A1D", line: "#E2E5EA", muted: "#626973",
+        cardBg: "#FFFFFF", thBg: "#EEF0F3", groupBg: "#E5E8EC",
+        subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#FFFFFF",
         base: "#FFFFFF",
-        income: accent, expense: "#B5462F",
-        accentSoft: mix(accent, WHITE, 0.86),
-        acctBg: mix(accent, WHITE, 0.90),
+        income: accent, expense: "#CE3B2C",
+        accentSoft: mix(accent, WHITE, 0.88),
+        acctBg: mix(accent, WHITE, 0.92),
         colHl: mix(accent, WHITE, 0.92),
-        zero: "#C9C5BC",
-        expenseSoft: "#FBEEE9",
+        zero: "#B7BCC3",
+        expenseSoft: mix("#CE3B2C", WHITE, 0.90),
       };
 
   return {

@@ -66,7 +66,7 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>金額はプラスで入力。控除は自動で差し引きます。</div>
         {rows.map((r, i) => (
           <div key={r.item} style={styles.salaryRow}>
-            <span style={{ fontSize: 14, width: 64, color: r.item === "控除" ? "#7A6A4F" : INK, fontWeight: 600 }}>{r.item}</span>
+            <span style={{ fontSize: 14, width: 64, color: r.item === "控除" ? MUTED : INK, fontWeight: 600 }}>{r.item}</span>
             <div style={{ ...styles.amountWrap, flex: 1, padding: "5px 12px", border: `1px solid ${LINE}` }}>
               <span style={{ ...styles.yenMark, fontSize: 16 }}>¥</span>
               <input type="number" inputMode="numeric" value={r.amount} onChange={(e) => setAmt(i, e.target.value)} placeholder="0" style={{ ...styles.amountInput, fontSize: 18 }} />

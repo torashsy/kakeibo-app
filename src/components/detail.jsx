@@ -264,7 +264,7 @@ export function YearTable({ entries, ym, config, cards }) {
               return (
                 <tr key={i}>
                   <Editable tag="td" id={isSub ? "table.subtotal" : "table.rowlabel"} base={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</Editable>
-                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : {}) }}>{v === 0 ? "·" : num(v)}</Editable>; })}
+                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : {}) }}>{v === 0 ? "" : num(v)}</Editable>; })}
                   <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}) }}>{num(yearTotal)}</Editable>
                 </tr>
               );
