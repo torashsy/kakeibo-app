@@ -143,6 +143,13 @@ export const SEED_DEBT = {
 };
 
 
+// 収支計算とは無関係の自由メモ(サブスク・交際費などの覚え書き)の初期データ
+export const SEED_MEMOS = [
+  { id: uid(), title: "サブスク", amount: 3470, body: "Netflix ¥1,490\nSpotify ¥980\niCloud+ ¥1,000" },
+  { id: uid(), title: "交際費", amount: 12000, body: "6月の飲み会・プレゼント代など" },
+];
+
+
 // 月データを、元incomeと同じ並びの「項目リスト」に整える(0円項目も含む)
 export function buildStructure(monthEntries, config, cards) {
   const byKey = {}; // key -> {item, account, cat, entries[]}

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, computeSummary } from './utils.js';
+import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, computeSummary } from './utils.js';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
 import { Cards } from './components/cards.jsx';
+import { Memos } from './components/memos.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
 import { Icon } from './icons.jsx';
@@ -14,6 +15,7 @@ export default function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [cards, setCards] = useState([]);
   const [debt, setDebt] = useState({});
+  const [memos, setMemos] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("summary");
@@ -24,12 +26,13 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th] = await Promise.all([
+        const [e, c, cd, d, th, mm] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
           window.storage.get("debt", true).catch(() => null),
           window.storage.get("theme", true).catch(() => null),
+          window.storage.get("memos", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -47,6 +50,8 @@ export default function App() {
         const rawDebt = d && d.value ? JSON.parse(d.value) : null;
         setDebt(rawDebt && typeof rawDebt === "object" ? rawDebt : SEED_DEBT);
         setTheme(th && th.value ? { ...DEFAULT_THEME, ...JSON.parse(th.value) } : DEFAULT_THEME);
+        const rawMemos = mm && mm.value ? JSON.parse(mm.value) : null;
+        setMemos(Array.isArray(rawMemos) ? rawMemos : SEED_MEMOS);
       } catch {
         setEntries(SEED_ENTRIES.map((x) => ({ ...x, id: uid() }))); setCards(DEFAULT_CARDS); setDebt(SEED_DEBT);
       } finally { setLoaded(true); }
@@ -57,6 +62,7 @@ export default function App() {
   const commitConfig = (n) => { setConfig(n); save("config", n); };
   const commitCards = (n) => { setCards(n); save("cards", n); };
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
+  const commitMemos = (n) => { setMemos(n); save("memos", n); };
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
 
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
@@ -108,7 +114,7 @@ export default function App() {
     <div style={{ ...styles.app, ...themeVars(theme) }}>
       <header style={styles.header}>
         <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><span style={styles.cloud}>☁ 同期</span></div>
-        {tab !== "cards" && tab !== "settings" && tab !== "design" && (
+        {tab !== "cards" && tab !== "settings" && tab !== "design" && tab !== "memos" && (
           <div style={styles.monthPicker}>
             <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i > 0) setYm(months[i - 1]); }}>‹</button>
             <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}</select>
@@ -121,6 +127,7 @@ export default function App() {
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
+        {tab === "memos" && <Memos memos={memos} onSave={commitMemos} />}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
       </main>
@@ -131,6 +138,7 @@ export default function App() {
         <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} label="サマリ" icon="summary" />
         <TabBtn active={tab === "detail"} onClick={() => setTab("detail")} label="詳細" icon="detail" />
         <TabBtn active={tab === "cards"} onClick={() => setTab("cards")} label="カード" icon="card" />
+        <TabBtn active={tab === "memos"} onClick={() => setTab("memos")} label="メモ" icon="memo" />
         <TabBtn active={tab === "settings" || tab === "design"} onClick={() => setTab("settings")} label="設定" icon="settings" />
       </nav>
 

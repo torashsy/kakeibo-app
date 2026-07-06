@@ -113,6 +113,12 @@ export const styles = {
   saveBtnHalf: { flex: 1, border: "none", background: ACCENT, color: "#fff", borderRadius: 12, padding: "13px 8px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
   deleteBtn: { width: "100%", border: "none", background: "transparent", color: RED, borderRadius: 12, padding: "12px", fontSize: 13.5, cursor: "pointer", marginTop: 4, fontFamily: "inherit" },
   cancelBtn: { width: "100%", border: "none", background: "transparent", color: MUTED, borderRadius: 12, padding: "10px", fontSize: 13.5, cursor: "pointer", fontFamily: "inherit" },
+  memoCard: { display: "block", width: "100%", background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "13px 16px", cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
+  memoHead: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 },
+  memoTitle: { fontSize: 15, fontWeight: 600, color: INK },
+  memoAmount: { fontSize: 15, fontWeight: 600, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)", flexShrink: 0 },
+  memoBody: { fontSize: 12.5, color: MUTED, marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.5 },
+  memoTextarea: { width: "100%", border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, outline: "none", background: "var(--card-bg)", color: INK, boxSizing: "border-box", fontFamily: "inherit", minHeight: 96, resize: "vertical", lineHeight: 1.5 },
 };
 
 
