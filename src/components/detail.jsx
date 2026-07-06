@@ -52,7 +52,7 @@ export function DetailList({ monthEntries, onEdit }) {
 export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
   const its = node.entries; const total = its.reduce((a, e) => a + e.amount, 0);
   if (its.length === 0) {
-    return <div style={styles.itemRow}><span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={{ ...styles.detailItem, color: "var(--zero)" }}>{label}</span></span><span style={{ ...styles.detailTotal, color: "var(--zero)" }}>¥0</span></div>;
+    return <div style={styles.itemRow}><span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={{ ...styles.detailItem, color: "var(--zero)" }}>{label}</span></span><span style={styles.editRowRight}><span style={{ ...styles.detailTotal, color: "var(--zero)" }}>¥0</span><span style={styles.chevRSpacer} /></span></div>;
   }
   if (its.length === 1) {
     return (
@@ -70,7 +70,7 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
           <span style={{ ...styles.chev, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", width: 16 }}>›</span>
           <Editable id="detail.item" tag="span" base={styles.detailItem}>{label}</Editable><span style={styles.countBadge}>{its.length}件</span>
         </span>
-        <Editable id="detail.total" tag="span" base={styles.detailTotal}>{yen(total)}</Editable>
+        <span style={styles.editRowRight}><Editable id="detail.total" tag="span" base={styles.detailTotal}>{yen(total)}</Editable><span style={styles.chevRSpacer} /></span>
       </button>
       {isOpen && its.map((e, i) => (
         <button key={e.id} style={styles.editSubRow} onClick={() => onEdit(e)}>
@@ -103,7 +103,7 @@ export function DetailCards({ S, config, cards, onEdit }) {
       <Editable id="card.groupHead" base={styles.detailHead}><span>給与系</span></Editable>
       <Editable id="detail.cardBg" base={styles.detailCard}>
         {salaryItems.map((it) => <ItemRow key={it} label={it} node={S.get("salary", it, "")} gkey={"salary|" + it} {...rowProps} />)}
-        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>給与計</span><span>{yen(salaryTotal)}</span></Editable>
+        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>給与計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(salaryTotal)}</span><span style={styles.chevRSpacer} /></span></Editable>
       </Editable>
     </div>
 
@@ -112,7 +112,7 @@ export function DetailCards({ S, config, cards, onEdit }) {
       <Editable id="card.groupHead" base={styles.detailHead}><span>カード</span></Editable>
       <Editable id="detail.cardBg" base={styles.detailCard}>
         {(cards || []).map((c) => <ItemRow key={c.id} label={c.name} node={S.get("card", c.name, "")} gkey={"card|" + c.name} {...rowProps} />)}
-        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>カード計</span><span>{yen(cardTotal)}</span></Editable>
+        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>カード計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(cardTotal)}</span><span style={styles.chevRSpacer} /></span></Editable>
       </Editable>
     </div>
 
@@ -123,7 +123,7 @@ export function DetailCards({ S, config, cards, onEdit }) {
         const accTotal = S.flowTypes.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
         return (
           <Editable key={acc} id="detail.cardBg" base={{ ...styles.detailCard, marginBottom: 10 }}>
-            <Editable id="card.acctHead" base={styles.subGroupHead}><span>{acc}</span><span style={styles.subGroupTotal}>{yen(accTotal)}</span></Editable>
+            <Editable id="card.acctHead" base={styles.subGroupHead}><span>{acc}</span><span style={styles.editRowRight}><span style={styles.subGroupTotal}>{yen(accTotal)}</span><span style={styles.chevRSpacer} /></span></Editable>
             {S.flowTypes.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
           </Editable>
         );
@@ -135,7 +135,7 @@ export function DetailCards({ S, config, cards, onEdit }) {
       <Editable id="card.groupHead" base={styles.detailHead}><span>口座残高</span></Editable>
       <Editable id="detail.cardBg" base={styles.detailCard}>
         {S.accounts.map((acc) => <ItemRow key={acc} label={acc} node={S.get("account", "残高", acc)} gkey={`bal|${acc}`} {...rowProps} />)}
-        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>残高計</span><span>{yen(balTotalAll)}</span></Editable>
+        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>残高計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(balTotalAll)}</span><span style={styles.chevRSpacer} /></span></Editable>
       </Editable>
     </div>
   </>;
