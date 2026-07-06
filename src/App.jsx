@@ -43,7 +43,7 @@ export default function App() {
         }
         setConfig(c && c.value ? { ...DEFAULT_CONFIG, ...JSON.parse(c.value) } : DEFAULT_CONFIG);
         const rawCards = cd && cd.value ? JSON.parse(cd.value) : null;
-        setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "" } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "" }) : DEFAULT_CARDS);
+        setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "", annualFee: 0 } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "", annualFee: Number(c.annualFee) || 0 }) : DEFAULT_CARDS);
         const rawDebt = d && d.value ? JSON.parse(d.value) : null;
         setDebt(rawDebt && typeof rawDebt === "object" ? rawDebt : SEED_DEBT);
         setTheme(th && th.value ? { ...DEFAULT_THEME, ...JSON.parse(th.value) } : DEFAULT_THEME);
