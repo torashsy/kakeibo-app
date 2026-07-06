@@ -123,6 +123,10 @@ if (typeof document !== "undefined" && !document.getElementById("kakeibo-kf")) {
     // モバイルで文字が太く/大きく描画されすぎるのを防ぐ(PCの見た目に寄せる)。
     // font-synthesis:none で擬似ボールドを無効化、font-smoothing で細く滑らかに。
     "html{-webkit-text-size-adjust:100%;text-size-adjust:100%}",
+    // iOS Safariは色指定のない<button>の文字をシステム青で描画する。
+    // 明細行などはボタンなので、色未指定のボタンは周囲の文字色(ink)を継承させて白に戻す。
+    // (色を明示しているボタンはインライン指定が優先されるため影響しない)
+    "button{color:inherit;-webkit-text-fill-color:currentColor}",
     "body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-synthesis:none}",
     // iOS/Androidが金額の数字を電話番号扱いで自動リンク化(青文字)する対策。
     // アプリは表示用の<a>を持たないので、#root内の全リンクの色を元の文字色に戻す。
