@@ -159,8 +159,8 @@ export const SEED_DEBT = {
 
 // 収支計算とは無関係の自由メモ(交際費などの覚え書き)の初期データ。カテゴリで小計をまとめる。
 export const SEED_MEMOS = [
-  { id: uid(), title: "6月 飲み会", amount: 5000, body: "同期と", category: "交際費" },
-  { id: uid(), title: "誕生日プレゼント", amount: 7000, body: "", category: "交際費" },
+  { id: uid(), title: "6月 飲み会", amount: 5000, body: "同期と", category: "交際費", ym: "2026-06" },
+  { id: uid(), title: "誕生日プレゼント", amount: 7000, body: "", category: "交際費", ym: "2026-06" },
 ];
 
 // サブスク管理の初期データ。cycle は "monthly"(月額) / "yearly"(年払い)。
@@ -170,6 +170,74 @@ export const SEED_SUBS = [
   { id: uid(), name: "Spotify", amount: 980, cycle: "monthly", card: "", renewal: "", plan: "", note: "" },
   { id: uid(), name: "Amazon Prime", amount: 5900, cycle: "yearly", card: "JCB Gold", renewal: "2026-11-01", plan: "年間プラン", note: "" },
 ];
+
+
+// ===== 計画(plan) =====
+// 年度(4月開始)の12か月の ym を返す
+export const planMonths = (fyStart) => Array.from({ length: 12 }, (_, i) => { const d = new Date(fyStart, 3 + i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+
+// ym から年度開始年(4月)を求める
+export const fyStartOf = (ym) => { const [y, m] = ym.split("-").map(Number); return m >= 4 ? y : y - 1; };
+
+// 計画の行を設定・カードから生成。group=income/expense、sub=小見出し、
+// key は実績とマッピングするための識別子("salary|給与" / "card|SMCC Gold" / "flow|投資" / "memo|交際費")
+export function planLines(config, cards) {
+  const lines = [];
+  (config.salaryItems || []).forEach((it) => lines.push({ key: "salary|" + it, group: "income", sub: "給与系", label: it }));
+  lines.push({ key: "flow|入金", group: "income", sub: "その他収入", label: "臨時収入・入金" });
+  (cards || []).forEach((c) => lines.push({ key: "card|" + c.name, group: "expense", sub: "カード", label: c.name }));
+  lines.push({ key: "flow|投資", group: "expense", sub: "その他支出", label: "投資" });
+  lines.push({ key: "memo|交際費", group: "expense", sub: "その他支出", label: "交際費" });
+  lines.push({ key: "flow|出金", group: "expense", sub: "その他支出", label: "現金出金" });
+  return lines;
+}
+
+// 計画額(標準月 std ＋ 例外月 over の上書き)
+export const planValue = (plan, key, ym) => {
+  const l = plan && plan.lines && plan.lines[key];
+  if (!l) return 0;
+  const v = l.over && l.over[ym] != null ? l.over[ym] : l.std;
+  return Number(v) || 0;
+};
+
+// 実績額(計画と同じ符号規約で1行・1か月ぶん)。monthEntries はその月の記録。
+export function actualForLine(key, monthEntries, memos, ym) {
+  const [type, name] = key.split("|");
+  if (type === "salary") return monthEntries.reduce((a, e) => a + (e.cat === "salary" && e.item === name ? e.amount : 0), 0);
+  if (type === "card") return monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === name ? Math.abs(e.amount) : 0), 0);
+  if (type === "memo") return (memos || []).reduce((a, m) => a + ((m.category || "") === name && m.ym === ym ? (Number(m.amount) || 0) : 0), 0);
+  if (type === "flow") {
+    if (name === "投資") return -monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "transfer" ? e.amount : 0), 0);
+    const role = name === "入金" ? "in" : "out";
+    return monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === role ? Math.abs(e.amount) : 0), 0);
+  }
+  return 0;
+}
+
+// 初期計画(スプレッドシートを参考にした標準月＋一部上書き)。年度は当該データに合わせ2026。
+export const SEED_PLAN = {
+  fyStart: 2026,
+  lines: {
+    "salary|給与": { std: 310000, over: { "2026-06": 286000 } },
+    "salary|手当": { std: 0, over: { "2026-06": 160000, "2026-07": 72000, "2026-10": 90000, "2027-01": 620000 } },
+    "salary|賞与": { std: 0, over: {} },
+    "salary|控除": { std: -62000, over: { "2026-06": -89000, "2026-07": -76000 } },
+    "flow|入金": { std: 0, over: { "2026-11": 1100000 } },
+    "card|SMCC Gold": { std: 40000, over: {} },
+    "card|smcc": { std: 300, over: {} },
+    "card|JAL navi": { std: 20000, over: {} },
+    "card|VIEW": { std: 60000, over: { "2026-06": 50000 } },
+    "card|JCB Gold": { std: 10000, over: {} },
+    "card|SAISON": { std: 15000, over: {} },
+    "card|EPOS": { std: 1000, over: {} },
+    "card|TOBU": { std: 1000, over: {} },
+    "card|PayPay": { std: 4000, over: {} },
+    "card|MDC": { std: 1000, over: {} },
+    "flow|投資": { std: 46000, over: {} },
+    "memo|交際費": { std: 25000, over: {} },
+    "flow|出金": { std: 0, over: {} },
+  },
+};
 
 
 // 月データを、元incomeと同じ並びの「項目リスト」に整える(0円項目も含む)

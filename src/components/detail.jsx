@@ -3,22 +3,25 @@ import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils.js';
 import { styles } from '../styles.js';
 import { Editable } from '../edit.jsx';
+import { PlanView } from './plan.jsx';
 
-export function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
+export function Detail({ monthEntries, entries, ym, config, cards, memos, plans, onSavePlans, onEdit }) {
   const [view, setView] = useState("card");
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <div style={styles.viewToggle}>
+      <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
         <button style={{ ...styles.viewToggleBtn, ...(view === "list" ? styles.viewToggleActive : {}) }} onClick={() => setView("list")}>履歴</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>項目別</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "table" ? styles.viewToggleActive : {}) }} onClick={() => setView("table")}>表</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "plan" ? styles.viewToggleActive : {}) }} onClick={() => setView("plan")}>計画</button>
       </div>
       {view === "list" && <DetailList monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "table" && <DetailTable S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "year" && <YearTable entries={entries} ym={ym} config={config} cards={cards} />}
+      {view === "plan" && <PlanView plans={plans} onSave={onSavePlans} config={config} cards={cards} entries={entries} memos={memos} ym={ym} />}
     </div>
   );
 }

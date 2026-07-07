@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, computeSummary } from './utils.js';
+import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary } from './utils.js';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -17,6 +17,7 @@ export default function App() {
   const [debt, setDebt] = useState({});
   const [memos, setMemos] = useState([]);
   const [subs, setSubs] = useState([]);
+  const [plans, setPlans] = useState(SEED_PLAN);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("summary");
@@ -27,7 +28,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th, mm, sb] = await Promise.all([
+        const [e, c, cd, d, th, mm, sb, pl] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
@@ -35,6 +36,7 @@ export default function App() {
           window.storage.get("theme", true).catch(() => null),
           window.storage.get("memos", true).catch(() => null),
           window.storage.get("subs", true).catch(() => null),
+          window.storage.get("plans", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -56,6 +58,8 @@ export default function App() {
         setMemos(Array.isArray(rawMemos) ? rawMemos : SEED_MEMOS);
         const rawSubs = sb && sb.value ? JSON.parse(sb.value) : null;
         setSubs(Array.isArray(rawSubs) ? rawSubs : SEED_SUBS);
+        const rawPlans = pl && pl.value ? JSON.parse(pl.value) : null;
+        setPlans(rawPlans && rawPlans.lines ? rawPlans : SEED_PLAN);
       } catch {
         setEntries(SEED_ENTRIES.map((x) => ({ ...x, id: uid() }))); setCards(DEFAULT_CARDS); setDebt(SEED_DEBT);
       } finally { setLoaded(true); }
@@ -68,6 +72,7 @@ export default function App() {
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
   const commitSubs = (n) => { setSubs(n); save("subs", n); };
+  const commitPlans = (n) => { setPlans(n); save("plans", n); };
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
 
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
@@ -130,7 +135,7 @@ export default function App() {
 
       <main style={styles.main}>
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
-        {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
+        {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
         {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} />}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
