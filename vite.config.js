@@ -1,3 +1,4 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-export default defineConfig({ plugins: [react()] });
+// base:"./" — GitHub Pages(サブパス配信)でも動くよう、アセットを相対パスで参照する
+export default defineConfig({ base: "./", plugins: [react()] });

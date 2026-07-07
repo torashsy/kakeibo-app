@@ -15,3 +15,10 @@ if (typeof document !== "undefined" && !document.querySelector('meta[name="forma
 createRoot(document.getElementById("root")).render(
   <React.StrictMode><App /></React.StrictMode>
 );
+
+// PWA: 本番(https配信)でのみService Workerを登録。無い環境(プレビュー等)では黙って何もしない。
+if (import.meta.env.PROD && typeof navigator !== "undefined" && "serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
