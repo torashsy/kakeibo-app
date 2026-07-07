@@ -181,16 +181,20 @@ export const fyStartOf = (ym) => { const [y, m] = ym.split("-").map(Number); ret
 
 // 計画の行を設定・カードから生成。group=income/expense、sub=小見出し、
 // key は実績とマッピングするための識別子("salary|給与" / "card|SMCC Gold" / "flow|投資" / "memo|交際費")
+// 実績と同じグループ構成(給与系/カード/口座/その他)。口座は預入/入金/引出/送金/投資振替を統合。
 export function planLines(config, cards) {
   const lines = [];
-  (config.salaryItems || []).forEach((it) => lines.push({ key: "salary|" + it, group: "income", sub: "給与系", label: it }));
-  // 口座フローは実績と同じ種別名で（預入/入金=収入、引出/送金/投資振替=支出）
-  ALL_FLOW_TYPES.forEach((t) => { if (acctRole(t) === "in") lines.push({ key: "flow|" + t, group: "income", sub: "口座", label: t }); });
-  (cards || []).forEach((c) => lines.push({ key: "card|" + c.name, group: "expense", sub: "カード", label: c.name }));
-  ALL_FLOW_TYPES.forEach((t) => { const r = acctRole(t); if (r === "out" || r === "transfer") lines.push({ key: "flow|" + t, group: "expense", sub: "口座", label: t }); });
-  lines.push({ key: "memo|交際費", group: "expense", sub: "その他支出", label: "交際費" });
+  (config.salaryItems || []).forEach((it) => lines.push({ key: "salary|" + it, group: "salary", label: it }));
+  (cards || []).forEach((c) => lines.push({ key: "card|" + c.name, group: "card", label: c.name }));
+  ALL_FLOW_TYPES.forEach((t) => lines.push({ key: "flow|" + t, group: "account", label: t }));
+  lines.push({ key: "memo|交際費", group: "other", label: "交際費" });
   return lines;
 }
+
+// 収支への符号(+収入 / −支出)。口座フローは符号付きなので +。
+export const planGroupSign = (group) => (group === "card" || group === "other" ? -1 : 1);
+// [グループ見出し, 小計ラベル(nullなら小計行なし)]
+export const PLAN_GROUPS = [["salary", "給与系", "給与計"], ["card", "カード", "カード計"], ["account", "口座", "口座計"], ["other", "その他", null]];
 
 // 計画額(標準月 std ＋ 例外月 over の上書き)
 export const planValue = (plan, key, ym) => {
@@ -206,11 +210,8 @@ export function actualForLine(key, monthEntries, memos, ym) {
   if (type === "salary") return monthEntries.reduce((a, e) => a + (e.cat === "salary" && e.item === name ? e.amount : 0), 0);
   if (type === "card") return monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === name ? Math.abs(e.amount) : 0), 0);
   if (type === "memo") return (memos || []).reduce((a, m) => a + ((m.category || "") === name && m.ym === ym ? (Number(m.amount) || 0) : 0), 0);
-  if (type === "flow") {
-    // name はフロー種別(実績の item と一致)。投資振替は符号反転で「投資額」を正にする
-    const sum = monthEntries.reduce((a, e) => a + (e.cat === "account" && e.item === name ? e.amount : 0), 0);
-    return acctRole(name) === "transfer" ? -sum : Math.abs(sum);
-  }
+  // 口座フローは実績の記録と同じ符号(預入/入金=+、引出/送金/投資振替=記録どおり)で集計
+  if (type === "flow") return monthEntries.reduce((a, e) => a + (e.cat === "account" && e.item === name ? e.amount : 0), 0);
   return 0;
 }
 
@@ -237,7 +238,7 @@ export const SEED_PLAN = {
     "salary|賞与": { std: 0, over: {} },
     "salary|控除": { std: -62000, over: { "2026-06": -89000, "2026-07": -76000 } },
     "flow|入金": { std: 0, over: { "2026-11": 1100000 } },
-    "flow|投資振替": { std: 46000, over: {} },
+    "flow|投資振替": { std: -46000, over: {} },
     "card|SMCC Gold": { std: 40000, over: {} },
     "card|smcc": { std: 300, over: {} },
     "card|JAL navi": { std: 20000, over: {} },
