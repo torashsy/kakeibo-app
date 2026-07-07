@@ -9,6 +9,7 @@ import { MemoTab } from './components/memos.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
 import { Icon } from './icons.jsx';
+import { getSyncState, onSyncChange } from './storage.js';
 
 export default function App() {
   const [entries, setEntries] = useState([]);
@@ -135,7 +136,7 @@ export default function App() {
   return (
     <div style={{ ...styles.app, ...themeVars(theme) }}>
       <header style={styles.header}>
-        <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><span style={styles.cloud}>☁ 同期</span></div>
+        <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><CloudBadge /></div>
         {tab !== "cards" && tab !== "settings" && tab !== "design" && tab !== "memos" && (
           <div style={styles.monthPicker}>
             <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i > 0) setYm(months[i - 1]); }}>‹</button>
@@ -171,6 +172,17 @@ export default function App() {
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
     </div>
   );
+}
+
+// ヘッダーの同期状態表示。ログイン中のみ「☁ 同期中」、それ以外は「ローカル保存」
+function CloudBadge() {
+  const [mode, setMode] = useState("off");
+  useEffect(() => {
+    const refresh = () => getSyncState().then((s) => setMode(s.mode)).catch(() => {});
+    refresh();
+    return onSyncChange(refresh);
+  }, []);
+  return <span style={styles.cloud}>{mode === "on" ? "☁ 同期中" : "ローカル保存"}</span>;
 }
 
 function TabBtn({ active, onClick, label, icon }) {

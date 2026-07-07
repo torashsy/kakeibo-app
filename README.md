@@ -35,9 +35,32 @@ npm test           # ユニットテスト(Vitest)
 口座の記録種別と収支への算入は `ACCOUNT_TYPES` / `acctRole` を参照
 （残高=記録のみ / 預入・受取=収入 / 引出・送金=支出 / 投資振替=符号そのまま収支反映）。
 
-## クラウド同期したい場合
-`src/storage.js` の実装を、同じ `get/set/delete/list` の signature のまま
-バックエンド（Supabase 等）に差し替えるだけでよい。App.jsx の変更は不要。
+## クラウド同期（Supabase・実装済み）
+`src/storage.js` は localStorage を基本に、設定するとSupabaseへキー単位の
+last-write-wins で双方向同期する（オフライン時はローカル→復帰後に追送。
+マージ判定は `src/sync.js`）。URL/anon key は端末のlocalStorageにのみ保存し、
+リポジトリには置かない。supabase-js は設定時のみ動的読込。
+
+セットアップ（1回だけ）:
+1. https://supabase.com で無料プロジェクトを作成
+2. Authentication → Sign In / Up → Email を有効化
+   （簡単にするなら "Confirm email" はオフ）
+3. SQL Editor で以下を実行:
+```sql
+create table public.kv (
+  user_id uuid not null default auth.uid(),
+  key text not null,
+  value text,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, key)
+);
+alter table public.kv enable row level security;
+create policy "own rows" on public.kv for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+4. アプリの 設定 → クラウド同期 に Project URL と anon key
+   （Settings → API）を入力 → 新規登録/ログイン
+5. 2台目の端末では同じURL/keyを入れてログインすればデータが揃う
 
 ## Claude Code での進め方の目安
 - デザインの調整は指示ベースで少しずつ（`styles.js` は CSS 変数を参照。色は `theme.js` の `themeVars` で集中管理）。
