@@ -57,7 +57,7 @@ export const styles = {
   chip: { border: `1px solid ${LINE}`, background: PAPER, borderRadius: 8, padding: "4px 9px", fontSize: 12, color: INK, cursor: "pointer", fontVariantNumeric: "tabular-nums", fontFamily: "inherit" },
   chipGhost: { border: "none", background: "transparent", color: MUTED, fontSize: 12, cursor: "pointer", padding: 0 },
   tableScroll: { overflowX: "auto", border: `1px solid ${LINE}`, borderRadius: 12, background: "var(--card-bg)", WebkitOverflowScrolling: "touch" },
-  table: { borderCollapse: "collapse", fontSize: 12.5, fontVariantNumeric: "var(--num-variant)", fontFamily: "var(--num-font)", minWidth: "100%", tableLayout: "fixed" },
+  table: { borderCollapse: "collapse", fontSize: 12.5, fontVariantNumeric: "var(--num-variant)", fontFamily: "var(--num-font)", width: "100%", tableLayout: "fixed" },
   th: { padding: "8px 10px", fontSize: 11, fontWeight: 600, color: MUTED, background: "var(--th-bg)", borderBottom: `1px solid ${LINE}`, whiteSpace: "nowrap", textAlign: "right", width: 96 },
   thSticky: { position: "sticky", left: 0, zIndex: 2, textAlign: "left", background: "var(--th-bg)", minWidth: 96, width: "auto" },
   thTotal: { borderLeft: `1px solid ${LINE}`, textAlign: "right" },

@@ -184,6 +184,7 @@ export function DetailTable({ S, config, cards, onEdit }) {
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>項目別と同じ並びです。横スクロール可。数字をタップで編集。</div>
       <div style={styles.tableScroll}>
         <table style={styles.table}>
+          <colgroup><col />{cols.map((c) => <col key={"col-" + c} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thSticky }}>項目</Editable>{cols.map((c) => <Editable tag="th" id="table.th" key={c} base={styles.th}>{c}</Editable>)}<Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thTotal }}>計</Editable></tr></thead>
           <tbody>
             {rows.map((r, i) => {
@@ -263,6 +264,7 @@ export function YearTable({ entries, ym, config, cards }) {
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{fyStart}年4月〜{fyStart + 1}年3月の12か月。横スクロールできます。</div>
       <div style={styles.tableScroll}>
         <table style={styles.table}>
+          <colgroup><col />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thSticky }}>項目</Editable>{months.map((mo) => <Editable tag="th" id="table.th" key={mo} base={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</Editable>)}<Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thTotal }}>年間計</Editable></tr></thead>
           <tbody>
             {rows.map((r, i) => {

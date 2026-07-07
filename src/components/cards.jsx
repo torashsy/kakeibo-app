@@ -34,6 +34,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>各月の支払予定額。セルをタップで編集。横スクロール可。</div>
       <div style={styles.tableScroll}>
         <table style={styles.table}>
+          <colgroup><col />{monthsCols.map((m) => <col key={"col-" + m} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>カード</th>{monthsCols.map((m) => <th key={m} style={styles.th}>{parseInt(m.split("-")[1], 10)}月</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>残債</th></tr></thead>
           <tbody>
             {cards.map((c) => (
