@@ -170,7 +170,7 @@ export function DetailTable({ S, config, cards, onEdit }) {
     S.flowsFor(acc).forEach((t) => addItem(t, S.get("account", t, acc), true));
   });
   const flowTotal = S.accounts.reduce((a, acc) => a + S.flowsFor(acc).reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0), 0);
-  sub("入出金・振替 計", flowTotal);
+  sub("入出金 計", flowTotal);
 
   // 口座残高
   head("口座残高");
@@ -251,7 +251,7 @@ export function YearTable({ entries, ym, config, cards }) {
     rows.push({ kind: "acct", label: acc });
     flowTypesFor(acc, config).forEach((t) => rows.push({ kind: "row", label: t, indent: true, get: (mo) => val(mo, "account", t, acc) }));
   });
-  rows.push({ kind: "sub", label: "入出金・振替 計", get: (mo) => accounts.reduce((a, acc) => a + flowTypesFor(acc, config).reduce((b, t) => b + val(mo, "account", t, acc), 0), 0) });
+  rows.push({ kind: "sub", label: "入出金 計", get: (mo) => accounts.reduce((a, acc) => a + flowTypesFor(acc, config).reduce((b, t) => b + val(mo, "account", t, acc), 0), 0) });
   rows.push({ kind: "head", label: "口座残高" });
   accounts.forEach((acc) => rows.push({ kind: "row", label: acc, get: (mo) => val(mo, "account", "残高", acc) }));
   rows.push({ kind: "sub", label: "残高計", get: (mo) => accounts.reduce((a, acc) => a + val(mo, "account", "残高", acc), 0) });

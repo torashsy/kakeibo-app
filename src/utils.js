@@ -14,35 +14,37 @@ export const addMonth = (ym, d) => { const [y, m] = ym.split("-").map(Number); c
 export function migrateEntry(e) {
   if (!e || typeof e !== "object") return null;
   const id = e.id || uid();
-  // すでに新形式でも、臨時収入が給与系に紛れていたら口座の受取へ移す
+  // すでに新形式でも、臨時収入が給与系に紛れていたら口座の入金へ移す。
+  // 旧称「受取」は「入金」に統一する。
   if (e.cat) {
-    if (e.cat === "salary" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "受取", account: e.account || "", amount: Math.abs(e.amount) };
+    if (e.cat === "salary" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "入金", account: e.account || "", amount: Math.abs(e.amount) };
+    if (e.cat === "account" && e.item === "受取") return { ...e, id, item: "入金" };
     return { ...e, id };
   }
   // 旧形式: kind = income/deduction/expense/card/transfer/balance
   const k = e.kind;
-  if (k === "income" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "受取", account: e.account || "", amount: Math.abs(e.amount) };
+  if (k === "income" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "入金", account: e.account || "", amount: Math.abs(e.amount) };
   if (k === "salary" || k === "income") return { id, ym: e.ym, cat: "salary", item: e.item || "給与", account: "", amount: e.amount };
   if (k === "deduction") return { id, ym: e.ym, cat: "salary", item: "控除", account: "", amount: -Math.abs(e.amount) };
   if (k === "card") return { id, ym: e.ym, cat: "card", item: e.item, account: "", amount: Math.abs(e.amount) };
   if (k === "balance") return { id, ym: e.ym, cat: "account", item: "残高", account: e.account || "", amount: e.amount };
   if (k === "expense") return { id, ym: e.ym, cat: "account", item: "引出", account: e.account || "", amount: -Math.abs(e.amount) };
-  if (k === "transfer") return { id, ym: e.ym, cat: "account", item: e.amount >= 0 ? "受取" : "引出", account: e.account || "", amount: e.amount };
+  if (k === "transfer") return { id, ym: e.ym, cat: "account", item: e.amount >= 0 ? "入金" : "引出", account: e.account || "", amount: e.amount };
   // 判別不能なものは無視(壊れたデータで落ちないように)
   return null;
 }
 
 
 // 入出金・振替の種類(残高を除く)。口座ごとに表示する種類を絞り込める。
-export const ALL_FLOW_TYPES = ["預入", "受取", "引出", "送金", "投資振替"];
+export const ALL_FLOW_TYPES = ["預入", "入金", "引出", "送金", "投資振替"];
 
 export const DEFAULT_CONFIG = {
   accounts: ["ゆうちょ", "NEOBANK", "JRE BANK"],
   salaryItems: ["給与", "手当", "賞与", "控除"],
   // 口座ごとに表示する入出金・振替の種類(未指定の口座は全種類を表示)
   accountFlows: {
-    "ゆうちょ": ["預入", "受取", "引出", "送金"],   // 投資振替は使わない
-    "JRE BANK": ["受取", "送金", "投資振替"],        // 預入・引出は使わない
+    "ゆうちょ": ["預入", "入金", "引出", "送金"],   // 投資振替は使わない
+    "JRE BANK": ["入金", "送金", "投資振替"],        // 預入・引出は使わない
   },
 };
 
@@ -55,12 +57,24 @@ export const ACCOUNT_TYPES = [
   { id: "残高", role: "bal", hint: "口座の残高を記録します" },
   { id: "預入", role: "in", hint: "口座への預け入れ。収入に入ります" },
   { id: "引出", role: "out", hint: "口座からの引き出し。支出に入ります" },
-  { id: "受取", role: "in", hint: "送金などの受け取り。収入に入ります" },
+  { id: "入金", role: "in", hint: "送金などの受け取り。収入に入ります" },
   { id: "送金", role: "out", hint: "他所への送金。支出に入ります" },
   { id: "投資振替", role: "transfer", hint: "投資/ハイブリッド口座への振替。入れた分は支出、戻した分は収入" },
 ];
 
-export const acctRole = (item) => (ACCOUNT_TYPES.find((t) => t.id === item)?.role) || (item === "入金" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
+export const acctRole = (item) => (ACCOUNT_TYPES.find((t) => t.id === item)?.role) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
+
+// 設定(config)内の口座フロー種別の旧称「受取」を「入金」に移行する
+export function migrateConfig(cfg) {
+  if (!cfg || typeof cfg !== "object") return cfg;
+  const af = cfg.accountFlows;
+  if (af && typeof af === "object") {
+    const naf = {};
+    for (const [k, arr] of Object.entries(af)) naf[k] = (Array.isArray(arr) ? arr : []).map((t) => (t === "受取" ? "入金" : t));
+    return { ...cfg, accountFlows: naf };
+  }
+  return cfg;
+}
 
 
 // 1ヶ月分の記録から収支サマリを計算する(サマリ画面・年間の貯蓄率グラフで共用)
@@ -113,12 +127,12 @@ export const SEED_ENTRIES = [
   { ym: "2026-05", cat: "card", item: "PayPay", account: "", amount: 19550 },
   { ym: "2026-05", cat: "card", item: "MDC", account: "", amount: 2025 },
   { ym: "2026-05", cat: "account", item: "残高", account: "ゆうちょ", amount: 18503 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "ゆうちょ", amount: 52563 },
+  { ym: "2026-05", cat: "account", item: "入金", account: "ゆうちょ", amount: 52563 },
   { ym: "2026-05", cat: "account", item: "引出", account: "ゆうちょ", amount: -6165 },
   { ym: "2026-05", cat: "account", item: "残高", account: "NEOBANK", amount: 5296 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "NEOBANK", amount: 63172 },
+  { ym: "2026-05", cat: "account", item: "入金", account: "NEOBANK", amount: 63172 },
   { ym: "2026-05", cat: "account", item: "残高", account: "JRE BANK", amount: 20399 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "JRE BANK", amount: 19760 },
+  { ym: "2026-05", cat: "account", item: "入金", account: "JRE BANK", amount: 19760 },
   { ym: "2026-06", cat: "salary", item: "給与", account: "", amount: 286720 },
   { ym: "2026-06", cat: "salary", item: "手当", account: "", amount: 4136 },
   { ym: "2026-06", cat: "salary", item: "賞与", account: "", amount: 134073 },
