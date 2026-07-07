@@ -39,7 +39,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
             {cards.map((c) => (
               <tr key={c.id}>
                 <td style={{ ...styles.td, ...styles.tdSticky }}>{c.name}</td>
-                {monthsCols.map((m) => <td key={m} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%" }} onClick={() => openEdit(c.name, m)}>{debt[c.name]?.[m] ? num(debt[c.name][m]) : " "}</button></td>)}
+                {monthsCols.map((m) => <td key={m} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%", textAlign: "right" }} onClick={() => openEdit(c.name, m)}>{debt[c.name]?.[m] ? num(debt[c.name][m]) : " "}</button></td>)}
                 <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}>{num(remaining(c.name))}</td>
               </tr>
             ))}

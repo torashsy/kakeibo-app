@@ -38,7 +38,7 @@ export const styles = {
   chevRSpacer: { display: "inline-block", width: 14, flexShrink: 0 },   // ›の無い行でも数字の右端を揃えるための余白
   detailSubHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 2px 2px" },
   editSubRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "8px 2px 8px 22px", background: "var(--subtotal-bg)", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
-  itemRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "var(--row-pad) 2px", background: "transparent", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
+  itemRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", boxSizing: "border-box", padding: "var(--row-pad) 2px", background: "transparent", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
   itemRowLeft: { display: "flex", alignItems: "center", gap: 6 },
   chevSpacer: { display: "inline-block", width: 16 },
   subGroupHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 2px 6px", fontSize: 12, fontWeight: 600, color: MUTED, borderBottom: `1px solid ${LINE}` },
