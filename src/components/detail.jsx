@@ -39,7 +39,7 @@ export function DetailList({ monthEntries, onEdit }) {
               <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
             </span>
             <span style={styles.editRowRight}>
-              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
+              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
               <span style={styles.chev}>›</span>
             </span>
           </button>
@@ -75,7 +75,7 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
       {isOpen && its.map((e, i) => (
         <button key={e.id} style={styles.editSubRow} onClick={() => onEdit(e)}>
           <span style={{ color: MUTED, fontSize: 12.5 }}>{i + 1}件目</span>
-          <span style={styles.editRowRight}><span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{yen(e.amount)}</span><span style={styles.chev}>›</span></span>
+          <span style={styles.editRowRight}><span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)" }}>{yen(e.amount)}</span><span style={styles.chev}>›</span></span>
         </button>
       ))}
     </div>
