@@ -6,9 +6,6 @@ export const LINE = "var(--line)", MUTED = "var(--muted)", RED = "var(--expense)
 
 // 全体で使う1つのフォントスタック(以前の「フォント選択」機能は廃止)
 const FONT_STACK = "'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif";
-// 金額など桁を揃えたい数字用の等幅フォント。日本語フォントは tabular-nums 非対応で
-// 桁がずれるため、数字は等幅(monospace)で描画して位を確実に揃える。
-const NUM_STACK = "ui-monospace,'SF Mono',SFMono-Regular,Menlo,'DejaVu Sans Mono',Consolas,monospace";
 
 
 // ユーザーが選べるのは「アクセント色」と「ダークモード」だけ。
@@ -84,7 +81,7 @@ export const themeVars = (t) => {
     "--num-align": "right", "--label-align": "left",
     "--radius": "14px", "--row-pad": "12px", "--num-size": "15px",
     "--hero-bg": accent, "--hero-text": "#FFFFFF",
-    "--font": FONT_STACK, "--num-font": NUM_STACK,
+    "--font": FONT_STACK, "--num-font": FONT_STACK,
     "--base-size": "15px", "--heavy": 600, "--tracking": "0px",
     "--tab-bg": p.tabBg, "--tab-active": accent,
     "--num-variant": "tabular-nums",
