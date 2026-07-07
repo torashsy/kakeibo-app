@@ -7,10 +7,28 @@ import { styles } from '../styles.js';
 const perMonth = (s) => (s.cycle === "yearly" ? (Number(s.amount) || 0) / 12 : (Number(s.amount) || 0));
 const perYear = (s) => (s.cycle === "yearly" ? (Number(s.amount) || 0) : (Number(s.amount) || 0) * 12);
 
+// 更新日までの残り日数(日付のみで計算)。renewal が無ければ null。
+const daysUntil = (renewal) => {
+  if (!renewal) return null;
+  const [y, m, d] = renewal.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(y, m - 1, d);
+  return Math.round((target - today) / 86400000);
+};
+const SOON_DAYS = 14; // この日数以内の更新を「間近」としてハイライト
+
 export function Subs({ subs, onSave, cards }) {
   const [edit, setEdit] = useState(null);
   const monthTotal = useMemo(() => subs.reduce((a, s) => a + perMonth(s), 0), [subs]);
   const yearTotal = useMemo(() => subs.reduce((a, s) => a + perYear(s), 0), [subs]);
+  // 更新日順に並び替え(更新日ありを昇順=近い/過ぎた順、更新日なしは末尾)
+  const sorted = useMemo(() => [...subs].sort((a, b) => {
+    if (a.renewal && b.renewal) return a.renewal < b.renewal ? -1 : a.renewal > b.renewal ? 1 : 0;
+    if (a.renewal) return -1;
+    if (b.renewal) return 1;
+    return 0;
+  }), [subs]);
   const commit = () => {
     if (!edit.name.trim()) return;
     const s = { ...edit, name: edit.name.trim(), amount: Number(edit.amount) || 0, cycle: edit.cycle || "monthly" };
@@ -31,20 +49,27 @@ export function Subs({ subs, onSave, cards }) {
         <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだサブスクがありません。「＋ 追加」から登録できます。</div></div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {subs.map((s) => (
-            <button key={s.id} style={styles.memoCard} onClick={() => setEdit({ ...s, amount: s.amount ? String(s.amount) : "" })}>
-              <div style={styles.memoHead}>
-                <span style={styles.memoTitle}>{s.name}{s.plan ? <span style={styles.subCycle}>　{s.plan}</span> : null}</span>
-                <span style={styles.memoAmount}>{yen(s.amount)}<span style={styles.subCycle}>/{s.cycle === "yearly" ? "年" : "月"}</span></span>
-              </div>
-              <div style={styles.subMeta}>
-                {s.card && <span style={styles.brandTag}>{s.card}</span>}
-                {s.renewal && <span style={styles.brandTag}>更新 {s.renewal}</span>}
-                {s.cycle === "yearly" && <span style={styles.subMonthly}>月換算 {yen(perMonth(s))}</span>}
-              </div>
-              {s.note && <div style={styles.memoBody}>{s.note}</div>}
-            </button>
-          ))}
+          {sorted.map((s) => {
+            const d = daysUntil(s.renewal);
+            const soon = d != null && d >= 0 && d <= SOON_DAYS;
+            const past = d != null && d < 0;
+            return (
+              <button key={s.id} style={{ ...styles.memoCard, ...(soon ? { border: "1.5px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...s, amount: s.amount ? String(s.amount) : "" })}>
+                <div style={styles.memoHead}>
+                  <span style={styles.memoTitle}>{s.name}{s.plan ? <span style={styles.subCycle}>　{s.plan}</span> : null}</span>
+                  <span style={styles.memoAmount}>{yen(s.amount)}<span style={styles.subCycle}>/{s.cycle === "yearly" ? "年" : "月"}</span></span>
+                </div>
+                <div style={styles.subMeta}>
+                  {soon && <span style={styles.subDue}>{d === 0 ? "本日更新" : `更新まであと${d}日`}</span>}
+                  {past && <span style={styles.subDuePast}>更新日を過ぎています</span>}
+                  {s.card && <span style={styles.brandTag}>{s.card}</span>}
+                  {s.renewal && <span style={styles.brandTag}>更新 {s.renewal}</span>}
+                  {s.cycle === "yearly" && <span style={styles.subMonthly}>月換算 {yen(perMonth(s))}</span>}
+                </div>
+                {s.note && <div style={styles.memoBody}>{s.note}</div>}
+              </button>
+            );
+          })}
         </div>
       )}
       {edit && (

@@ -13,7 +13,7 @@ export const styles = {
   main: { padding: "12px 16px" },
   heroCard: { background: "var(--hero-bg)", borderRadius: "var(--radius)", padding: "20px 20px 18px", color: "var(--hero-text)", boxShadow: "0 8px 24px rgba(0,0,0,0.28)", marginBottom: 14 },
   heroLabel: { fontSize: 12, opacity: 0.85, letterSpacing: "0.08em" },
-  heroValue: { fontSize: 34, fontWeight: "var(--heavy)", marginTop: 4, letterSpacing: "-0.02em", color: "var(--hero-text)" },
+  heroValue: { fontSize: 34, fontWeight: "var(--heavy)", marginTop: 4, letterSpacing: "-0.02em", color: "var(--hero-text)", fontVariantNumeric: "tabular-nums" },
   heroSub: { fontSize: 12.5, opacity: 0.9, marginTop: 6 },
   sumGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 6 },
   sumCell: { background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "12px 14px" },
@@ -119,7 +119,7 @@ export const styles = {
   memoAmount: { fontSize: 15, fontWeight: 600, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)", flexShrink: 0 },
   memoBody: { fontSize: 12.5, color: MUTED, marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.5 },
   memoTextarea: { width: "100%", border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, outline: "none", background: "var(--card-bg)", color: INK, boxSizing: "border-box", fontFamily: "inherit", minHeight: 96, resize: "vertical", lineHeight: 1.5 },
-  memoGroupHead: { display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 4px 8px", fontSize: 12.5, fontWeight: 600, color: ACCENT },
+  memoGroupHead: { display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 0 8px", padding: "0 16px 0 4px", fontSize: 12.5, fontWeight: 600, color: ACCENT },
   memoGroupSum: { fontSize: 13.5, fontWeight: 600, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)" },
   subTotals: { display: "flex", alignItems: "stretch", background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "12px 8px", marginBottom: 12 },
   subTotalCell: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 },
@@ -129,6 +129,8 @@ export const styles = {
   subMeta: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, alignItems: "center" },
   subCycle: { fontSize: 11.5, color: MUTED, fontWeight: 400, marginLeft: 1 },
   subMonthly: { fontSize: 11, color: MUTED },
+  subDue: { fontSize: 10.5, fontWeight: 700, color: "var(--accent)", background: "var(--accent-soft)", border: `1px solid var(--accent)`, borderRadius: 6, padding: "1px 8px" },
+  subDuePast: { fontSize: 10.5, fontWeight: 700, color: "var(--expense)", background: "var(--expense-soft)", border: `1px solid var(--expense)`, borderRadius: 6, padding: "1px 8px" },
 };
 
 

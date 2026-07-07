@@ -80,7 +80,7 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
             </span>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
               <span style={styles.brandTag}>{c.brand || "—"}</span>
-              <span style={{ fontSize: 11.5, color: Number(c.annualFee) > 0 ? MUTED : "var(--income)" }}>
+              <span style={{ fontSize: 11.5, color: Number(c.annualFee) > 0 ? MUTED : "var(--income)", fontVariantNumeric: "tabular-nums" }}>
                 {Number(c.annualFee) > 0 ? `年会費 ${yen(c.annualFee)}` : "年会費 無料"}
               </span>
             </span>

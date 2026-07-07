@@ -68,9 +68,9 @@ function MemoList({ memos, onSave }) {
             <div style={styles.sheetTitle}>{edit.id ? "メモを編集" : "メモを追加"}</div>
             <label style={styles.fieldLabel}>タイトル</label>
             <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} placeholder="例）飲み会 / プレゼント" style={styles.textInput} autoFocus />
-            <label style={styles.fieldLabel}>カテゴリ（任意・合計をまとめる単位）</label>
+            <label style={styles.fieldLabel}>カテゴリ（既存を選択、または自由に入力して新規追加）</label>
             {cats.length > 0 && <div style={styles.optionRow}>{cats.map((c) => <button key={c} style={{ ...styles.optionChip, ...(edit.category === c ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, category: c })}>{c}</button>)}</div>}
-            <input value={edit.category ?? ""} onChange={(e) => setEdit({ ...edit, category: e.target.value })} placeholder="例）交際費" style={styles.textInput} />
+            <input value={edit.category ?? ""} onChange={(e) => setEdit({ ...edit, category: e.target.value })} placeholder="新しいカテゴリ名を入力（例：交際費）" style={styles.textInput} />
             <label style={styles.fieldLabel}>金額（円・任意）</label>
             <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.amount ?? ""} onChange={(e) => setEdit({ ...edit, amount: e.target.value })} placeholder="0" style={styles.amountInput} /></div>
             <label style={styles.fieldLabel}>内容（任意）</label>
