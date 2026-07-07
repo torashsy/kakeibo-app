@@ -184,11 +184,11 @@ export const fyStartOf = (ym) => { const [y, m] = ym.split("-").map(Number); ret
 export function planLines(config, cards) {
   const lines = [];
   (config.salaryItems || []).forEach((it) => lines.push({ key: "salary|" + it, group: "income", sub: "給与系", label: it }));
-  lines.push({ key: "flow|入金", group: "income", sub: "その他収入", label: "臨時収入・入金" });
+  // 口座フローは実績と同じ種別名で（預入/入金=収入、引出/送金/投資振替=支出）
+  ALL_FLOW_TYPES.forEach((t) => { if (acctRole(t) === "in") lines.push({ key: "flow|" + t, group: "income", sub: "口座", label: t }); });
   (cards || []).forEach((c) => lines.push({ key: "card|" + c.name, group: "expense", sub: "カード", label: c.name }));
-  lines.push({ key: "flow|投資", group: "expense", sub: "その他支出", label: "投資" });
+  ALL_FLOW_TYPES.forEach((t) => { const r = acctRole(t); if (r === "out" || r === "transfer") lines.push({ key: "flow|" + t, group: "expense", sub: "口座", label: t }); });
   lines.push({ key: "memo|交際費", group: "expense", sub: "その他支出", label: "交際費" });
-  lines.push({ key: "flow|出金", group: "expense", sub: "その他支出", label: "現金出金" });
   return lines;
 }
 
@@ -207,12 +207,26 @@ export function actualForLine(key, monthEntries, memos, ym) {
   if (type === "card") return monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === name ? Math.abs(e.amount) : 0), 0);
   if (type === "memo") return (memos || []).reduce((a, m) => a + ((m.category || "") === name && m.ym === ym ? (Number(m.amount) || 0) : 0), 0);
   if (type === "flow") {
-    if (name === "投資") return -monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "transfer" ? e.amount : 0), 0);
-    const role = name === "入金" ? "in" : "out";
-    return monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === role ? Math.abs(e.amount) : 0), 0);
+    // name はフロー種別(実績の item と一致)。投資振替は符号反転で「投資額」を正にする
+    const sum = monthEntries.reduce((a, e) => a + (e.cat === "account" && e.item === name ? e.amount : 0), 0);
+    return acctRole(name) === "transfer" ? -sum : Math.abs(sum);
   }
   return 0;
 }
+
+// その行・その月に実績記録があるか(見通しで実績/計画を切り替える判定)
+export function hasActualForLine(key, monthEntries, memos, ym) {
+  const [type, name] = key.split("|");
+  if (type === "salary") return monthEntries.some((e) => e.cat === "salary" && e.item === name);
+  if (type === "card") return monthEntries.some((e) => e.cat === "card" && e.item === name);
+  if (type === "flow") return monthEntries.some((e) => e.cat === "account" && e.item === name);
+  if (type === "memo") return (memos || []).some((m) => (m.category || "") === name && m.ym === ym);
+  return false;
+}
+
+// その月に残高記録があるか / 残高計
+export const hasBalRecord = (monthEntries) => monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");
+export const balTotalOf = (monthEntries) => monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
 
 // 初期計画(スプレッドシートを参考にした標準月＋一部上書き)。年度は当該データに合わせ2026。
 export const SEED_PLAN = {
@@ -223,6 +237,7 @@ export const SEED_PLAN = {
     "salary|賞与": { std: 0, over: {} },
     "salary|控除": { std: -62000, over: { "2026-06": -89000, "2026-07": -76000 } },
     "flow|入金": { std: 0, over: { "2026-11": 1100000 } },
+    "flow|投資振替": { std: 46000, over: {} },
     "card|SMCC Gold": { std: 40000, over: {} },
     "card|smcc": { std: 300, over: {} },
     "card|JAL navi": { std: 20000, over: {} },
@@ -233,9 +248,7 @@ export const SEED_PLAN = {
     "card|TOBU": { std: 1000, over: {} },
     "card|PayPay": { std: 4000, over: {} },
     "card|MDC": { std: 1000, over: {} },
-    "flow|投資": { std: 46000, over: {} },
     "memo|交際費": { std: 25000, over: {} },
-    "flow|出金": { std: 0, over: {} },
   },
 };
 
