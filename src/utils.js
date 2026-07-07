@@ -143,10 +143,18 @@ export const SEED_DEBT = {
 };
 
 
-// 収支計算とは無関係の自由メモ(サブスク・交際費などの覚え書き)の初期データ
+// 収支計算とは無関係の自由メモ(交際費などの覚え書き)の初期データ。カテゴリで小計をまとめる。
 export const SEED_MEMOS = [
-  { id: uid(), title: "サブスク", amount: 3470, body: "Netflix ¥1,490\nSpotify ¥980\niCloud+ ¥1,000" },
-  { id: uid(), title: "交際費", amount: 12000, body: "6月の飲み会・プレゼント代など" },
+  { id: uid(), title: "6月 飲み会", amount: 5000, body: "同期と", category: "交際費" },
+  { id: uid(), title: "誕生日プレゼント", amount: 7000, body: "", category: "交際費" },
+];
+
+// サブスク管理の初期データ。cycle は "monthly"(月額) / "yearly"(年払い)。
+// card は所有カード名、renewal は次回更新日(YYYY-MM-DD)。収支には計上しない。
+export const SEED_SUBS = [
+  { id: uid(), name: "Netflix", amount: 1490, cycle: "monthly", card: "SMCC Gold", renewal: "", plan: "スタンダード", note: "" },
+  { id: uid(), name: "Spotify", amount: 980, cycle: "monthly", card: "", renewal: "", plan: "", note: "" },
+  { id: uid(), name: "Amazon Prime", amount: 5900, cycle: "yearly", card: "JCB Gold", renewal: "2026-11-01", plan: "年間プラン", note: "" },
 ];
 
 

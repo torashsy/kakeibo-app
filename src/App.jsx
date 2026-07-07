@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, computeSummary } from './utils.js';
+import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, computeSummary } from './utils.js';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
 import { Cards } from './components/cards.jsx';
-import { Memos } from './components/memos.jsx';
+import { MemoTab } from './components/memos.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
 import { Icon } from './icons.jsx';
@@ -16,6 +16,7 @@ export default function App() {
   const [cards, setCards] = useState([]);
   const [debt, setDebt] = useState({});
   const [memos, setMemos] = useState([]);
+  const [subs, setSubs] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("summary");
@@ -26,13 +27,14 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th, mm] = await Promise.all([
+        const [e, c, cd, d, th, mm, sb] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
           window.storage.get("debt", true).catch(() => null),
           window.storage.get("theme", true).catch(() => null),
           window.storage.get("memos", true).catch(() => null),
+          window.storage.get("subs", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -52,6 +54,8 @@ export default function App() {
         setTheme(th && th.value ? { ...DEFAULT_THEME, ...JSON.parse(th.value) } : DEFAULT_THEME);
         const rawMemos = mm && mm.value ? JSON.parse(mm.value) : null;
         setMemos(Array.isArray(rawMemos) ? rawMemos : SEED_MEMOS);
+        const rawSubs = sb && sb.value ? JSON.parse(sb.value) : null;
+        setSubs(Array.isArray(rawSubs) ? rawSubs : SEED_SUBS);
       } catch {
         setEntries(SEED_ENTRIES.map((x) => ({ ...x, id: uid() }))); setCards(DEFAULT_CARDS); setDebt(SEED_DEBT);
       } finally { setLoaded(true); }
@@ -63,6 +67,7 @@ export default function App() {
   const commitCards = (n) => { setCards(n); save("cards", n); };
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
+  const commitSubs = (n) => { setSubs(n); save("subs", n); };
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
 
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
@@ -127,7 +132,7 @@ export default function App() {
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
-        {tab === "memos" && <Memos memos={memos} onSave={commitMemos} />}
+        {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} />}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
       </main>

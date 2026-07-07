@@ -119,6 +119,16 @@ export const styles = {
   memoAmount: { fontSize: 15, fontWeight: 600, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)", flexShrink: 0 },
   memoBody: { fontSize: 12.5, color: MUTED, marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.5 },
   memoTextarea: { width: "100%", border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, outline: "none", background: "var(--card-bg)", color: INK, boxSizing: "border-box", fontFamily: "inherit", minHeight: 96, resize: "vertical", lineHeight: 1.5 },
+  memoGroupHead: { display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 4px 8px", fontSize: 12.5, fontWeight: 600, color: ACCENT },
+  memoGroupSum: { fontSize: 13.5, fontWeight: 600, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)" },
+  subTotals: { display: "flex", alignItems: "stretch", background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "12px 8px", marginBottom: 12 },
+  subTotalCell: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 },
+  subTotalLabel: { fontSize: 11.5, color: MUTED },
+  subTotalValue: { fontSize: 20, fontWeight: 600, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "var(--num-font)" },
+  subTotalDiv: { width: 1, background: LINE, margin: "2px 0" },
+  subMeta: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, alignItems: "center" },
+  subCycle: { fontSize: 11.5, color: MUTED, fontWeight: 400, marginLeft: 1 },
+  subMonthly: { fontSize: 11, color: MUTED },
 };
 
 
