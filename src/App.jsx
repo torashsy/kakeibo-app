@@ -73,6 +73,18 @@ export default function App() {
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
   const commitSubs = (n) => { setSubs(n); save("subs", n); };
   const commitPlans = (n) => { setPlans(n); save("plans", n); };
+
+  // バックアップJSONからの復元。読み込み時と同じ移行・正規化を通して安全に取り込む
+  const importData = (d) => {
+    if (Array.isArray(d.entries)) { const m = d.entries.map(migrateEntry).filter(Boolean); setEntries(m); save("entries", m); }
+    if (d.config && typeof d.config === "object") commitConfig(migrateConfig({ ...DEFAULT_CONFIG, ...d.config }));
+    if (Array.isArray(d.cards)) commitCards(d.cards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "", annualFee: 0 } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "", annualFee: Number(c.annualFee) || 0 }));
+    if (d.debt && typeof d.debt === "object") commitDebt(d.debt);
+    if (Array.isArray(d.memos)) commitMemos(d.memos);
+    if (Array.isArray(d.subs)) commitSubs(d.subs);
+    if (d.plans && d.plans.lines) commitPlans(d.plans);
+    if (d.theme && typeof d.theme === "object") commitTheme({ ...DEFAULT_THEME, ...d.theme });
+  };
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
 
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
@@ -133,12 +145,12 @@ export default function App() {
         )}
       </header>
 
-      <main style={styles.main}>
+      <main style={{ ...styles.main, ...((tab === "summary" || tab === "detail") ? { paddingBottom: 96 } : {}) }}>
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
-        {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
+        {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} ym={ym} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
       </main>
 

@@ -6,7 +6,7 @@ import { Subs } from './subs.jsx';
 
 // メモタブ。「メモ(自由メモ・カテゴリ別小計)」と「サブスク(定期支払い管理)」の切替。
 // いずれも収支計算(entries/computeSummary)とは無関係の独立データ。
-export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards }) {
+export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards, ym }) {
   const [view, setView] = useState("memo");
   return (
     <div style={{ padding: "4px 2px 8px" }}>
@@ -14,12 +14,12 @@ export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards }) {
         <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "subs" ? styles.viewToggleActive : {}) }} onClick={() => setView("subs")}>サブスク</button>
       </div>
-      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} />}
+      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} ym={ym} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} />}
     </div>
   );
 }
 
-function MemoList({ memos, onSave }) {
+function MemoList({ memos, onSave, ym }) {
   const [edit, setEdit] = useState(null);
   const cats = useMemo(() => Array.from(new Set(memos.map((m) => (m.category || "").trim()).filter(Boolean))), [memos]);
   const groups = useMemo(() => {
@@ -36,7 +36,7 @@ function MemoList({ memos, onSave }) {
   const remove = () => { onSave(memos.filter((x) => x.id !== edit.id)); setEdit(null); };
   return (
     <div>
-      <div style={styles.detailHead}><span>メモ（{memos.length}）</span><button style={styles.addBtn} onClick={() => setEdit({ title: "", amount: "", body: "", category: "", ym: "" })}>＋ 追加</button></div>
+      <div style={styles.detailHead}><span>メモ（{memos.length}）</span><button style={styles.addBtn} onClick={() => setEdit({ title: "", amount: "", body: "", category: "", ym: ym || "" })}>＋ 追加</button></div>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>収支には計上されない自由メモ。カテゴリごとに合計を表示します。</div>
       {memos.length === 0 ? (
         <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだメモがありません。「＋ 追加」から作成できます。</div></div>
