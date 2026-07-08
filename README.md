@@ -64,5 +64,7 @@ create policy "own rows" on public.kv for all
 
 ## Claude Code での進め方の目安
 - デザインの調整は指示ベースで少しずつ（`styles.js` は CSS 変数を参照。色は `theme.js` の `themeVars` で集中管理）。
-- 保存層を実バックエンドへ。
-- テスト（Vitest）と型（TypeScript化）を段階的に導入。
+- 保存層は Supabase 対応済み（上記参照）。
+- テスト（Vitest, `src/*.test.ts`）導入済み。コアロジック（`utils.ts`/`sync.ts`）は
+  TypeScript化済み（`npm run typecheck`）。コンポーネント（`.jsx`）は当面 untyped の
+  ままにしてあるので、型の恩恵を広げたい場合はそちらも段階的に `.tsx` 化するとよい。

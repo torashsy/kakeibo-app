@@ -1,4 +1,4 @@
-# masterへのpushで、テスト→ビルド→GitHub Pagesへ自動デプロイする
+# masterへのpushで、型検査→テスト→ビルド→GitHub Pagesへ自動デプロイする
 name: Deploy to GitHub Pages
 
 on:
@@ -25,6 +25,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
       - run: npm test
       - run: npm run build
       - uses: actions/configure-pages@v5
