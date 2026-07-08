@@ -6,7 +6,7 @@ import { Subs } from './subs.jsx';
 
 // メモタブ。「メモ(自由メモ・カテゴリ別小計)」と「サブスク(定期支払い管理)」の切替。
 // いずれも収支計算(entries/computeSummary)とは無関係の独立データ。
-export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards, ym }) {
+export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards, config, ym }) {
   const [view, setView] = useState("memo");
   return (
     <div style={{ padding: "4px 2px 8px" }}>
@@ -14,14 +14,19 @@ export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards, ym }) {
         <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "subs" ? styles.viewToggleActive : {}) }} onClick={() => setView("subs")}>サブスク</button>
       </div>
-      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} cards={cards} ym={ym} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} />}
+      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} cards={cards} config={config} ym={ym} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} />}
     </div>
   );
 }
 
-function MemoList({ memos, onSave, cards, ym }) {
+function MemoList({ memos, onSave, cards, config, ym }) {
   const [edit, setEdit] = useState(null);
-  const cats = useMemo(() => Array.from(new Set(memos.map((m) => (m.category || "").trim()).filter(Boolean))), [memos]);
+  // 計画タブと連携するカテゴリ(config.memoCategories)を優先し、既に使われている自由入力のカテゴリも合わせて候補にする
+  const cats = useMemo(() => {
+    const s = new Set((config?.memoCategories || []).map((c) => c.trim()).filter(Boolean));
+    memos.forEach((m) => { const c = (m.category || "").trim(); if (c) s.add(c); });
+    return Array.from(s);
+  }, [memos, config]);
   const groups = useMemo(() => {
     const map = new Map();
     for (const m of memos) { const k = (m.category || "").trim() || "その他"; if (!map.has(k)) map.set(k, []); map.get(k).push(m); }
