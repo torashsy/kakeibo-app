@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils.js';
 import { styles } from '../styles.js';
-import { Editable } from '../edit.jsx';
 import { PlanView } from './plan.jsx';
 
 export function Detail({ monthEntries, entries, ym, config, cards, memos, plans, onSavePlans, closedMonths, onToggleClosedMonth, onEdit }) {
@@ -34,20 +33,21 @@ export function DetailList({ monthEntries, onEdit }) {
   return (
     <div>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>追加した記録の一覧です。行をタップすると編集・削除できます。</div>
-      <Editable id="detail.cardBg" base={styles.detailCard}>
+      <div style={styles.detailCard}>
         {list.map((e) => (
           <button key={e.id} style={styles.listRow} onClick={() => onEdit(e)}>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-              <Editable id="detail.item" tag="span" base={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</Editable>
+              <span style={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</span>
               <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
             </span>
             <span style={styles.editRowRight}>
-              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
+              <span
+                style={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</span>
               <span style={styles.chev}>›</span>
             </span>
           </button>
         ))}
-      </Editable>
+      </div>
     </div>
   );
 }
@@ -60,8 +60,8 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
   if (its.length === 1) {
     return (
       <button style={styles.itemRow} onClick={() => onEdit(its[0])}>
-        <span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><Editable id="detail.item" tag="span" base={styles.detailItem}>{label}</Editable></span>
-        <span style={styles.editRowRight}><Editable id="detail.total" tag="span" base={styles.detailTotal}>{yen(its[0].amount)}</Editable><span style={styles.chev}>›</span></span>
+        <span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={styles.detailItem}>{label}</span></span>
+        <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(its[0].amount)}</span><span style={styles.chev}>›</span></span>
       </button>
     );
   }
@@ -71,9 +71,9 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
       <button style={styles.itemRow} onClick={() => toggle(gkey)}>
         <span style={styles.itemRowLeft}>
           <span style={{ ...styles.chev, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", width: 16 }}>›</span>
-          <Editable id="detail.item" tag="span" base={styles.detailItem}>{label}</Editable><span style={styles.countBadge}>{its.length}件</span>
+          <span style={styles.detailItem}>{label}</span><span style={styles.countBadge}>{its.length}件</span>
         </span>
-        <span style={styles.editRowRight}><Editable id="detail.total" tag="span" base={styles.detailTotal}>{yen(total)}</Editable><span style={styles.chevRSpacer} /></span>
+        <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(total)}</span><span style={styles.chevRSpacer} /></span>
       </button>
       {isOpen && its.map((e, i) => (
         <button key={e.id} style={styles.editSubRow} onClick={() => onEdit(e)}>
@@ -98,51 +98,53 @@ export function DetailCards({ S, config, cards, onEdit }) {
   // 口座
   const balTotalAll = S.accounts.reduce((a, acc) => a + S.totalOf(`account|残高|${acc}`), 0);
 
-  return <>
-    <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>0円の項目も表示しています。複数回入力した項目はタップで開けます。</div>
+  return (
+    <>
+      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>0円の項目も表示しています。複数回入力した項目はタップで開けます。</div>
 
-    {/* 給与系 */}
-    <div style={{ marginBottom: 18 }}>
-      <Editable id="card.groupHead" base={styles.detailHead}><span>給与系</span></Editable>
-      <Editable id="detail.cardBg" base={styles.detailCard}>
-        {salaryItems.map((it) => <ItemRow key={it} label={it} node={S.get("salary", it, "")} gkey={"salary|" + it} {...rowProps} />)}
-        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>給与計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(salaryTotal)}</span><span style={styles.chevRSpacer} /></span></Editable>
-      </Editable>
-    </div>
+      {/* 給与系 */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={styles.detailHead}><span>給与系</span></div>
+        <div style={styles.detailCard}>
+          {salaryItems.map((it) => <ItemRow key={it} label={it} node={S.get("salary", it, "")} gkey={"salary|" + it} {...rowProps} />)}
+          <div style={styles.subtotalRow}><span>給与計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(salaryTotal)}</span><span style={styles.chevRSpacer} /></span></div>
+        </div>
+      </div>
 
-    {/* カード */}
-    <div style={{ marginBottom: 18 }}>
-      <Editable id="card.groupHead" base={styles.detailHead}><span>カード</span></Editable>
-      <Editable id="detail.cardBg" base={styles.detailCard}>
-        {(cards || []).map((c) => <ItemRow key={c.id} label={c.name} node={S.get("card", c.name, "")} gkey={"card|" + c.name} {...rowProps} />)}
-        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>カード計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(cardTotal)}</span><span style={styles.chevRSpacer} /></span></Editable>
-      </Editable>
-    </div>
+      {/* カード */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={styles.detailHead}><span>カード</span></div>
+        <div style={styles.detailCard}>
+          {(cards || []).map((c) => <ItemRow key={c.id} label={c.name} node={S.get("card", c.name, "")} gkey={"card|" + c.name} {...rowProps} />)}
+          <div style={styles.subtotalRow}><span>カード計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(cardTotal)}</span><span style={styles.chevRSpacer} /></span></div>
+        </div>
+      </div>
 
-    {/* 口座: 口座ごとにまとめる */}
-    <div style={{ marginBottom: 8 }}>
-      <Editable id="card.groupHead" base={styles.detailHead}><span>口座（入出金・振替）</span></Editable>
-      {S.accounts.map((acc) => {
-        const flows = S.flowsFor(acc);
-        const accTotal = flows.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
-        return (
-          <Editable key={acc} id="detail.cardBg" base={{ ...styles.detailCard, marginBottom: 10 }}>
-            <Editable id="card.acctHead" base={styles.subGroupHead}><span>{acc}</span><span style={styles.editRowRight}><span style={styles.subGroupTotal}>{yen(accTotal)}</span><span style={styles.chevRSpacer} /></span></Editable>
-            {flows.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
-          </Editable>
-        );
-      })}
-    </div>
+      {/* 口座: 口座ごとにまとめる */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={styles.detailHead}><span>口座（入出金・振替）</span></div>
+        {S.accounts.map((acc) => {
+          const flows = S.flowsFor(acc);
+          const accTotal = flows.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
+          return (
+            <div style={{ ...styles.detailCard, marginBottom: 10 }} key={acc}>
+              <div style={styles.subGroupHead}><span>{acc}</span><span style={styles.editRowRight}><span style={styles.subGroupTotal}>{yen(accTotal)}</span><span style={styles.chevRSpacer} /></span></div>
+              {flows.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
+            </div>
+          );
+        })}
+      </div>
 
-    {/* 口座残高 */}
-    <div style={{ marginBottom: 18 }}>
-      <Editable id="card.groupHead" base={styles.detailHead}><span>口座残高</span></Editable>
-      <Editable id="detail.cardBg" base={styles.detailCard}>
-        {S.accounts.map((acc) => <ItemRow key={acc} label={acc} node={S.get("account", "残高", acc)} gkey={`bal|${acc}`} {...rowProps} />)}
-        <Editable id="detail.subtotal" base={styles.subtotalRow}><span>残高計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(balTotalAll)}</span><span style={styles.chevRSpacer} /></span></Editable>
-      </Editable>
-    </div>
-  </>;
+      {/* 口座残高 */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={styles.detailHead}><span>口座残高</span></div>
+        <div style={styles.detailCard}>
+          {S.accounts.map((acc) => <ItemRow key={acc} label={acc} node={S.get("account", "残高", acc)} gkey={`bal|${acc}`} {...rowProps} />)}
+          <div style={styles.subtotalRow}><span>残高計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(balTotalAll)}</span><span style={styles.chevRSpacer} /></span></div>
+        </div>
+      </div>
+    </>
+  );
 }
 
 export function DetailTable({ S, config, cards, onEdit }) {
@@ -188,21 +190,21 @@ export function DetailTable({ S, config, cards, onEdit }) {
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (cols.length + 1) * 96 }}>
           <colgroup><col style={{ width: 132 }} />{cols.map((c) => <col key={"col-" + c} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
-          <thead><tr><Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thSticky }}>項目</Editable>{cols.map((c) => <Editable tag="th" id="table.th" key={c} base={styles.th}>{c}</Editable>)}<Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thTotal }}>計</Editable></tr></thead>
+          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{cols.map((c) => <th style={styles.th} key={c}>{c}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>計</th></tr></thead>
           <tbody>
             {rows.map((r, i) => {
-              if (r.kind === "head") return <tr key={i}><Editable tag="td" id="table.group" colSpan={cols.length + 2} base={styles.tdGroup}>{r.label}</Editable></tr>;
-              if (r.kind === "acct") return <tr key={i}><Editable tag="td" id="table.acct" colSpan={cols.length + 2} base={styles.tdAcct}>{r.label}</Editable></tr>;
-              if (r.kind === "sub") return (
-                <tr key={i}><Editable tag="td" id="table.subtotal" base={{ ...styles.td, ...styles.tdSticky, ...styles.tdSubLabel }}>{r.label}</Editable>{cols.map((c) => <td key={c} style={{ ...styles.tdNum, ...styles.tdSubLabel }}></td>)}<Editable tag="td" id="table.subtotal" base={{ ...styles.tdNum, ...styles.tdSubTotal }}>{num(r.total)}</Editable></tr>
-              );
+              if (r.kind === "head") return <tr key={i}><td style={styles.tdGroup} colSpan={cols.length + 2}>{r.label}</td></tr>;
+              if (r.kind === "acct") return <tr key={i}><td style={styles.tdAcct} colSpan={cols.length + 2}>{r.label}</td></tr>;
+              if (r.kind === "sub") return (<tr key={i}><td style={{ ...styles.td, ...styles.tdSticky, ...styles.tdSubLabel }}>{r.label}</td>{cols.map((c) => <td key={c} style={{ ...styles.tdNum, ...styles.tdSubLabel }}></td>)}<td style={{ ...styles.tdNum, ...styles.tdSubTotal }}>{num(r.total)}</td></tr>);
               const its = r.node.entries; const total = its.reduce((a, e) => a + e.amount, 0);
               const zero = its.length === 0;
               return (
                 <tr key={i}>
-                  <Editable tag="td" id="table.rowlabel" base={{ ...styles.td, ...styles.tdSticky, ...(r.indent ? { paddingLeft: 20 } : {}), ...(zero ? { color: "var(--zero)" } : {}) }}>{r.label}</Editable>
-                  {cols.map((c) => { const e = its[c - 1]; return <Editable tag="td" id="table.cell" key={c} base={styles.tdNum}>{e ? <button style={styles.cellBtn} onClick={() => onEdit(e)}>{num(e.amount)}</button> : ""}</Editable>; })}
-                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(zero ? { color: "var(--zero)" } : {}) }}>{zero ? "0" : num(total)}</Editable>
+                  <td
+                    style={{ ...styles.td, ...styles.tdSticky, ...(r.indent ? { paddingLeft: 20 } : {}), ...(zero ? { color: "var(--zero)" } : {}) }}>{r.label}</td>
+                  {cols.map((c) => { const e = its[c - 1]; return <td style={styles.tdNum} key={c}>{e ? <button style={styles.cellBtn} onClick={() => onEdit(e)}>{num(e.amount)}</button> : ""}</td>; })}
+                  <td
+                    style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(zero ? { color: "var(--zero)" } : {}) }}>{zero ? "0" : num(total)}</td>
                 </tr>
               );
             })}
@@ -268,20 +270,28 @@ export function YearTable({ entries, ym, config, cards }) {
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (months.length + 1) * 96 }}>
           <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
-          <thead><tr><Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thSticky }}>項目</Editable>{months.map((mo) => <Editable tag="th" id="table.th" key={mo} base={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</Editable>)}<Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thTotal }}>年間計</Editable></tr></thead>
+          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th
+            style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}
+            key={mo}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>年間計</th></tr></thead>
           <tbody>
             {rows.map((r, i) => {
-              if (r.kind === "head") return <tr key={i}><Editable tag="td" id="table.group" colSpan={months.length + 2} base={styles.tdGroup}>{r.label}</Editable></tr>;
-              if (r.kind === "acct") return <tr key={i}><Editable tag="td" id="table.acct" colSpan={months.length + 2} base={styles.tdAcct}>{r.label}</Editable></tr>;
+              if (r.kind === "head") return <tr key={i}><td style={styles.tdGroup} colSpan={months.length + 2}>{r.label}</td></tr>;
+              if (r.kind === "acct") return <tr key={i}><td style={styles.tdAcct} colSpan={months.length + 2}>{r.label}</td></tr>;
               const isNet = r.kind === "net";
               const isSub = r.kind === "sub" || isNet;
               const yearTotal = months.reduce((a, mo) => a + r.get(mo), 0);
               const signColor = (v) => (v > 0 ? GREEN : v < 0 ? RED : "var(--zero)");
               return (
                 <tr key={i}>
-                  <Editable tag="td" id={isSub ? "table.subtotal" : "table.rowlabel"} base={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</Editable>
-                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 600 } : {})) }}>{v === 0 ? "" : num(v)}</Editable>; })}
-                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 600 } : {}) }}>{num(yearTotal)}</Editable>
+                  <td
+                    style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</td>
+                  {months.map((mo) => { const v = r.get(mo); return (
+                    <td
+                      style={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 600 } : {})) }}
+                      key={mo}>{v === 0 ? "" : num(v)}</td>
+                  ); })}
+                  <td
+                    style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 600 } : {}) }}>{num(yearTotal)}</td>
                 </tr>
               );
             })}
