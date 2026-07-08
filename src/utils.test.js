@@ -4,6 +4,7 @@ import {
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
+  planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
 } from "./utils.js";
 
 describe("整形", () => {
@@ -148,5 +149,56 @@ describe("計画", () => {
     expect(hasBalRecord(month)).toBe(true);
     expect(balTotalOf(month)).toBe(155596);
     expect(hasBalRecord([])).toBe(false);
+  });
+
+  it("planVsActualForMonth: 実績合計/計画合計/差を算出", () => {
+    const cards = [{ name: "VIEW" }];
+    const config = { salaryItems: ["給与"] };
+    const plans = { lines: { "salary|給与": { std: 300000, over: {} }, "card|VIEW": { std: 40000, over: {} } } };
+    const monthEntries = [
+      { cat: "salary", item: "給与", amount: 310000 },
+      { cat: "card", item: "VIEW", amount: 35000 },
+    ];
+    const r = planVsActualForMonth(plans, config, cards, [], monthEntries, "2026-06");
+    expect(r.planNet).toBe(300000 - 40000);
+    expect(r.actualNet).toBe(310000 - 35000);
+    expect(r.diff).toBe(r.actualNet - r.planNet);
+  });
+});
+
+describe("サブスク更新日の自動繰り越し", () => {
+  it("advanceRenewalDate: 月額は+1か月", () => {
+    expect(advanceRenewalDate("2026-06-15", "monthly")).toBe("2026-07-15");
+    expect(advanceRenewalDate("2026-12-15", "monthly")).toBe("2027-01-15");
+  });
+  it("advanceRenewalDate: 年払いは+1年", () => {
+    expect(advanceRenewalDate("2026-11-01", "yearly")).toBe("2027-11-01");
+  });
+  it("advanceRenewalDate: 月末日は月をまたいでクランプ(JSのDateの仕様どおり)", () => {
+    // 1/31 の翌月 -> 2月は28/29日までなので3/2,3/3等にずれる(意図された仕様の確認)
+    expect(advanceRenewalDate("2026-01-31", "monthly")).toBe("2026-03-03");
+  });
+
+  it("rollForwardSubs: 過ぎた更新日を今日以降まで繰り越す", () => {
+    const subs = [{ id: "1", renewal: "2026-01-15", cycle: "monthly" }];
+    const r = rollForwardSubs(subs, "2026-06-10");
+    expect(r[0].renewal >= "2026-06-10").toBe(true);
+    // 月額なので15日を維持したまま繰り越されるはず
+    expect(r[0].renewal).toBe("2026-06-15");
+  });
+  it("rollForwardSubs: 今日以降ならそのまま(参照も同じ)", () => {
+    const subs = [{ id: "1", renewal: "2026-12-01", cycle: "monthly" }];
+    const r = rollForwardSubs(subs, "2026-06-10");
+    expect(r).toBe(subs);
+  });
+  it("rollForwardSubs: 更新日なしのサブスクは無視", () => {
+    const subs = [{ id: "1", renewal: "", cycle: "monthly" }];
+    const r = rollForwardSubs(subs, "2026-06-10");
+    expect(r).toBe(subs);
+  });
+  it("rollForwardSubs: 年払いも正しく繰り越す", () => {
+    const subs = [{ id: "1", renewal: "2024-03-01", cycle: "yearly" }];
+    const r = rollForwardSubs(subs, "2026-06-10");
+    expect(r[0].renewal).toBe("2027-03-01");
   });
 });

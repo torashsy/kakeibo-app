@@ -229,6 +229,44 @@ export function hasActualForLine(key, monthEntries, memos, ym) {
 export const hasBalRecord = (monthEntries) => monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");
 export const balTotalOf = (monthEntries) => monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
 
+// 1か月分の 実績合計/計画合計/差 をグループ別・収支合計で算出(サマリの計画対比カード用)
+export function planVsActualForMonth(plans, config, cards, memos, monthEntries, ym) {
+  const lines = planLines(config, cards);
+  const byGroup = (which) => {
+    const sums = {};
+    for (const [gid] of PLAN_GROUPS) sums[gid] = 0;
+    for (const l of lines) sums[l.group] += which === "plan" ? planValue(plans, l.key, ym) : actualForLine(l.key, monthEntries, memos, ym);
+    return sums;
+  };
+  const planSums = byGroup("plan"), actualSums = byGroup("actual");
+  const netOf = (sums) => PLAN_GROUPS.reduce((a, [gid]) => a + planGroupSign(gid) * sums[gid], 0);
+  const planNet = netOf(planSums), actualNet = netOf(actualSums);
+  return { planSums, actualSums, planNet, actualNet, diff: actualNet - planNet };
+}
+
+// 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。
+export function advanceRenewalDate(dateStr, cycle) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (cycle === "yearly") { const dt = new Date(y + 1, m - 1, d); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; }
+  const dt = new Date(y, m, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+// 更新日が過ぎているサブスクを、今日以降になるまで自動で繰り越す(周期分ずつ進める)。
+// 変更が無ければ同じ配列参照を返す(呼び出し側で再保存要否を判定できる)。
+export function rollForwardSubs(subs, todayStr) {
+  const today = todayStr || new Date().toISOString().slice(0, 10);
+  let changed = false;
+  const next = subs.map((s) => {
+    if (!s.renewal) return s;
+    let r = s.renewal, guard = 0;
+    while (r < today && guard < 240) { r = advanceRenewalDate(r, s.cycle); guard++; }
+    if (r !== s.renewal) { changed = true; return { ...s, renewal: r }; }
+    return s;
+  });
+  return changed ? next : subs;
+}
+
 // 初期計画(スプレッドシートを参考にした標準月＋一部上書き)。年度は当該データに合わせ2026。
 export const SEED_PLAN = {
   fyStart: 2026,

@@ -1,10 +1,10 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen } from '../utils.js';
+import { yen, ymLabel, planVsActualForMonth } from '../utils.js';
 import { styles } from '../styles.js';
 import { Editable } from '../edit.jsx';
 
-export function Summary({ summary, prevBalTotal }) {
+export function Summary({ summary, prevBalTotal, plans, config, cards, memos, monthEntries, ym }) {
   const hasBal = Object.keys(summary.balances).length > 0;
   const balChange = (hasBal && prevBalTotal != null) ? summary.balTotal - prevBalTotal : null;
   return (
@@ -20,6 +20,7 @@ export function Summary({ summary, prevBalTotal }) {
         <SumCell label="入金(現金・送金)" value={summary.cashIn} color={GREEN} />
         <SumCell label="出金(現金・送金)" value={-summary.cashOut} color={RED} />
       </div>
+      <PlanCompareCard plans={plans} config={config} cards={cards} memos={memos} monthEntries={monthEntries} ym={ym} />
       <Editable id="sec.title" base={styles.sectionTitle}>口座残高</Editable>
       <Editable id="card.bg" base={styles.balCard}>
         {!hasBal && <div style={{ color: MUTED, fontSize: 13, padding: "6px 2px" }}>この月の残高記録はまだありません</div>}
@@ -37,6 +38,27 @@ export function Summary({ summary, prevBalTotal }) {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// 今月の実績と計画を比較する小カード。計画レイヤー(計画/実績/見通し)とは別に、
+// サマリから一目で「計画どおり進んでいるか」を確認できるようにする。
+function PlanCompareCard({ plans, config, cards, memos, monthEntries, ym }) {
+  const r = useMemo(() => planVsActualForMonth(plans, config, cards, memos, monthEntries, ym), [plans, config, cards, memos, monthEntries, ym]);
+  const diffColor = r.diff === 0 ? MUTED : r.diff > 0 ? GREEN : RED;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <Editable id="sec.title" base={styles.sectionTitle}>計画との比較（{ymLabel(ym)}）</Editable>
+      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>交際費（メモ）を含む計画ベースの収支です。上の「今月の収支」とは定義が異なります。</div>
+      <Editable id="card.bg" base={styles.balCard}>
+        <div style={styles.balRow}><span style={styles.balAcc}>実績</span><span style={styles.balVal}>{yen(r.actualNet)}</span></div>
+        <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED }}>計画</span><span style={{ ...styles.balVal, color: MUTED }}>{yen(r.planNet)}</span></div>
+        <div style={{ ...styles.balRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 10 }}>
+          <span style={{ ...styles.balAcc, fontWeight: 600 }}>差（実績−計画）</span>
+          <span style={{ ...styles.balVal, fontWeight: 600, color: diffColor }}>{r.diff > 0 ? "+" : ""}{yen(r.diff)}</span>
+        </div>
+      </Editable>
     </div>
   );
 }

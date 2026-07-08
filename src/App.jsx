@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary } from './utils.js';
+import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs } from './utils.js';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -58,7 +58,11 @@ export default function App() {
         const rawMemos = mm && mm.value ? JSON.parse(mm.value) : null;
         setMemos(Array.isArray(rawMemos) ? rawMemos : SEED_MEMOS);
         const rawSubs = sb && sb.value ? JSON.parse(sb.value) : null;
-        setSubs(Array.isArray(rawSubs) ? rawSubs : SEED_SUBS);
+        const loadedSubs = Array.isArray(rawSubs) ? rawSubs : SEED_SUBS;
+        const rolledSubs = rollForwardSubs(loadedSubs);
+        setSubs(rolledSubs);
+        // 更新日を過ぎたサブスクを自動で繰り越した場合はそのまま保存(次回起動時も同じ結果に)
+        if (rolledSubs !== loadedSubs) { try { window.storage.set("subs", JSON.stringify(rolledSubs), true); } catch {} }
         const rawPlans = pl && pl.value ? JSON.parse(pl.value) : null;
         setPlans(rawPlans && rawPlans.lines ? rawPlans : SEED_PLAN);
       } catch {
@@ -147,7 +151,7 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "summary" || tab === "detail") ? { paddingBottom: 96 } : {}) }}>
-        {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
+        {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} memos={memos} monthEntries={monthEntries} ym={ym} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
         {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} ym={ym} />}

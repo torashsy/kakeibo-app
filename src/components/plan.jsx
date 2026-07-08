@@ -8,8 +8,9 @@ import { styles } from '../styles.js';
 export function PlanView({ plans, onSave, config, cards, entries, memos, ym }) {
   const [mode, setMode] = useState("forecast"); // forecast | actual | plan | diff
   const [edit, setEdit] = useState(null);
+  const [fyOffset, setFyOffset] = useState(0); // 表示中の月とは独立に年度を前後できる
 
-  const fyStart = fyStartOf(ym);
+  const fyStart = fyStartOf(ym) + fyOffset;
   const months = useMemo(() => planMonths(fyStart), [fyStart]);
   const lines = useMemo(() => planLines(config, cards), [config, cards]);
   const entriesByMonth = useMemo(() => {
@@ -89,6 +90,12 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym }) {
 
   return (
     <div style={{ marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 10 }}>
+        <button aria-label="前の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o - 1)}>‹</button>
+        <span style={{ fontSize: 15, fontWeight: 700, minWidth: 88, textAlign: "center" }}>{fyStart}年度</span>
+        <button aria-label="次の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o + 1)}>›</button>
+        {fyOffset !== 0 && <button style={{ ...styles.chipGhost, marginLeft: 4 }} onClick={() => setFyOffset(0)}>今年度に戻す</button>}
+      </div>
       <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
         {[["forecast", "見通し"], ["actual", "実績"], ["plan", "計画"], ["diff", "差異"]].map(([v, l]) => (
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
