@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideSync } from "./sync.js";
+import { decideSync } from "./sync";
 
 const T1 = "2026-07-01T00:00:00.000Z";
 const T2 = "2026-07-02T00:00:00.000Z";

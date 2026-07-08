@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
-import { num, ymLabel, addMonth, acctRole, planMonths, fyStartOf, planLines, planValue, actualForLine, hasActualForLine, hasBalRecord, balTotalOf, planGroupSign, PLAN_GROUPS } from '../utils.js';
+import { num, ymLabel, addMonth, acctRole, planMonths, fyStartOf, planLines, planValue, actualForLine, hasActualForLine, hasBalRecord, balTotalOf, planGroupSign, PLAN_GROUPS, isMonthClosed } from '../utils';
 import { styles } from '../styles.js';
 
 // 計画 / 実績 / 見通し / 差異 を月×項目で見るビュー。グループは実績と同じ(給与系/カード/口座/その他)。
 // 見通し=実績が入っている行/月は実績、まだの部分は計画。残高は実績を引き継いで先へ projection。
-export function PlanView({ plans, onSave, config, cards, entries, memos, ym }) {
+// 締めた月は、記録の有無に関わらず実績を優先(入力もれと「本当に無かった」を区別する)。
+export function PlanView({ plans, onSave, config, cards, entries, memos, ym, closedMonths, onToggleClosedMonth }) {
   const [mode, setMode] = useState("forecast"); // forecast | actual | plan | diff
   const [edit, setEdit] = useState(null);
+  const [fyOffset, setFyOffset] = useState(0); // 表示中の月とは独立に年度を前後できる
 
-  const fyStart = fyStartOf(ym);
+  const fyStart = fyStartOf(ym) + fyOffset;
   const months = useMemo(() => planMonths(fyStart), [fyStart]);
   const lines = useMemo(() => planLines(config, cards), [config, cards]);
   const entriesByMonth = useMemo(() => {
@@ -20,7 +22,7 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym }) {
 
   const planOf = (key, mo) => planValue(plans, key, mo);
   const actualOf = (key, mo) => actualForLine(key, entriesByMonth[mo] || [], memos, mo);
-  const isActual = (key, mo) => hasActualForLine(key, entriesByMonth[mo] || [], memos, mo);
+  const isActual = (key, mo) => isMonthClosed(closedMonths, mo) || hasActualForLine(key, entriesByMonth[mo] || [], memos, mo);
   const forecastOf = (key, mo) => (isActual(key, mo) ? actualOf(key, mo) : planOf(key, mo));
   const which = mode === "plan" ? "plan" : mode === "actual" ? "actual" : "forecast";
   const valFor = (key, mo, w) => (w === "plan" ? planOf(key, mo) : w === "actual" ? actualOf(key, mo) : forecastOf(key, mo));
@@ -89,6 +91,20 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym }) {
 
   return (
     <div style={{ marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 10 }}>
+        <button aria-label="前の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o - 1)}>‹</button>
+        <span style={{ fontSize: 15, fontWeight: 700, minWidth: 88, textAlign: "center" }}>{fyStart}年度</span>
+        <button aria-label="次の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o + 1)}>›</button>
+        {fyOffset !== 0 && <button style={{ ...styles.chipGhost, marginLeft: 4 }} onClick={() => setFyOffset(0)}>今年度に戻す</button>}
+      </div>
+      {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 0 12px", padding: "10px 14px", background: "var(--card-bg)", border: "1px solid var(--line)", borderRadius: 12 }}>
+          <span style={{ fontSize: 12.5, color: isMonthClosed(closedMonths, ym) ? ACCENT : MUTED }}>
+            {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)}は確定済み（未入力の項目は0円として扱います）` : `${ymLabel(ym)}の記録入力は終わりましたか？`}
+          </span>
+          <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定する"}</button>
+        </div>
+      )}
       <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
         {[["forecast", "見通し"], ["actual", "実績"], ["plan", "計画"], ["diff", "差異"]].map(([v, l]) => (
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { MUTED } from '../theme.js';
-import { yen, uid } from '../utils.js';
+import { yen, uid } from '../utils';
 import { styles } from '../styles.js';
 
 // 月換算: 月額はそのまま、年払いは /12。年換算: 月額は ×12、年払いはそのまま。

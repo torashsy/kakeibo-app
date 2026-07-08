@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, ACCOUNT_TYPES, acctRole } from '../utils.js';
+import { yen, ymLabel, addMonth, ACCOUNT_TYPES, acctRole } from '../utils';
 import { styles } from '../styles.js';
 import { Icon } from '../icons.jsx';
 
@@ -56,15 +56,21 @@ export function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
 
 export function SalaryForm({ ym, config, entries, onClose, onSave }) {
   const existing = useMemo(() => entries.filter((e) => e.ym === ym && e.cat === "salary"), [entries, ym]);
+  const prevYm = addMonth(ym, -1);
+  const prevEntries = useMemo(() => entries.filter((e) => e.ym === prevYm && e.cat === "salary"), [entries, prevYm]);
   const [rows, setRows] = useState(config.salaryItems.map((it) => { const f = existing.find((e) => e.item === it); return { item: it, amount: f ? Math.abs(f.amount).toString() : "" }; }));
   const setAmt = (i, v) => setRows(rows.map((r, idx) => (idx === i ? { ...r, amount: v } : r)));
+  const copyPrev = () => setRows(config.salaryItems.map((it) => { const f = prevEntries.find((e) => e.item === it); return { item: it, amount: f ? Math.abs(f.amount).toString() : "" }; }));
   const takeHome = rows.reduce((a, r) => { const v = parseFloat(r.amount); if (isNaN(v)) return a; return a + (r.item === "控除" ? -Math.abs(v) : v); }, 0);
   return (
     <div style={styles.sheetBackdrop} onClick={onClose}>
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>給与系（{ymLabel(ym)}）</div>
-        <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>金額はプラスで入力。控除は自動で差し引きます。</div>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <span>金額はプラスで入力。控除は自動で差し引きます。</span>
+          {prevEntries.length > 0 && <button style={styles.chipGhost} onClick={copyPrev}>前月をコピー</button>}
+        </div>
         {rows.map((r, i) => (
           <div key={r.item} style={styles.salaryRow}>
             <span style={{ fontSize: 14, width: 64, color: r.item === "控除" ? MUTED : INK, fontWeight: 600 }}>{r.item}</span>
@@ -82,12 +88,18 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
   );
 }
 
-export function CardForm({ ym, cards, editing, onClose, onAdd, onUpdate, onDelete }) {
+export function CardForm({ ym, cards, entries, editing, onClose, onAdd, onUpdate, onDelete }) {
   const [item, setItem] = useState(editing ? editing.item : "");
   const [amount, setAmount] = useState(editing ? Math.abs(editing.amount).toString() : "");
   const [entryYm, setEntryYm] = useState(editing ? editing.ym : ym);
   const [flash, setFlash] = useState("");
   const canSave = item && amount && !isNaN(parseFloat(amount));
+  const prevAmt = useMemo(() => {
+    if (!item || editing) return null;
+    const prevYm = addMonth(entryYm, -1);
+    const f = (entries || []).find((e) => e.cat === "card" && e.item === item && e.ym === prevYm);
+    return f ? Math.abs(f.amount) : null;
+  }, [item, entryYm, entries, editing]);
   const build = () => ({ id: editing ? editing.id : undefined, ym: entryYm, cat: "card", item, account: "", amount: Math.abs(parseFloat(amount)) });
   const saveOne = (cont) => {
     if (!canSave) return;
@@ -103,7 +115,10 @@ export function CardForm({ ym, cards, editing, onClose, onAdd, onUpdate, onDelet
         {flash && <div style={styles.flash}>✓ {flash}</div>}
         <label style={styles.fieldLabel}>カード</label>
         <div style={styles.optionRow}>{cards.map((c) => <button key={c.id} style={{ ...styles.optionChip, ...(item === c.name ? styles.optionChipActive : {}) }} onClick={() => setItem(c.name)}>{c.name}</button>)}</div>
-        <label style={styles.fieldLabel}>請求額</label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <label style={styles.fieldLabel}>請求額</label>
+          {prevAmt != null && <button style={styles.chipGhost} onClick={() => setAmount(String(prevAmt))}>前月 {yen(prevAmt)} をコピー</button>}
+        </div>
         <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={styles.amountInput} autoFocus /></div>
         <label style={styles.fieldLabel}>月</label>
         <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />
@@ -121,7 +136,7 @@ export function CardForm({ ym, cards, editing, onClose, onAdd, onUpdate, onDelet
   );
 }
 
-export function AccountForm({ ym, config, editing, onClose, onAdd, onUpdate, onDelete }) {
+export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUpdate, onDelete }) {
   const [type, setType] = useState(editing ? editing.item : "残高");
   const [account, setAccount] = useState(editing ? editing.account : (config.accounts[0] || ""));
   const [amount, setAmount] = useState(editing ? Math.abs(editing.amount).toString() : "");
@@ -130,6 +145,12 @@ export function AccountForm({ ym, config, editing, onClose, onAdd, onUpdate, onD
   const [flash, setFlash] = useState("");
   const isTransfer = acctRole(type) === "transfer";
   const canSave = account && amount && !isNaN(parseFloat(amount));
+  const prevEntry = useMemo(() => {
+    if (editing || !account) return null;
+    const prevYm = addMonth(entryYm, -1);
+    return (entries || []).find((e) => e.cat === "account" && e.item === type && e.account === account && e.ym === prevYm) || null;
+  }, [type, account, entryYm, entries, editing]);
+  const usePrev = () => { setAmount(String(Math.abs(prevEntry.amount))); if (isTransfer) setDir(prevEntry.amount < 0 ? "out" : "in"); };
   const signed = () => {
     const v = Math.abs(parseFloat(amount));
     if (isTransfer) return dir === "out" ? -v : v;   // 入れる=−(支出方向) / 戻す=＋(収入方向)
@@ -163,7 +184,10 @@ export function AccountForm({ ym, config, editing, onClose, onAdd, onUpdate, onD
         )}
         <label style={styles.fieldLabel}>口座</label>
         <div style={styles.optionRow}>{config.accounts.map((a) => <button key={a} style={{ ...styles.optionChip, ...(account === a ? styles.optionChipActive : {}) }} onClick={() => setAccount(a)}>{a}</button>)}</div>
-        <label style={styles.fieldLabel}>金額</label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <label style={styles.fieldLabel}>金額</label>
+          {prevEntry && <button style={styles.chipGhost} onClick={usePrev}>前月 {yen(Math.abs(prevEntry.amount))} をコピー</button>}
+        </div>
         <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={styles.amountInput} autoFocus /></div>
         <label style={styles.fieldLabel}>月</label>
         <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />

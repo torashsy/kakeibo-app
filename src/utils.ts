@@ -1,17 +1,79 @@
+// ===== データモデル =====
+export type Cat = "salary" | "card" | "account";
 
-export const yen = (n) => (n < 0 ? "-" : "") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
+export interface Entry {
+  id?: string;
+  ym: string;          // "YYYY-MM"
+  cat: Cat;
+  item: string;
+  account?: string;
+  amount: number;
+}
 
-export const num = (n) => (n == null ? "" : Math.round(n).toLocaleString("ja-JP"));
+export interface Config {
+  accounts: string[];
+  salaryItems: string[];
+  accountFlows?: Record<string, string[]>;
+}
 
-export const ymLabel = (ym) => { const [y, m] = ym.split("-"); return `${y}年${parseInt(m, 10)}月`; };
+export interface Card {
+  id: string;
+  name: string;
+  brand?: string;
+  note?: string;
+  annualFee?: number;
+}
+
+export interface Memo {
+  id: string;
+  title: string;
+  amount?: number | string;
+  body?: string;
+  category?: string;
+  ym?: string;          // "YYYY-MM"。任意(計画との月別比較に使用)
+}
+
+export interface Sub {
+  id: string;
+  name: string;
+  amount: number | string;
+  cycle: "monthly" | "yearly";
+  card?: string;
+  renewal?: string;     // "YYYY-MM-DD"
+  plan?: string;
+  note?: string;
+}
+
+export interface PlanLineData { std: number; over: Record<string, number>; }
+export interface Plan { fyStart?: number; lines: Record<string, PlanLineData>; }
+export interface PlanLine { key: string; group: string; label: string; }
+
+export interface Summary {
+  gross: number; deduction: number; cardTotal: number; cashIn: number; cashOut: number; invest: number;
+  income: number; expense: number; net: number; balances: Record<string, number>; balTotal: number;
+}
+
+export interface PlanVsActual {
+  planSums: Record<string, number>;
+  actualSums: Record<string, number>;
+  planNet: number;
+  actualNet: number;
+  diff: number;
+}
+
+export const yen = (n: number) => (n < 0 ? "-" : "") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
+
+export const num = (n: number | null | undefined) => (n == null ? "" : Math.round(n).toLocaleString("ja-JP"));
+
+export const ymLabel = (ym: string) => { const [y, m] = ym.split("-"); return `${y}年${parseInt(m, 10)}月`; };
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-export const addMonth = (ym, d) => { const [y, m] = ym.split("-").map(Number); const dt = new Date(y, m - 1 + d, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
+export const addMonth = (ym: string, d: number) => { const [y, m] = ym.split("-").map(Number); const dt = new Date(y, m - 1 + d, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
 
 
 // 旧バージョン(kindベース)のデータを新形式(catベース)に変換して救済する
-export function migrateEntry(e) {
+export function migrateEntry(e: any): Entry | null {
   if (!e || typeof e !== "object") return null;
   const id = e.id || uid();
   // すでに新形式でも、臨時収入が給与系に紛れていたら口座の入金へ移す。
@@ -36,9 +98,9 @@ export function migrateEntry(e) {
 
 
 // 入出金・振替の種類(残高を除く)。口座ごとに表示する種類を絞り込める。
-export const ALL_FLOW_TYPES = ["預入", "入金", "引出", "送金", "投資振替"];
+export const ALL_FLOW_TYPES: string[] = ["預入", "入金", "引出", "送金", "投資振替"];
 
-export const DEFAULT_CONFIG = {
+export const DEFAULT_CONFIG: Config = {
   accounts: ["ゆうちょ", "NEOBANK", "JRE BANK"],
   salaryItems: ["給与", "手当", "賞与", "控除"],
   // 口座ごとに表示する入出金・振替の種類(未指定の口座は全種類を表示)
@@ -49,7 +111,7 @@ export const DEFAULT_CONFIG = {
 };
 
 // その口座で表示する入出金・振替の種類を返す(未設定なら全種類)
-export const flowTypesFor = (account, config) => (config && config.accountFlows && config.accountFlows[account]) || ALL_FLOW_TYPES;
+export const flowTypesFor = (account: string, config: Config) => (config && config.accountFlows && config.accountFlows[account]) || ALL_FLOW_TYPES;
 
 
 // 口座記録の種類。role: bal=残高記録 / in=収入に算入 / out=支出に算入 / transfer=符号そのまま収支に算入
@@ -62,15 +124,15 @@ export const ACCOUNT_TYPES = [
   { id: "投資振替", role: "transfer", hint: "投資/ハイブリッド口座への振替。入れた分は支出、戻した分は収入" },
 ];
 
-export const acctRole = (item) => (ACCOUNT_TYPES.find((t) => t.id === item)?.role) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
+export const acctRole = (item: string): "bal" | "in" | "out" | "transfer" => (ACCOUNT_TYPES.find((t) => t.id === item)?.role as any) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
 
 // 設定(config)内の口座フロー種別の旧称「受取」を「入金」に移行する
-export function migrateConfig(cfg) {
+export function migrateConfig(cfg: any): any {
   if (!cfg || typeof cfg !== "object") return cfg;
   const af = cfg.accountFlows;
   if (af && typeof af === "object") {
-    const naf = {};
-    for (const [k, arr] of Object.entries(af)) naf[k] = (Array.isArray(arr) ? arr : []).map((t) => (t === "受取" ? "入金" : t));
+    const naf: Record<string, string[]> = {};
+    for (const [k, arr] of Object.entries(af)) naf[k] = (Array.isArray(arr) ? arr as string[] : []).map((t) => (t === "受取" ? "入金" : t));
     return { ...cfg, accountFlows: naf };
   }
   return cfg;
@@ -78,14 +140,14 @@ export function migrateConfig(cfg) {
 
 
 // 1ヶ月分の記録から収支サマリを計算する(サマリ画面・年間の貯蓄率グラフで共用)
-export function computeSummary(monthEntries) {
-  let gross = 0, deduction = 0, cardTotal = 0, cashIn = 0, cashOut = 0, invest = 0; const balances = {};
+export function computeSummary(monthEntries: Entry[]): Summary {
+  let gross = 0, deduction = 0, cardTotal = 0, cashIn = 0, cashOut = 0, invest = 0; const balances: Record<string, number> = {};
   for (const e of monthEntries) {
     if (e.cat === "salary") { if (e.item === "控除") deduction += e.amount; else gross += e.amount; }
     else if (e.cat === "card") cardTotal += Math.abs(e.amount);
     else if (e.cat === "account") {
       const role = acctRole(e.item);
-      if (role === "bal") balances[e.account] = e.amount;
+      if (role === "bal") balances[e.account || ""] = e.amount;
       else if (role === "transfer") invest += e.amount;        // 符号そのまま(入=−, 戻し=＋ を利用者が符号で表現)
       else if (role === "in") cashIn += Math.abs(e.amount);
       else if (role === "out") cashOut += Math.abs(e.amount);
@@ -98,7 +160,7 @@ export function computeSummary(monthEntries) {
 }
 
 
-export const DEFAULT_CARDS = [
+export const DEFAULT_CARDS: Card[] = [
   { id: uid(), name: "SMCC Gold", brand: "VISA", note: "三井住友ゴールドNL" },
   { id: uid(), name: "smcc", brand: "VISA", note: "三井住友NL" },
   { id: uid(), name: "JAL navi", brand: "JCB", note: "JALカードNavi" },
@@ -112,7 +174,7 @@ export const DEFAULT_CARDS = [
 ];
 
 
-export const SEED_ENTRIES = [
+export const SEED_ENTRIES: Entry[] = [
   { ym: "2026-04", cat: "account", item: "残高", account: "ゆうちょ", amount: 48924 },
   { ym: "2026-04", cat: "account", item: "残高", account: "NEOBANK", amount: 47495 },
   { ym: "2026-04", cat: "account", item: "残高", account: "JRE BANK", amount: 1199 },
@@ -149,7 +211,7 @@ export const SEED_ENTRIES = [
 ];
 
 
-export const SEED_DEBT = {
+export const SEED_DEBT: Record<string, Record<string, number>> = {
   "SMCC Gold": { "2026-06": 55140, "2026-07": 54804, "2026-08": 47975, "2026-09": 44041, "2026-10": 37845, "2026-11": 34866, "2026-12": 34480 },
   "smcc": { "2026-06": 294, "2026-07": 294, "2026-08": 294 },
   "JAL navi": { "2026-06": 37284, "2026-07": 37284, "2026-08": 4740 },
@@ -158,14 +220,14 @@ export const SEED_DEBT = {
 
 
 // 収支計算とは無関係の自由メモ(交際費などの覚え書き)の初期データ。カテゴリで小計をまとめる。
-export const SEED_MEMOS = [
+export const SEED_MEMOS: Memo[] = [
   { id: uid(), title: "6月 飲み会", amount: 5000, body: "同期と", category: "交際費", ym: "2026-06" },
   { id: uid(), title: "誕生日プレゼント", amount: 7000, body: "", category: "交際費", ym: "2026-06" },
 ];
 
 // サブスク管理の初期データ。cycle は "monthly"(月額) / "yearly"(年払い)。
 // card は所有カード名、renewal は次回更新日(YYYY-MM-DD)。収支には計上しない。
-export const SEED_SUBS = [
+export const SEED_SUBS: Sub[] = [
   { id: uid(), name: "Netflix", amount: 1490, cycle: "monthly", card: "SMCC Gold", renewal: "", plan: "スタンダード", note: "" },
   { id: uid(), name: "Spotify", amount: 980, cycle: "monthly", card: "", renewal: "", plan: "", note: "" },
   { id: uid(), name: "Amazon Prime", amount: 5900, cycle: "yearly", card: "JCB Gold", renewal: "2026-11-01", plan: "年間プラン", note: "" },
@@ -174,16 +236,16 @@ export const SEED_SUBS = [
 
 // ===== 計画(plan) =====
 // 年度(4月開始)の12か月の ym を返す
-export const planMonths = (fyStart) => Array.from({ length: 12 }, (_, i) => { const d = new Date(fyStart, 3 + i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+export const planMonths = (fyStart: number): string[] => Array.from({ length: 12 }, (_, i) => { const d = new Date(fyStart, 3 + i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
 
 // ym から年度開始年(4月)を求める
-export const fyStartOf = (ym) => { const [y, m] = ym.split("-").map(Number); return m >= 4 ? y : y - 1; };
+export const fyStartOf = (ym: string): number => { const [y, m] = ym.split("-").map(Number); return m >= 4 ? y : y - 1; };
 
 // 計画の行を設定・カードから生成。group=income/expense、sub=小見出し、
 // key は実績とマッピングするための識別子("salary|給与" / "card|SMCC Gold" / "flow|投資" / "memo|交際費")
 // 実績と同じグループ構成(給与系/カード/口座/その他)。口座は預入/入金/引出/送金/投資振替を統合。
-export function planLines(config, cards) {
-  const lines = [];
+export function planLines(config: Config, cards: Card[]): PlanLine[] {
+  const lines: PlanLine[] = [];
   (config.salaryItems || []).forEach((it) => lines.push({ key: "salary|" + it, group: "salary", label: it }));
   (cards || []).forEach((c) => lines.push({ key: "card|" + c.name, group: "card", label: c.name }));
   ALL_FLOW_TYPES.forEach((t) => lines.push({ key: "flow|" + t, group: "account", label: t }));
@@ -192,12 +254,12 @@ export function planLines(config, cards) {
 }
 
 // 収支への符号(+収入 / −支出)。口座フローは符号付きなので +。
-export const planGroupSign = (group) => (group === "card" || group === "other" ? -1 : 1);
-// [グループ見出し, 小計ラベル(nullなら小計行なし)]
-export const PLAN_GROUPS = [["salary", "給与系", "給与計"], ["card", "カード", "カード計"], ["account", "口座", "口座計"], ["other", "その他", null]];
+export const planGroupSign = (group: string): 1 | -1 => (group === "card" || group === "other" ? -1 : 1);
+// [グループID, グループ見出し, 小計ラベル(nullなら小計行なし)]
+export const PLAN_GROUPS: [string, string, string | null][] = [["salary", "給与系", "給与計"], ["card", "カード", "カード計"], ["account", "口座", "口座計"], ["other", "その他", null]];
 
 // 計画額(標準月 std ＋ 例外月 over の上書き)
-export const planValue = (plan, key, ym) => {
+export const planValue = (plan: Plan | null | undefined, key: string, ym: string): number => {
   const l = plan && plan.lines && plan.lines[key];
   if (!l) return 0;
   const v = l.over && l.over[ym] != null ? l.over[ym] : l.std;
@@ -205,7 +267,7 @@ export const planValue = (plan, key, ym) => {
 };
 
 // 実績額(計画と同じ符号規約で1行・1か月ぶん)。monthEntries はその月の記録。
-export function actualForLine(key, monthEntries, memos, ym) {
+export function actualForLine(key: string, monthEntries: Entry[], memos: Memo[], ym: string): number {
   const [type, name] = key.split("|");
   if (type === "salary") return monthEntries.reduce((a, e) => a + (e.cat === "salary" && e.item === name ? e.amount : 0), 0);
   if (type === "card") return monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === name ? Math.abs(e.amount) : 0), 0);
@@ -216,7 +278,7 @@ export function actualForLine(key, monthEntries, memos, ym) {
 }
 
 // その行・その月に実績記録があるか(見通しで実績/計画を切り替える判定)
-export function hasActualForLine(key, monthEntries, memos, ym) {
+export function hasActualForLine(key: string, monthEntries: Entry[], memos: Memo[], ym: string): boolean {
   const [type, name] = key.split("|");
   if (type === "salary") return monthEntries.some((e) => e.cat === "salary" && e.item === name);
   if (type === "card") return monthEntries.some((e) => e.cat === "card" && e.item === name);
@@ -226,11 +288,58 @@ export function hasActualForLine(key, monthEntries, memos, ym) {
 }
 
 // その月に残高記録があるか / 残高計
-export const hasBalRecord = (monthEntries) => monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");
-export const balTotalOf = (monthEntries) => monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
+export const hasBalRecord = (monthEntries: Entry[]): boolean => monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");
+export const balTotalOf = (monthEntries: Entry[]): number => monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
+
+// 月の「締め」フラグ。締めた月は、記録が無い項目も「0円で確定」とみなし
+// (入力もれ=未入力ではなく実際に無かった、と判断)、見通しで計画に頼らず実績を優先させる。
+export const isMonthClosed = (closedMonths: string[] | null | undefined, ym: string): boolean => Array.isArray(closedMonths) && closedMonths.includes(ym);
+export const toggleMonthClosed = (closedMonths: string[] | null | undefined, ym: string): string[] => {
+  const set = new Set(Array.isArray(closedMonths) ? closedMonths : []);
+  if (set.has(ym)) set.delete(ym); else set.add(ym);
+  return [...set].sort();
+};
+
+// 1か月分の 実績合計/計画合計/差 をグループ別・収支合計で算出(サマリの計画対比カード用)
+export function planVsActualForMonth(plans: Plan, config: Config, cards: Card[], memos: Memo[], monthEntries: Entry[], ym: string): PlanVsActual {
+  const lines = planLines(config, cards);
+  const byGroup = (which: "plan" | "actual") => {
+    const sums: Record<string, number> = {};
+    for (const [gid] of PLAN_GROUPS) sums[gid] = 0;
+    for (const l of lines) sums[l.group] += which === "plan" ? planValue(plans, l.key, ym) : actualForLine(l.key, monthEntries, memos, ym);
+    return sums;
+  };
+  const planSums = byGroup("plan"), actualSums = byGroup("actual");
+  const netOf = (sums: Record<string, number>) => PLAN_GROUPS.reduce((a, [gid]) => a + planGroupSign(gid) * sums[gid], 0);
+  const planNet = netOf(planSums), actualNet = netOf(actualSums);
+  return { planSums, actualSums, planNet, actualNet, diff: actualNet - planNet };
+}
+
+// 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。
+export function advanceRenewalDate(dateStr: string, cycle: "monthly" | "yearly"): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (cycle === "yearly") { const dt = new Date(y + 1, m - 1, d); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; }
+  const dt = new Date(y, m, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+// 更新日が過ぎているサブスクを、今日以降になるまで自動で繰り越す(周期分ずつ進める)。
+// 変更が無ければ同じ配列参照を返す(呼び出し側で再保存要否を判定できる)。
+export function rollForwardSubs(subs: Sub[], todayStr?: string): Sub[] {
+  const today = todayStr || new Date().toISOString().slice(0, 10);
+  let changed = false;
+  const next = subs.map((s) => {
+    if (!s.renewal) return s;
+    let r = s.renewal, guard = 0;
+    while (r < today && guard < 240) { r = advanceRenewalDate(r, s.cycle); guard++; }
+    if (r !== s.renewal) { changed = true; return { ...s, renewal: r }; }
+    return s;
+  });
+  return changed ? next : subs;
+}
 
 // 初期計画(スプレッドシートを参考にした標準月＋一部上書き)。年度は当該データに合わせ2026。
-export const SEED_PLAN = {
+export const SEED_PLAN: Plan = {
   fyStart: 2026,
   lines: {
     "salary|給与": { std: 310000, over: { "2026-06": 286000 } },
@@ -254,10 +363,12 @@ export const SEED_PLAN = {
 };
 
 
+export interface StructureNode { cat: string; item: string; account: string; entries: Entry[]; }
+
 // 月データを、元incomeと同じ並びの「項目リスト」に整える(0円項目も含む)
-export function buildStructure(monthEntries, config, cards) {
-  const byKey = {}; // key -> {item, account, cat, entries[]}
-  const push = (cat, item, account, e) => {
+export function buildStructure(monthEntries: Entry[], config: Config, cards: Card[]) {
+  const byKey: Record<string, StructureNode> = {}; // key -> {item, account, cat, entries[]}
+  const push = (cat: string, item: string, account: string, e?: Entry) => {
     const key = cat + "|" + item + "|" + (account || "");
     if (!byKey[key]) byKey[key] = { cat, item, account: account || "", entries: [] };
     if (e) byKey[key].entries.push(e);
@@ -266,12 +377,12 @@ export function buildStructure(monthEntries, config, cards) {
   (config.salaryItems || []).forEach((it) => push("salary", it, ""));
   (cards || []).forEach((c) => push("card", c.name, ""));
   const accounts = config.accounts || [];
-  const flowsFor = (a) => flowTypesFor(a, config);
+  const flowsFor = (a: string) => flowTypesFor(a, config);
   accounts.forEach((a) => flowsFor(a).forEach((t) => push("account", t, a)));
   accounts.forEach((a) => push("account", "残高", a));
   // 実データを流し込む(器に無い項目=旧データも動的に追加)
-  for (const e of monthEntries) push(e.cat, e.item, e.cat === "account" ? e.account : "", e);
-  const totalOf = (key) => byKey[key].entries.reduce((a, e) => a + e.amount, 0);
-  const get = (cat, item, account) => byKey[cat + "|" + item + "|" + (account || "")] || { entries: [], cat, item, account: account || "" };
+  for (const e of monthEntries) push(e.cat, e.item, e.cat === "account" ? (e.account || "") : "", e);
+  const totalOf = (key: string) => byKey[key].entries.reduce((a, e) => a + e.amount, 0);
+  const get = (cat: string, item: string, account?: string): StructureNode => byKey[cat + "|" + item + "|" + (account || "")] || { entries: [], cat, item, account: account || "" };
   return { byKey, totalOf, get, accounts, flowsFor, flowTypes: ALL_FLOW_TYPES };
 }
