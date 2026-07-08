@@ -3,22 +3,25 @@ import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils.js';
 import { styles } from '../styles.js';
 import { Editable } from '../edit.jsx';
+import { PlanView } from './plan.jsx';
 
-export function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
+export function Detail({ monthEntries, entries, ym, config, cards, memos, plans, onSavePlans, onEdit }) {
   const [view, setView] = useState("card");
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <div style={styles.viewToggle}>
+      <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
         <button style={{ ...styles.viewToggleBtn, ...(view === "list" ? styles.viewToggleActive : {}) }} onClick={() => setView("list")}>履歴</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>項目別</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "table" ? styles.viewToggleActive : {}) }} onClick={() => setView("table")}>表</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "plan" ? styles.viewToggleActive : {}) }} onClick={() => setView("plan")}>計画</button>
       </div>
       {view === "list" && <DetailList monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "table" && <DetailTable S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "year" && <YearTable entries={entries} ym={ym} config={config} cards={cards} />}
+      {view === "plan" && <PlanView plans={plans} onSave={onSavePlans} config={config} cards={cards} entries={entries} memos={memos} ym={ym} />}
     </div>
   );
 }
@@ -39,7 +42,7 @@ export function DetailList({ monthEntries, onEdit }) {
               <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
             </span>
             <span style={styles.editRowRight}>
-              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
+              <Editable id="detail.total" tag="span" base={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</Editable>
               <span style={styles.chev}>›</span>
             </span>
           </button>
@@ -170,7 +173,7 @@ export function DetailTable({ S, config, cards, onEdit }) {
     S.flowsFor(acc).forEach((t) => addItem(t, S.get("account", t, acc), true));
   });
   const flowTotal = S.accounts.reduce((a, acc) => a + S.flowsFor(acc).reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0), 0);
-  sub("入出金・振替 計", flowTotal);
+  sub("入出金 計", flowTotal);
 
   // 口座残高
   head("口座残高");
@@ -183,7 +186,8 @@ export function DetailTable({ S, config, cards, onEdit }) {
     <div style={{ marginTop: 4 }}>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>項目別と同じ並びです。横スクロール可。数字をタップで編集。</div>
       <div style={styles.tableScroll}>
-        <table style={styles.table}>
+        <table style={{ ...styles.table, width: 132 + (cols.length + 1) * 96 }}>
+          <colgroup><col style={{ width: 132 }} />{cols.map((c) => <col key={"col-" + c} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thSticky }}>項目</Editable>{cols.map((c) => <Editable tag="th" id="table.th" key={c} base={styles.th}>{c}</Editable>)}<Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thTotal }}>計</Editable></tr></thead>
           <tbody>
             {rows.map((r, i) => {
@@ -251,7 +255,7 @@ export function YearTable({ entries, ym, config, cards }) {
     rows.push({ kind: "acct", label: acc });
     flowTypesFor(acc, config).forEach((t) => rows.push({ kind: "row", label: t, indent: true, get: (mo) => val(mo, "account", t, acc) }));
   });
-  rows.push({ kind: "sub", label: "入出金・振替 計", get: (mo) => accounts.reduce((a, acc) => a + flowTypesFor(acc, config).reduce((b, t) => b + val(mo, "account", t, acc), 0), 0) });
+  rows.push({ kind: "sub", label: "入出金 計", get: (mo) => accounts.reduce((a, acc) => a + flowTypesFor(acc, config).reduce((b, t) => b + val(mo, "account", t, acc), 0), 0) });
   rows.push({ kind: "head", label: "口座残高" });
   accounts.forEach((acc) => rows.push({ kind: "row", label: acc, get: (mo) => val(mo, "account", "残高", acc) }));
   rows.push({ kind: "sub", label: "残高計", get: (mo) => accounts.reduce((a, acc) => a + val(mo, "account", "残高", acc), 0) });
@@ -262,7 +266,8 @@ export function YearTable({ entries, ym, config, cards }) {
       <SavingsChart entries={entries} months={months} ym={ym} />
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{fyStart}年4月〜{fyStart + 1}年3月の12か月。横スクロールできます。</div>
       <div style={styles.tableScroll}>
-        <table style={styles.table}>
+        <table style={{ ...styles.table, width: 132 + (months.length + 1) * 96 }}>
+          <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thSticky }}>項目</Editable>{months.map((mo) => <Editable tag="th" id="table.th" key={mo} base={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</Editable>)}<Editable tag="th" id="table.th" base={{ ...styles.th, ...styles.thTotal }}>年間計</Editable></tr></thead>
           <tbody>
             {rows.map((r, i) => {
@@ -275,8 +280,8 @@ export function YearTable({ entries, ym, config, cards }) {
               return (
                 <tr key={i}>
                   <Editable tag="td" id={isSub ? "table.subtotal" : "table.rowlabel"} base={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</Editable>
-                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 800 } : {})) }}>{v === 0 ? "" : num(v)}</Editable>; })}
-                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 800 } : {}) }}>{num(yearTotal)}</Editable>
+                  {months.map((mo) => { const v = r.get(mo); return <Editable tag="td" id="table.cell" key={mo} base={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 600 } : {})) }}>{v === 0 ? "" : num(v)}</Editable>; })}
+                  <Editable tag="td" id="table.totalcell" base={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 600 } : {}) }}>{num(yearTotal)}</Editable>
                 </tr>
               );
             })}
@@ -302,8 +307,8 @@ function SavingsChart({ entries, months, ym }) {
   return (
     <div style={{ ...styles.detailCard, marginBottom: 14, padding: "12px 6px 6px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 6px 8px" }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: MUTED }}>貯蓄率の推移（収支 ÷ 収入）</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: avg >= 0 ? GREEN : RED }}>平均 {Math.round(avg * 100)}%</span>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: MUTED }}>貯蓄率の推移（収支 ÷ 収入）</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: avg >= 0 ? GREEN : RED }}>平均 {Math.round(avg * 100)}%</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
         <line x1={0} y1={midY} x2={W} y2={midY} stroke={LINE} strokeWidth={1} />

@@ -30,16 +30,17 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   };
   return (
     <div>
-      <div style={styles.debtSummary}><span style={{ fontSize: 13, color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={{ fontSize: 22, fontWeight: 800, color: RED }}>{yen(totalRemaining)}</span></div>
+      <div style={styles.debtSummary}><span style={{ fontSize: 13, color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={{ fontSize: 22, fontWeight: 600, color: RED }}>{yen(totalRemaining)}</span></div>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>各月の支払予定額。セルをタップで編集。横スクロール可。</div>
       <div style={styles.tableScroll}>
-        <table style={styles.table}>
+        <table style={{ ...styles.table, width: 132 + (monthsCols.length + 1) * 96 }}>
+          <colgroup><col style={{ width: 132 }} />{monthsCols.map((m) => <col key={"col-" + m} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>カード</th>{monthsCols.map((m) => <th key={m} style={styles.th}>{parseInt(m.split("-")[1], 10)}月</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>残債</th></tr></thead>
           <tbody>
             {cards.map((c) => (
               <tr key={c.id}>
                 <td style={{ ...styles.td, ...styles.tdSticky }}>{c.name}</td>
-                {monthsCols.map((m) => <td key={m} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%" }} onClick={() => openEdit(c.name, m)}>{debt[c.name]?.[m] ? num(debt[c.name][m]) : " "}</button></td>)}
+                {monthsCols.map((m) => <td key={m} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%", textAlign: "right" }} onClick={() => openEdit(c.name, m)}>{debt[c.name]?.[m] ? num(debt[c.name][m]) : " "}</button></td>)}
                 <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}>{num(remaining(c.name))}</td>
               </tr>
             ))}
@@ -64,12 +65,13 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
   const [edit, setEdit] = useState(null);
   const commit = () => {
     if (!edit.name.trim()) return;
-    const next = edit.id ? cards.map((c) => (c.id === edit.id ? edit : c)) : [...cards, { ...edit, id: uid() }];
+    const card = { ...edit, annualFee: Number(edit.annualFee) || 0 };
+    const next = edit.id ? cards.map((c) => (c.id === edit.id ? card : c)) : [...cards, { ...card, id: uid() }];
     onSaveCards(next); setEdit(null);
   };
   return (
     <div>
-      <div style={styles.detailHead}><span>所有カード（{cards.length}枚）</span><button style={styles.addBtn} onClick={() => setEdit({ name: "", brand: "", note: "" })}>＋ 追加</button></div>
+      <div style={styles.detailHead}><span>所有カード（{cards.length}枚）</span><button style={styles.addBtn} onClick={() => setEdit({ name: "", brand: "", note: "", annualFee: "" })}>＋ 追加</button></div>
       <div style={styles.detailCard}>
         {cards.map((c) => (
           <button key={c.id} style={styles.cardListRow} onClick={() => setEdit({ ...c })}>
@@ -77,7 +79,12 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
               <span style={{ fontSize: 14.5, fontWeight: 600 }}>{c.name}</span>
               {c.note && <span style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>{c.note}</span>}
             </span>
-            <span style={styles.brandTag}>{c.brand || "—"}</span>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+              <span style={styles.brandTag}>{c.brand || "—"}</span>
+              <span style={{ fontSize: 11.5, color: Number(c.annualFee) > 0 ? MUTED : "var(--income)", fontVariantNumeric: "tabular-nums" }}>
+                {Number(c.annualFee) > 0 ? `年会費 ${yen(c.annualFee)}` : "年会費 無料"}
+              </span>
+            </span>
           </button>
         ))}
         {cards.length === 0 && <div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだカードがありません</div>}
@@ -91,6 +98,8 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
             <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="例）楽天カード" style={styles.textInput} autoFocus />
             <label style={styles.fieldLabel}>ブランド</label>
             <div style={styles.optionRow}>{["VISA", "Master", "JCB", "AMEX", "Diners"].map((b) => <button key={b} style={{ ...styles.optionChip, ...(edit.brand === b ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, brand: b })}>{b}</button>)}</div>
+            <label style={styles.fieldLabel}>年会費（円・任意）</label>
+            <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.annualFee ?? ""} onChange={(e) => setEdit({ ...edit, annualFee: e.target.value })} placeholder="0（無料）" style={styles.amountInput} /></div>
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="正式名称や用途など" style={styles.textInput} />
             <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新する" : "追加する"}</button>

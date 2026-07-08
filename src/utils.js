@@ -14,35 +14,37 @@ export const addMonth = (ym, d) => { const [y, m] = ym.split("-").map(Number); c
 export function migrateEntry(e) {
   if (!e || typeof e !== "object") return null;
   const id = e.id || uid();
-  // すでに新形式でも、臨時収入が給与系に紛れていたら口座の受取へ移す
+  // すでに新形式でも、臨時収入が給与系に紛れていたら口座の入金へ移す。
+  // 旧称「受取」は「入金」に統一する。
   if (e.cat) {
-    if (e.cat === "salary" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "受取", account: e.account || "", amount: Math.abs(e.amount) };
+    if (e.cat === "salary" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "入金", account: e.account || "", amount: Math.abs(e.amount) };
+    if (e.cat === "account" && e.item === "受取") return { ...e, id, item: "入金" };
     return { ...e, id };
   }
   // 旧形式: kind = income/deduction/expense/card/transfer/balance
   const k = e.kind;
-  if (k === "income" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "受取", account: e.account || "", amount: Math.abs(e.amount) };
+  if (k === "income" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "入金", account: e.account || "", amount: Math.abs(e.amount) };
   if (k === "salary" || k === "income") return { id, ym: e.ym, cat: "salary", item: e.item || "給与", account: "", amount: e.amount };
   if (k === "deduction") return { id, ym: e.ym, cat: "salary", item: "控除", account: "", amount: -Math.abs(e.amount) };
   if (k === "card") return { id, ym: e.ym, cat: "card", item: e.item, account: "", amount: Math.abs(e.amount) };
   if (k === "balance") return { id, ym: e.ym, cat: "account", item: "残高", account: e.account || "", amount: e.amount };
   if (k === "expense") return { id, ym: e.ym, cat: "account", item: "引出", account: e.account || "", amount: -Math.abs(e.amount) };
-  if (k === "transfer") return { id, ym: e.ym, cat: "account", item: e.amount >= 0 ? "受取" : "引出", account: e.account || "", amount: e.amount };
+  if (k === "transfer") return { id, ym: e.ym, cat: "account", item: e.amount >= 0 ? "入金" : "引出", account: e.account || "", amount: e.amount };
   // 判別不能なものは無視(壊れたデータで落ちないように)
   return null;
 }
 
 
 // 入出金・振替の種類(残高を除く)。口座ごとに表示する種類を絞り込める。
-export const ALL_FLOW_TYPES = ["預入", "受取", "引出", "送金", "投資振替"];
+export const ALL_FLOW_TYPES = ["預入", "入金", "引出", "送金", "投資振替"];
 
 export const DEFAULT_CONFIG = {
   accounts: ["ゆうちょ", "NEOBANK", "JRE BANK"],
   salaryItems: ["給与", "手当", "賞与", "控除"],
   // 口座ごとに表示する入出金・振替の種類(未指定の口座は全種類を表示)
   accountFlows: {
-    "ゆうちょ": ["預入", "受取", "引出", "送金"],   // 投資振替は使わない
-    "JRE BANK": ["受取", "送金", "投資振替"],        // 預入・引出は使わない
+    "ゆうちょ": ["預入", "入金", "引出", "送金"],   // 投資振替は使わない
+    "JRE BANK": ["入金", "送金", "投資振替"],        // 預入・引出は使わない
   },
 };
 
@@ -55,12 +57,24 @@ export const ACCOUNT_TYPES = [
   { id: "残高", role: "bal", hint: "口座の残高を記録します" },
   { id: "預入", role: "in", hint: "口座への預け入れ。収入に入ります" },
   { id: "引出", role: "out", hint: "口座からの引き出し。支出に入ります" },
-  { id: "受取", role: "in", hint: "送金などの受け取り。収入に入ります" },
+  { id: "入金", role: "in", hint: "送金などの受け取り。収入に入ります" },
   { id: "送金", role: "out", hint: "他所への送金。支出に入ります" },
   { id: "投資振替", role: "transfer", hint: "投資/ハイブリッド口座への振替。入れた分は支出、戻した分は収入" },
 ];
 
-export const acctRole = (item) => (ACCOUNT_TYPES.find((t) => t.id === item)?.role) || (item === "入金" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
+export const acctRole = (item) => (ACCOUNT_TYPES.find((t) => t.id === item)?.role) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
+
+// 設定(config)内の口座フロー種別の旧称「受取」を「入金」に移行する
+export function migrateConfig(cfg) {
+  if (!cfg || typeof cfg !== "object") return cfg;
+  const af = cfg.accountFlows;
+  if (af && typeof af === "object") {
+    const naf = {};
+    for (const [k, arr] of Object.entries(af)) naf[k] = (Array.isArray(arr) ? arr : []).map((t) => (t === "受取" ? "入金" : t));
+    return { ...cfg, accountFlows: naf };
+  }
+  return cfg;
+}
 
 
 // 1ヶ月分の記録から収支サマリを計算する(サマリ画面・年間の貯蓄率グラフで共用)
@@ -113,12 +127,12 @@ export const SEED_ENTRIES = [
   { ym: "2026-05", cat: "card", item: "PayPay", account: "", amount: 19550 },
   { ym: "2026-05", cat: "card", item: "MDC", account: "", amount: 2025 },
   { ym: "2026-05", cat: "account", item: "残高", account: "ゆうちょ", amount: 18503 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "ゆうちょ", amount: 52563 },
+  { ym: "2026-05", cat: "account", item: "入金", account: "ゆうちょ", amount: 52563 },
   { ym: "2026-05", cat: "account", item: "引出", account: "ゆうちょ", amount: -6165 },
   { ym: "2026-05", cat: "account", item: "残高", account: "NEOBANK", amount: 5296 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "NEOBANK", amount: 63172 },
+  { ym: "2026-05", cat: "account", item: "入金", account: "NEOBANK", amount: 63172 },
   { ym: "2026-05", cat: "account", item: "残高", account: "JRE BANK", amount: 20399 },
-  { ym: "2026-05", cat: "account", item: "受取", account: "JRE BANK", amount: 19760 },
+  { ym: "2026-05", cat: "account", item: "入金", account: "JRE BANK", amount: 19760 },
   { ym: "2026-06", cat: "salary", item: "給与", account: "", amount: 286720 },
   { ym: "2026-06", cat: "salary", item: "手当", account: "", amount: 4136 },
   { ym: "2026-06", cat: "salary", item: "賞与", account: "", amount: 134073 },
@@ -140,6 +154,103 @@ export const SEED_DEBT = {
   "smcc": { "2026-06": 294, "2026-07": 294, "2026-08": 294 },
   "JAL navi": { "2026-06": 37284, "2026-07": 37284, "2026-08": 4740 },
   "VIEW": { "2026-06": 37100 },
+};
+
+
+// 収支計算とは無関係の自由メモ(交際費などの覚え書き)の初期データ。カテゴリで小計をまとめる。
+export const SEED_MEMOS = [
+  { id: uid(), title: "6月 飲み会", amount: 5000, body: "同期と", category: "交際費", ym: "2026-06" },
+  { id: uid(), title: "誕生日プレゼント", amount: 7000, body: "", category: "交際費", ym: "2026-06" },
+];
+
+// サブスク管理の初期データ。cycle は "monthly"(月額) / "yearly"(年払い)。
+// card は所有カード名、renewal は次回更新日(YYYY-MM-DD)。収支には計上しない。
+export const SEED_SUBS = [
+  { id: uid(), name: "Netflix", amount: 1490, cycle: "monthly", card: "SMCC Gold", renewal: "", plan: "スタンダード", note: "" },
+  { id: uid(), name: "Spotify", amount: 980, cycle: "monthly", card: "", renewal: "", plan: "", note: "" },
+  { id: uid(), name: "Amazon Prime", amount: 5900, cycle: "yearly", card: "JCB Gold", renewal: "2026-11-01", plan: "年間プラン", note: "" },
+];
+
+
+// ===== 計画(plan) =====
+// 年度(4月開始)の12か月の ym を返す
+export const planMonths = (fyStart) => Array.from({ length: 12 }, (_, i) => { const d = new Date(fyStart, 3 + i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+
+// ym から年度開始年(4月)を求める
+export const fyStartOf = (ym) => { const [y, m] = ym.split("-").map(Number); return m >= 4 ? y : y - 1; };
+
+// 計画の行を設定・カードから生成。group=income/expense、sub=小見出し、
+// key は実績とマッピングするための識別子("salary|給与" / "card|SMCC Gold" / "flow|投資" / "memo|交際費")
+// 実績と同じグループ構成(給与系/カード/口座/その他)。口座は預入/入金/引出/送金/投資振替を統合。
+export function planLines(config, cards) {
+  const lines = [];
+  (config.salaryItems || []).forEach((it) => lines.push({ key: "salary|" + it, group: "salary", label: it }));
+  (cards || []).forEach((c) => lines.push({ key: "card|" + c.name, group: "card", label: c.name }));
+  ALL_FLOW_TYPES.forEach((t) => lines.push({ key: "flow|" + t, group: "account", label: t }));
+  lines.push({ key: "memo|交際費", group: "other", label: "交際費" });
+  return lines;
+}
+
+// 収支への符号(+収入 / −支出)。口座フローは符号付きなので +。
+export const planGroupSign = (group) => (group === "card" || group === "other" ? -1 : 1);
+// [グループ見出し, 小計ラベル(nullなら小計行なし)]
+export const PLAN_GROUPS = [["salary", "給与系", "給与計"], ["card", "カード", "カード計"], ["account", "口座", "口座計"], ["other", "その他", null]];
+
+// 計画額(標準月 std ＋ 例外月 over の上書き)
+export const planValue = (plan, key, ym) => {
+  const l = plan && plan.lines && plan.lines[key];
+  if (!l) return 0;
+  const v = l.over && l.over[ym] != null ? l.over[ym] : l.std;
+  return Number(v) || 0;
+};
+
+// 実績額(計画と同じ符号規約で1行・1か月ぶん)。monthEntries はその月の記録。
+export function actualForLine(key, monthEntries, memos, ym) {
+  const [type, name] = key.split("|");
+  if (type === "salary") return monthEntries.reduce((a, e) => a + (e.cat === "salary" && e.item === name ? e.amount : 0), 0);
+  if (type === "card") return monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === name ? Math.abs(e.amount) : 0), 0);
+  if (type === "memo") return (memos || []).reduce((a, m) => a + ((m.category || "") === name && m.ym === ym ? (Number(m.amount) || 0) : 0), 0);
+  // 口座フローは実績の記録と同じ符号(預入/入金=+、引出/送金/投資振替=記録どおり)で集計
+  if (type === "flow") return monthEntries.reduce((a, e) => a + (e.cat === "account" && e.item === name ? e.amount : 0), 0);
+  return 0;
+}
+
+// その行・その月に実績記録があるか(見通しで実績/計画を切り替える判定)
+export function hasActualForLine(key, monthEntries, memos, ym) {
+  const [type, name] = key.split("|");
+  if (type === "salary") return monthEntries.some((e) => e.cat === "salary" && e.item === name);
+  if (type === "card") return monthEntries.some((e) => e.cat === "card" && e.item === name);
+  if (type === "flow") return monthEntries.some((e) => e.cat === "account" && e.item === name);
+  if (type === "memo") return (memos || []).some((m) => (m.category || "") === name && m.ym === ym);
+  return false;
+}
+
+// その月に残高記録があるか / 残高計
+export const hasBalRecord = (monthEntries) => monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");
+export const balTotalOf = (monthEntries) => monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
+
+// 初期計画(スプレッドシートを参考にした標準月＋一部上書き)。年度は当該データに合わせ2026。
+export const SEED_PLAN = {
+  fyStart: 2026,
+  lines: {
+    "salary|給与": { std: 310000, over: { "2026-06": 286000 } },
+    "salary|手当": { std: 0, over: { "2026-06": 160000, "2026-07": 72000, "2026-10": 90000, "2027-01": 620000 } },
+    "salary|賞与": { std: 0, over: {} },
+    "salary|控除": { std: -62000, over: { "2026-06": -89000, "2026-07": -76000 } },
+    "flow|入金": { std: 0, over: { "2026-11": 1100000 } },
+    "flow|投資振替": { std: -46000, over: {} },
+    "card|SMCC Gold": { std: 40000, over: {} },
+    "card|smcc": { std: 300, over: {} },
+    "card|JAL navi": { std: 20000, over: {} },
+    "card|VIEW": { std: 60000, over: { "2026-06": 50000 } },
+    "card|JCB Gold": { std: 10000, over: {} },
+    "card|SAISON": { std: 15000, over: {} },
+    "card|EPOS": { std: 1000, over: {} },
+    "card|TOBU": { std: 1000, over: {} },
+    "card|PayPay": { std: 4000, over: {} },
+    "card|MDC": { std: 1000, over: {} },
+    "memo|交際費": { std: 25000, over: {} },
+  },
 };
 
 

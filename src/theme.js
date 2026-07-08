@@ -82,7 +82,7 @@ export const themeVars = (t) => {
     "--radius": "14px", "--row-pad": "12px", "--num-size": "15px",
     "--hero-bg": accent, "--hero-text": "#FFFFFF",
     "--font": FONT_STACK, "--num-font": FONT_STACK,
-    "--base-size": "15px", "--heavy": 800, "--tracking": "0px",
+    "--base-size": "15px", "--heavy": 600, "--tracking": "0px",
     "--tab-bg": p.tabBg, "--tab-active": accent,
     "--num-variant": "tabular-nums",
     colorScheme: dark ? "dark" : "light",

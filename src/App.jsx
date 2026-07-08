@@ -1,18 +1,24 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, computeSummary } from './utils.js';
+import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary } from './utils.js';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
 import { Cards } from './components/cards.jsx';
+import { MemoTab } from './components/memos.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
+import { Icon } from './icons.jsx';
+import { getSyncState, onSyncChange } from './storage.js';
 
 export default function App() {
   const [entries, setEntries] = useState([]);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [cards, setCards] = useState([]);
   const [debt, setDebt] = useState({});
+  const [memos, setMemos] = useState([]);
+  const [subs, setSubs] = useState([]);
+  const [plans, setPlans] = useState(SEED_PLAN);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("summary");
@@ -23,12 +29,15 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th] = await Promise.all([
+        const [e, c, cd, d, th, mm, sb, pl] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
           window.storage.get("debt", true).catch(() => null),
           window.storage.get("theme", true).catch(() => null),
+          window.storage.get("memos", true).catch(() => null),
+          window.storage.get("subs", true).catch(() => null),
+          window.storage.get("plans", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -40,12 +49,18 @@ export default function App() {
         } else {
           setEntries(SEED_ENTRIES.map((x) => ({ ...x, id: uid() })));
         }
-        setConfig(c && c.value ? { ...DEFAULT_CONFIG, ...JSON.parse(c.value) } : DEFAULT_CONFIG);
+        setConfig(migrateConfig(c && c.value ? { ...DEFAULT_CONFIG, ...JSON.parse(c.value) } : DEFAULT_CONFIG));
         const rawCards = cd && cd.value ? JSON.parse(cd.value) : null;
-        setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "" } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "" }) : DEFAULT_CARDS);
+        setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "", annualFee: 0 } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "", annualFee: Number(c.annualFee) || 0 }) : DEFAULT_CARDS);
         const rawDebt = d && d.value ? JSON.parse(d.value) : null;
         setDebt(rawDebt && typeof rawDebt === "object" ? rawDebt : SEED_DEBT);
         setTheme(th && th.value ? { ...DEFAULT_THEME, ...JSON.parse(th.value) } : DEFAULT_THEME);
+        const rawMemos = mm && mm.value ? JSON.parse(mm.value) : null;
+        setMemos(Array.isArray(rawMemos) ? rawMemos : SEED_MEMOS);
+        const rawSubs = sb && sb.value ? JSON.parse(sb.value) : null;
+        setSubs(Array.isArray(rawSubs) ? rawSubs : SEED_SUBS);
+        const rawPlans = pl && pl.value ? JSON.parse(pl.value) : null;
+        setPlans(rawPlans && rawPlans.lines ? rawPlans : SEED_PLAN);
       } catch {
         setEntries(SEED_ENTRIES.map((x) => ({ ...x, id: uid() }))); setCards(DEFAULT_CARDS); setDebt(SEED_DEBT);
       } finally { setLoaded(true); }
@@ -56,6 +71,21 @@ export default function App() {
   const commitConfig = (n) => { setConfig(n); save("config", n); };
   const commitCards = (n) => { setCards(n); save("cards", n); };
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
+  const commitMemos = (n) => { setMemos(n); save("memos", n); };
+  const commitSubs = (n) => { setSubs(n); save("subs", n); };
+  const commitPlans = (n) => { setPlans(n); save("plans", n); };
+
+  // バックアップJSONからの復元。読み込み時と同じ移行・正規化を通して安全に取り込む
+  const importData = (d) => {
+    if (Array.isArray(d.entries)) { const m = d.entries.map(migrateEntry).filter(Boolean); setEntries(m); save("entries", m); }
+    if (d.config && typeof d.config === "object") commitConfig(migrateConfig({ ...DEFAULT_CONFIG, ...d.config }));
+    if (Array.isArray(d.cards)) commitCards(d.cards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "", annualFee: 0 } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "", annualFee: Number(c.annualFee) || 0 }));
+    if (d.debt && typeof d.debt === "object") commitDebt(d.debt);
+    if (Array.isArray(d.memos)) commitMemos(d.memos);
+    if (Array.isArray(d.subs)) commitSubs(d.subs);
+    if (d.plans && d.plans.lines) commitPlans(d.plans);
+    if (d.theme && typeof d.theme === "object") commitTheme({ ...DEFAULT_THEME, ...d.theme });
+  };
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
 
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
@@ -106,8 +136,8 @@ export default function App() {
   return (
     <div style={{ ...styles.app, ...themeVars(theme) }}>
       <header style={styles.header}>
-        <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><span style={styles.cloud}>☁ 同期</span></div>
-        {tab !== "cards" && tab !== "settings" && tab !== "design" && (
+        <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><CloudBadge /></div>
+        {tab !== "cards" && tab !== "settings" && tab !== "design" && tab !== "memos" && (
           <div style={styles.monthPicker}>
             <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i > 0) setYm(months[i - 1]); }}>‹</button>
             <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}</select>
@@ -116,21 +146,23 @@ export default function App() {
         )}
       </header>
 
-      <main style={styles.main}>
+      <main style={{ ...styles.main, ...((tab === "summary" || tab === "detail") ? { paddingBottom: 96 } : {}) }}>
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} />}
-        {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
+        {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} theme={theme} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
+        {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} ym={ym} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
       </main>
 
       {(tab === "summary" || tab === "detail") && <button style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
 
       <nav style={styles.tabs}>
-        <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} label="サマリ" icon="◧" />
-        <TabBtn active={tab === "detail"} onClick={() => setTab("detail")} label="詳細" icon="≣" />
-        <TabBtn active={tab === "cards"} onClick={() => setTab("cards")} label="カード" icon="▤" />
-        <TabBtn active={tab === "settings" || tab === "design"} onClick={() => setTab("settings")} label="設定" icon="⚙" />
+        <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} label="サマリ" icon="summary" />
+        <TabBtn active={tab === "detail"} onClick={() => setTab("detail")} label="詳細" icon="detail" />
+        <TabBtn active={tab === "cards"} onClick={() => setTab("cards")} label="カード" icon="card" />
+        <TabBtn active={tab === "memos"} onClick={() => setTab("memos")} label="メモ" icon="memo" />
+        <TabBtn active={tab === "settings" || tab === "design"} onClick={() => setTab("settings")} label="設定" icon="settings" />
       </nav>
 
       {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); setSheet(cat); }} />}
@@ -142,6 +174,17 @@ export default function App() {
   );
 }
 
+// ヘッダーの同期状態表示。ログイン中のみ「☁ 同期中」、それ以外は「ローカル保存」
+function CloudBadge() {
+  const [mode, setMode] = useState("off");
+  useEffect(() => {
+    const refresh = () => getSyncState().then((s) => setMode(s.mode)).catch(() => {});
+    refresh();
+    return onSyncChange(refresh);
+  }, []);
+  return <span style={styles.cloud}>{mode === "on" ? "☁ 同期中" : "ローカル保存"}</span>;
+}
+
 function TabBtn({ active, onClick, label, icon }) {
-  return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><span style={{ fontSize: 17 }}>{icon}</span><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
+  return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><Icon name={icon} size={22} strokeWidth={active ? 2.1 : 1.8} /><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
 }
