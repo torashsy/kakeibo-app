@@ -31,7 +31,8 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
   const linesOf = (gid) => lines.filter((l) => l.group === gid);
   const groupSum = (gid, mo, w) => linesOf(gid).reduce((a, l) => a + valFor(l.key, mo, w), 0);
   const subCell = (gid, mo) => (mode === "diff" ? groupSum(gid, mo, "actual") - groupSum(gid, mo, "plan") : groupSum(gid, mo, which));
-  const netOf = (mo, w) => PLAN_GROUPS.reduce((a, [gid]) => a + planGroupSign(gid) * groupSum(gid, mo, w), 0);
+  // 収支計に含めるグループ(countsTowardNet)だけを合算する。交際費などの「その他」は収支に影響させない。
+  const netOf = (mo, w) => PLAN_GROUPS.reduce((a, [gid, , , countsTowardNet]) => a + (countsTowardNet ? planGroupSign(gid) * groupSum(gid, mo, w) : 0), 0);
   const netCell = (mo) => (mode === "diff" ? netOf(mo, "actual") - netOf(mo, "plan") : netOf(mo, which));
 
   // 残高見通し: 実績残高があればアンカー、無ければ前月+当月の収支

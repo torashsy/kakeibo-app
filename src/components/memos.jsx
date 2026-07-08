@@ -14,12 +14,12 @@ export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards, ym }) {
         <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "subs" ? styles.viewToggleActive : {}) }} onClick={() => setView("subs")}>サブスク</button>
       </div>
-      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} ym={ym} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} />}
+      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} cards={cards} ym={ym} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} />}
     </div>
   );
 }
 
-function MemoList({ memos, onSave, ym }) {
+function MemoList({ memos, onSave, cards, ym }) {
   const [edit, setEdit] = useState(null);
   const cats = useMemo(() => Array.from(new Set(memos.map((m) => (m.category || "").trim()).filter(Boolean))), [memos]);
   const groups = useMemo(() => {
@@ -29,14 +29,14 @@ function MemoList({ memos, onSave, ym }) {
   }, [memos]);
   const commit = () => {
     if (!edit.title.trim()) return;
-    const m = { ...edit, title: edit.title.trim(), category: (edit.category || "").trim(), amount: Number(edit.amount) || 0 };
+    const m = { ...edit, title: edit.title.trim(), category: (edit.category || "").trim(), amount: Number(edit.amount) || 0, linkedCard: edit.linkedCard || "" };
     const next = edit.id ? memos.map((x) => (x.id === edit.id ? m : x)) : [...memos, { ...m, id: uid() }];
     onSave(next); setEdit(null);
   };
   const remove = () => { onSave(memos.filter((x) => x.id !== edit.id)); setEdit(null); };
   return (
     <div>
-      <div style={styles.detailHead}><span>メモ（{memos.length}）</span><button style={styles.addBtn} onClick={() => setEdit({ title: "", amount: "", body: "", category: "", ym: ym || "" })}>＋ 追加</button></div>
+      <div style={styles.detailHead}><span>メモ（{memos.length}）</span><button style={styles.addBtn} onClick={() => setEdit({ title: "", amount: "", body: "", category: "", ym: ym || "", linkedCard: "" })}>＋ 追加</button></div>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>収支には計上されない自由メモ。カテゴリごとに合計を表示します。</div>
       {memos.length === 0 ? (
         <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだメモがありません。「＋ 追加」から作成できます。</div></div>
@@ -48,7 +48,7 @@ function MemoList({ memos, onSave, ym }) {
               <div style={styles.memoGroupHead}><span>{cat} 合計</span><span style={styles.memoGroupSum}>{yen(sum)}</span></div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {items.map((m) => (
-                  <button key={m.id} style={styles.memoCard} onClick={() => setEdit({ ...m, amount: m.amount ? String(m.amount) : "", category: m.category || "", ym: m.ym || "" })}>
+                  <button key={m.id} style={styles.memoCard} onClick={() => setEdit({ ...m, amount: m.amount ? String(m.amount) : "", category: m.category || "", ym: m.ym || "", linkedCard: m.linkedCard || "" })}>
                     <div style={styles.memoHead}>
                       <span style={styles.memoTitle}>{m.title}{m.ym ? <span style={styles.subCycle}>　{m.ym.replace("-", "/")}</span> : null}</span>
                       {Number(m.amount) > 0 && <span style={styles.memoAmount}>{yen(m.amount)}</span>}
@@ -75,6 +75,17 @@ function MemoList({ memos, onSave, ym }) {
             <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.amount ?? ""} onChange={(e) => setEdit({ ...edit, amount: e.target.value })} placeholder="0" style={styles.amountInput} /></div>
             <label style={styles.fieldLabel}>月（任意・計画との比較に使用）</label>
             <input type="month" value={edit.ym ?? ""} onChange={(e) => setEdit({ ...edit, ym: e.target.value })} style={styles.textInput} />
+            {cards && cards.length > 0 && (
+              <>
+                <label style={styles.fieldLabel}>内訳（任意・紐づくカードのサマリ展開に表示）</label>
+                <div style={styles.optionRow}>
+                  <button style={{ ...styles.optionChip, ...(!edit.linkedCard ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, linkedCard: "" })}>なし</button>
+                  {cards.map((c) => (
+                    <button key={c.id} style={{ ...styles.optionChip, ...(edit.linkedCard === c.name ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, linkedCard: c.name })}>{c.name}</button>
+                  ))}
+                </div>
+              </>
+            )}
             <label style={styles.fieldLabel}>内容（任意）</label>
             <textarea value={edit.body ?? ""} onChange={(e) => setEdit({ ...edit, body: e.target.value })} placeholder="自由記述" style={styles.memoTextarea} />
             <button style={{ ...styles.saveBtn, opacity: edit.title.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.title.trim()}>{edit.id ? "更新する" : "追加する"}</button>

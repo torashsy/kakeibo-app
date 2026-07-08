@@ -31,6 +31,7 @@ export interface Memo {
   body?: string;
   category?: string;
   ym?: string;          // "YYYY-MM"。任意(計画との月別比較に使用)
+  linkedCard?: string;  // 紐づくカード名(任意)。収支には影響せず、そのカードの内訳表示にのみ使う
 }
 
 export interface Sub {
@@ -255,8 +256,14 @@ export function planLines(config: Config, cards: Card[]): PlanLine[] {
 
 // 収支への符号(+収入 / −支出)。口座フローは符号付きなので +。
 export const planGroupSign = (group: string): 1 | -1 => (group === "card" || group === "other" ? -1 : 1);
-// [グループID, グループ見出し, 小計ラベル(nullなら小計行なし)]
-export const PLAN_GROUPS: [string, string, string | null][] = [["salary", "給与系", "給与計"], ["card", "カード", "カード計"], ["account", "口座", "口座計"], ["other", "その他", null]];
+// [グループID, グループ見出し, 小計ラベル(nullなら小計行なし), 収支計に含めるか]
+// "その他"(交際費などのメモ)は計画/実績の比較行としては表示するが、収支には一切影響させない
+export const PLAN_GROUPS: [string, string, string | null, boolean][] = [
+  ["salary", "給与系", "給与計", true],
+  ["card", "カード", "カード計", true],
+  ["account", "口座", "口座計", true],
+  ["other", "その他（収支計には含みません）", null, false],
+];
 
 // 計画額(標準月 std ＋ 例外月 over の上書き)
 export const planValue = (plan: Plan | null | undefined, key: string, ym: string): number => {
@@ -310,9 +317,32 @@ export function planVsActualForMonth(plans: Plan, config: Config, cards: Card[],
     return sums;
   };
   const planSums = byGroup("plan"), actualSums = byGroup("actual");
-  const netOf = (sums: Record<string, number>) => PLAN_GROUPS.reduce((a, [gid]) => a + planGroupSign(gid) * sums[gid], 0);
+  // 収支計に含めるグループ(countsTowardNet)だけを合算する。交際費などの「その他」は収支に影響させない。
+  const netOf = (sums: Record<string, number>) => PLAN_GROUPS.reduce((a, [gid, , , countsTowardNet]) => a + (countsTowardNet ? planGroupSign(gid) * sums[gid] : 0), 0);
   const planNet = netOf(planSums), actualNet = netOf(actualSums);
   return { planSums, actualSums, planNet, actualNet, diff: actualNet - planNet };
+}
+
+export interface CardBreakdownRow {
+  name: string;
+  total: number;        // その月のカード請求額(絶対値)
+  debtPortion: number;  // うち残債(分割払い)のスケジュール分
+  otherPortion: number; // 残債以外(通常利用分)
+  linkedMemos: Memo[];  // このカードに紐づくメモ(収支には影響しない参考情報)
+}
+
+// カード請求額を「残債(分割払いのスケジュール分)」と「それ以外」に分けた内訳。
+// サマリのカード請求セルをタップした時の展開表示に使う。金額のみで収支計算には影響しない。
+export function cardBreakdown(cards: Card[], debt: Record<string, Record<string, number>>, memos: Memo[], monthEntries: Entry[], ym: string): CardBreakdownRow[] {
+  return (cards || [])
+    .map((c) => {
+      const total = monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === c.name ? Math.abs(e.amount) : 0), 0);
+      const debtPortion = Math.min(total, Number(debt && debt[c.name] && debt[c.name][ym]) || 0);
+      const otherPortion = Math.max(0, total - debtPortion);
+      const linkedMemos = (memos || []).filter((m) => m.linkedCard === c.name && (!m.ym || m.ym === ym));
+      return { name: c.name, total, debtPortion, otherPortion, linkedMemos };
+    })
+    .filter((r) => r.total > 0 || r.linkedMemos.length > 0);
 }
 
 // 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。

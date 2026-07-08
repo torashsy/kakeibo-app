@@ -157,7 +157,7 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "summary" || tab === "detail") ? { paddingBottom: 96 } : {}) }}>
-        {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} memos={memos} monthEntries={monthEntries} ym={ym} />}
+        {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} ym={ym} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
         {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} ym={ym} />}
