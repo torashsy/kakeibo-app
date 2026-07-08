@@ -78,9 +78,15 @@ describe("migrateConfig", () => {
     expect(c.accountFlows["ゆうちょ"]).toEqual(["預入", "入金"]);
     expect(c.accountFlows["JRE BANK"]).toEqual(["入金", "送金"]);
   });
-  it("accountFlowsが無ければそのまま", () => {
+  it("accountFlowsが無ければaccountFlowsはそのまま", () => {
     const c = { accounts: ["A"] };
-    expect(migrateConfig(c)).toBe(c);
+    expect(migrateConfig(c).accountFlows).toBeUndefined();
+  });
+  it("memoCategoriesが無ければ既定値(交際費)を補う", () => {
+    expect(migrateConfig({ accounts: ["A"] }).memoCategories).toEqual(["交際費"]);
+  });
+  it("memoCategoriesが既にあればそのまま", () => {
+    expect(migrateConfig({ accounts: ["A"], memoCategories: ["娯楽費"] }).memoCategories).toEqual(["娯楽費"]);
   });
 });
 
@@ -127,6 +133,17 @@ describe("計画", () => {
     expect(planGroupSign("card")).toBe(-1);
     expect(planGroupSign("salary")).toBe(1);
     expect(planGroupSign("account")).toBe(1);
+  });
+  it("planLines: memoCategoriesを設定すれば交際費以外のカテゴリも計画対象になる", () => {
+    const config: Config = { accounts: [], salaryItems: [], memoCategories: ["交際費", "娯楽費"] };
+    const lines = planLines(config, []);
+    const other = lines.filter((l) => l.group === "other").map((l) => l.key);
+    expect(other).toEqual(["memo|交際費", "memo|娯楽費"]);
+  });
+  it("planLines: memoCategories未設定なら交際費のみ(後方互換)", () => {
+    const config: Config = { accounts: [], salaryItems: [] };
+    const lines = planLines(config, []);
+    expect(lines.filter((l) => l.group === "other").map((l) => l.key)).toEqual(["memo|交際費"]);
   });
 
   const month: Entry[] = [

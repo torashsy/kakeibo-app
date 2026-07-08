@@ -77,7 +77,22 @@ export default function App() {
 
   const save = (k, v) => { try { window.storage.set(k, JSON.stringify(v), true); } catch (e) { console.error(e); } };
   const commitConfig = (n) => { setConfig(n); save("config", n); };
-  const commitCards = (n) => { setCards(n); save("cards", n); };
+  // カード名は entries/debt/plans/subs/memos が文字列で参照しているため、
+  // 名前を変えたときは同じidのカードを比較して旧名→新名へ一括で追従させる(参照が迷子にならないように)
+  const commitCards = (n) => {
+    const renames = n
+      .map((c) => { const old = cards.find((x) => x.id === c.id); return old && old.name !== c.name ? { oldName: old.name, newName: c.name } : null; })
+      .filter(Boolean);
+    if (renames.length > 0) {
+      const renameOf = (name) => { const r = renames.find((r) => r.oldName === name); return r ? r.newName : name; };
+      setEntries((prev) => { const u = prev.map((e) => (e.cat === "card" && renames.some((r) => r.oldName === e.item) ? { ...e, item: renameOf(e.item) } : e)); save("entries", u); return u; });
+      setDebt((prev) => { const nd = { ...prev }; for (const r of renames) { if (nd[r.oldName]) { nd[r.newName] = { ...(nd[r.newName] || {}), ...nd[r.oldName] }; delete nd[r.oldName]; } } save("debt", nd); return nd; });
+      setPlans((prev) => { const nl = { ...(prev.lines || {}) }; for (const r of renames) { const ok = "card|" + r.oldName, nk = "card|" + r.newName; if (nl[ok]) { nl[nk] = nl[ok]; delete nl[ok]; } } const np = { ...prev, lines: nl }; save("plans", np); return np; });
+      setSubs((prev) => { const u = prev.map((s) => (renames.some((r) => r.oldName === s.card) ? { ...s, card: renameOf(s.card) } : s)); save("subs", u); return u; });
+      setMemos((prev) => { const u = prev.map((m) => (renames.some((r) => r.oldName === m.linkedCard) ? { ...m, linkedCard: renameOf(m.linkedCard) } : m)); save("memos", u); return u; });
+    }
+    setCards(n); save("cards", n);
+  };
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
   const commitSubs = (n) => { setSubs(n); save("subs", n); };
@@ -112,8 +127,13 @@ export default function App() {
     commitCards(cards.filter((c) => c.id !== card.id));
     if (count > 0) removeEntriesMatching((e) => e.cat === "card" && e.item === card.name);
     if (debt[card.name]) { const nd = { ...debt }; delete nd[card.name]; commitDebt(nd); }
+    // サブスクの支払いカード・メモの紐づけも、カード削除に合わせて外す(参照先が無いまま残らないように)
+    if (subs.some((s) => s.card === card.name)) commitSubs(subs.map((s) => (s.card === card.name ? { ...s, card: "" } : s)));
+    if (memos.some((m) => m.linkedCard === card.name)) commitMemos(memos.map((m) => (m.linkedCard === card.name ? { ...m, linkedCard: "" } : m)));
+    if (plans && plans.lines && plans.lines["card|" + card.name]) { const nl = { ...plans.lines }; delete nl["card|" + card.name]; commitPlans({ ...plans, lines: nl }); }
   };
   const removeConfigItem = (key, name) => {
+    if (key === "memoCategories") { commitConfig({ ...config, memoCategories: (config.memoCategories || []).filter((x) => x !== name) }); return; }
     const pred = key === "accounts" ? (e) => e.cat === "account" && e.account === name : (e) => e.cat === "salary" && e.item === name;
     const count = entries.filter(pred).length;
     const label = key === "accounts" ? "口座" : "給与系の項目";
@@ -160,7 +180,7 @@ export default function App() {
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} ym={ym} />}
         {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
-        {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} ym={ym} />}
+        {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} config={config} ym={ym} />}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
       </main>
