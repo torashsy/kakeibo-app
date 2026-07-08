@@ -5,7 +5,7 @@ import {
   planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
-  isMonthClosed, toggleMonthClosed,
+  isMonthClosed, toggleMonthClosed, cardBreakdown,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub,
 } from "./utils";
 
@@ -168,6 +168,66 @@ describe("計画", () => {
     expect(r.planNet).toBe(300000 - 40000);
     expect(r.actualNet).toBe(310000 - 35000);
     expect(r.diff).toBe(r.actualNet - r.planNet);
+  });
+
+  it("planVsActualForMonth: 交際費(その他)は計画/実績があっても収支計には含まない", () => {
+    const cards: Card[] = [{ id: "c1", name: "VIEW" }];
+    const config: Config = { accounts: [], salaryItems: ["給与"] };
+    const plans: Plan = {
+      lines: {
+        "salary|給与": { std: 300000, over: {} },
+        "card|VIEW": { std: 40000, over: {} },
+        "memo|交際費": { std: 25000, over: {} },
+      },
+    };
+    const monthEntries: Entry[] = [
+      { ym: "2026-06", cat: "salary", item: "給与", amount: 310000 },
+      { ym: "2026-06", cat: "card", item: "VIEW", amount: 35000 },
+    ];
+    const memosWithEntertainment: Memo[] = [{ id: "m1", title: "飲み会", category: "交際費", ym: "2026-06", amount: 12000 }];
+    const r = planVsActualForMonth(plans, config, cards, memosWithEntertainment, monthEntries, "2026-06");
+    // 交際費の計画(25000)・実績(12000)が入っていても、収支計は給与とカードのみで決まる
+    expect(r.planNet).toBe(300000 - 40000);
+    expect(r.actualNet).toBe(310000 - 35000);
+  });
+});
+
+describe("cardBreakdown", () => {
+  const cards: Card[] = [{ id: "c1", name: "楽天カード" }, { id: "c2", name: "VIEW" }];
+  const monthEntries: Entry[] = [
+    { ym: "2026-06", cat: "card", item: "楽天カード", amount: 30000 },
+    { ym: "2026-06", cat: "card", item: "VIEW", amount: 5000 },
+  ];
+  it("残債とそれ以外に分割し、残債は請求額を超えない", () => {
+    const debt = { "楽天カード": { "2026-06": 8000 } };
+    const rows = cardBreakdown(cards, debt, [], monthEntries, "2026-06");
+    const rakuten = rows.find((r) => r.name === "楽天カード")!;
+    expect(rakuten.total).toBe(30000);
+    expect(rakuten.debtPortion).toBe(8000);
+    expect(rakuten.otherPortion).toBe(22000);
+  });
+  it("残債データが請求額を超えていてもotherPortionは負にならない", () => {
+    const debt = { "VIEW": { "2026-06": 9000 } };
+    const rows = cardBreakdown(cards, debt, [], monthEntries, "2026-06");
+    const view = rows.find((r) => r.name === "VIEW")!;
+    expect(view.total).toBe(5000);
+    expect(view.debtPortion).toBe(5000);
+    expect(view.otherPortion).toBe(0);
+  });
+  it("紐づくメモを月一致でフィルタして含める(収支には影響しない参考情報)", () => {
+    const memos: Memo[] = [
+      { id: "m1", title: "Netflix", linkedCard: "楽天カード", ym: "2026-06", amount: 1500 },
+      { id: "m2", title: "先月分", linkedCard: "楽天カード", ym: "2026-05", amount: 1000 },
+      { id: "m3", title: "無関係", linkedCard: "VIEW", ym: "2026-06", amount: 500 },
+    ];
+    const rows = cardBreakdown(cards, {}, memos, monthEntries, "2026-06");
+    const rakuten = rows.find((r) => r.name === "楽天カード")!;
+    expect(rakuten.linkedMemos.map((m) => m.id)).toEqual(["m1"]);
+  });
+  it("請求も紐づくメモも無いカードは除外する", () => {
+    const cardsWithExtra: Card[] = [...cards, { id: "c3", name: "使っていないカード" }];
+    const rows = cardBreakdown(cardsWithExtra, {}, [], monthEntries, "2026-06");
+    expect(rows.some((r) => r.name === "使っていないカード")).toBe(false);
   });
 });
 
