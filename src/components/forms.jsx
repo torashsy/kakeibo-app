@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, addMonth, ACCOUNT_TYPES, acctRole } from '../utils.js';
+import { yen, ymLabel, addMonth, ACCOUNT_TYPES, acctRole } from '../utils';
 import { styles } from '../styles.js';
 import { Icon } from '../icons.jsx';
 

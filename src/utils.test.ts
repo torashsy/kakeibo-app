@@ -6,7 +6,8 @@ import {
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   isMonthClosed, toggleMonthClosed,
-} from "./utils.js";
+  type Entry, type Memo, type Card, type Config, type Plan, type Sub,
+} from "./utils";
 
 describe("整形", () => {
   it("yen: 正負とカンマ", () => {
@@ -44,12 +45,12 @@ describe("acctRole / flowTypesFor", () => {
 
 describe("migrateEntry", () => {
   it("新形式はそのまま(idを補完)", () => {
-    const e = migrateEntry({ ym: "2026-06", cat: "card", item: "VIEW", amount: 100 });
+    const e = migrateEntry({ ym: "2026-06", cat: "card", item: "VIEW", amount: 100 })!;
     expect(e.cat).toBe("card");
     expect(e.id).toBeTruthy();
   });
   it("口座の「受取」は「入金」へ改称", () => {
-    const e = migrateEntry({ ym: "2026-06", cat: "account", item: "受取", account: "ゆうちょ", amount: 500 });
+    const e = migrateEntry({ ym: "2026-06", cat: "account", item: "受取", account: "ゆうちょ", amount: 500 })!;
     expect(e.item).toBe("入金");
     expect(e.amount).toBe(500);
   });
@@ -62,8 +63,8 @@ describe("migrateEntry", () => {
     expect(e).toMatchObject({ cat: "salary", item: "控除", amount: -500 });
   });
   it("旧kind形式: transferは符号で入金/引出に振り分け", () => {
-    expect(migrateEntry({ ym: "2026-05", kind: "transfer", amount: 100 }).item).toBe("入金");
-    expect(migrateEntry({ ym: "2026-05", kind: "transfer", amount: -100 }).item).toBe("引出");
+    expect(migrateEntry({ ym: "2026-05", kind: "transfer", amount: 100 })!.item).toBe("入金");
+    expect(migrateEntry({ ym: "2026-05", kind: "transfer", amount: -100 })!.item).toBe("引出");
   });
   it("壊れたデータはnull(落とさない)", () => {
     expect(migrateEntry(null)).toBeNull();
@@ -84,15 +85,15 @@ describe("migrateConfig", () => {
 });
 
 describe("computeSummary", () => {
-  const entries = [
-    { cat: "salary", item: "給与", amount: 300000 },
-    { cat: "salary", item: "控除", amount: -50000 },
-    { cat: "card", item: "VIEW", amount: 40000 },
-    { cat: "account", item: "入金", account: "A", amount: 10000 },
-    { cat: "account", item: "引出", account: "A", amount: -20000 },
-    { cat: "account", item: "投資振替", account: "B", amount: -30000 },
-    { cat: "account", item: "残高", account: "A", amount: 111111 },
-    { cat: "account", item: "残高", account: "B", amount: 222222 },
+  const entries: Entry[] = [
+    { ym: "2026-06", cat: "salary", item: "給与", amount: 300000 },
+    { ym: "2026-06", cat: "salary", item: "控除", amount: -50000 },
+    { ym: "2026-06", cat: "card", item: "VIEW", amount: 40000 },
+    { ym: "2026-06", cat: "account", item: "入金", account: "A", amount: 10000 },
+    { ym: "2026-06", cat: "account", item: "引出", account: "A", amount: -20000 },
+    { ym: "2026-06", cat: "account", item: "投資振替", account: "B", amount: -30000 },
+    { ym: "2026-06", cat: "account", item: "残高", account: "A", amount: 111111 },
+    { ym: "2026-06", cat: "account", item: "残高", account: "B", amount: 222222 },
   ];
   const s = computeSummary(entries);
   it("収入=給与+控除+入金系", () => expect(s.income).toBe(300000 - 50000 + 10000));
@@ -119,7 +120,7 @@ describe("計画", () => {
     expect(planValue(plan, "無い行", "2026-06")).toBe(0);
   });
   it("planLines: 実績と同じグループ構成(口座に入金を含む)", () => {
-    const lines = planLines(DEFAULT_CONFIG, [{ name: "VIEW" }]);
+    const lines = planLines(DEFAULT_CONFIG, [{ id: "c1", name: "VIEW" }]);
     const acct = lines.filter((l) => l.group === "account").map((l) => l.label);
     expect(acct).toEqual(["預入", "入金", "引出", "送金", "投資振替"]);
     expect(lines.some((l) => l.key === "card|VIEW" && l.group === "card")).toBe(true);
@@ -128,13 +129,16 @@ describe("計画", () => {
     expect(planGroupSign("account")).toBe(1);
   });
 
-  const month = [
+  const month: Entry[] = [
     { ym: "2026-06", cat: "salary", item: "給与", amount: 286720 },
     { ym: "2026-06", cat: "card", item: "VIEW", amount: 40000 },
     { ym: "2026-06", cat: "account", item: "投資振替", account: "B", amount: -94000 },
     { ym: "2026-06", cat: "account", item: "残高", account: "A", amount: 155596 },
   ];
-  const memos = [{ category: "交際費", ym: "2026-06", amount: 12000 }, { category: "交際費", ym: "2026-05", amount: 9999 }];
+  const memos: Memo[] = [
+    { id: "m1", title: "飲み会", category: "交際費", ym: "2026-06", amount: 12000 },
+    { id: "m2", title: "誕生日", category: "交際費", ym: "2026-05", amount: 9999 },
+  ];
   it("actualForLine: 給与/カード/口座フロー(符号付き)/交際費メモ(月別)", () => {
     expect(actualForLine("salary|給与", month, memos, "2026-06")).toBe(286720);
     expect(actualForLine("card|VIEW", month, memos, "2026-06")).toBe(40000);
@@ -153,12 +157,12 @@ describe("計画", () => {
   });
 
   it("planVsActualForMonth: 実績合計/計画合計/差を算出", () => {
-    const cards = [{ name: "VIEW" }];
-    const config = { salaryItems: ["給与"] };
-    const plans = { lines: { "salary|給与": { std: 300000, over: {} }, "card|VIEW": { std: 40000, over: {} } } };
-    const monthEntries = [
-      { cat: "salary", item: "給与", amount: 310000 },
-      { cat: "card", item: "VIEW", amount: 35000 },
+    const cards: Card[] = [{ id: "c1", name: "VIEW" }];
+    const config: Config = { accounts: [], salaryItems: ["給与"] };
+    const plans: Plan = { lines: { "salary|給与": { std: 300000, over: {} }, "card|VIEW": { std: 40000, over: {} } } };
+    const monthEntries: Entry[] = [
+      { ym: "2026-06", cat: "salary", item: "給与", amount: 310000 },
+      { ym: "2026-06", cat: "card", item: "VIEW", amount: 35000 },
     ];
     const r = planVsActualForMonth(plans, config, cards, [], monthEntries, "2026-06");
     expect(r.planNet).toBe(300000 - 40000);
@@ -181,26 +185,26 @@ describe("サブスク更新日の自動繰り越し", () => {
   });
 
   it("rollForwardSubs: 過ぎた更新日を今日以降まで繰り越す", () => {
-    const subs = [{ id: "1", renewal: "2026-01-15", cycle: "monthly" }];
+    const subs: Sub[] = [{ id: "1", name: "テスト", amount: 1000, renewal: "2026-01-15", cycle: "monthly" }];
     const r = rollForwardSubs(subs, "2026-06-10");
-    expect(r[0].renewal >= "2026-06-10").toBe(true);
+    expect(r[0]!.renewal! >= "2026-06-10").toBe(true);
     // 月額なので15日を維持したまま繰り越されるはず
-    expect(r[0].renewal).toBe("2026-06-15");
+    expect(r[0]!.renewal).toBe("2026-06-15");
   });
   it("rollForwardSubs: 今日以降ならそのまま(参照も同じ)", () => {
-    const subs = [{ id: "1", renewal: "2026-12-01", cycle: "monthly" }];
+    const subs: Sub[] = [{ id: "1", name: "テスト", amount: 1000, renewal: "2026-12-01", cycle: "monthly" }];
     const r = rollForwardSubs(subs, "2026-06-10");
     expect(r).toBe(subs);
   });
   it("rollForwardSubs: 更新日なしのサブスクは無視", () => {
-    const subs = [{ id: "1", renewal: "", cycle: "monthly" }];
+    const subs: Sub[] = [{ id: "1", name: "テスト", amount: 1000, renewal: "", cycle: "monthly" }];
     const r = rollForwardSubs(subs, "2026-06-10");
     expect(r).toBe(subs);
   });
   it("rollForwardSubs: 年払いも正しく繰り越す", () => {
-    const subs = [{ id: "1", renewal: "2024-03-01", cycle: "yearly" }];
+    const subs: Sub[] = [{ id: "1", name: "テスト", amount: 1000, renewal: "2024-03-01", cycle: "yearly" }];
     const r = rollForwardSubs(subs, "2026-06-10");
-    expect(r[0].renewal).toBe("2027-03-01");
+    expect(r[0]!.renewal).toBe("2027-03-01");
   });
 });
 

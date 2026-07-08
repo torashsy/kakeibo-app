@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils.js';
+import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils';
 import { styles } from '../styles.js';
 import { PlanView } from './plan.jsx';
 

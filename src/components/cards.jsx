@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { MUTED, RED } from '../theme.js';
-import { yen, num, ymLabel, uid, addMonth } from '../utils.js';
+import { yen, num, ymLabel, uid, addMonth } from '../utils';
 import { styles } from '../styles.js';
 
 export function Cards({ cards, debt, ym, entries, onSaveCards, onSaveDebt, onRemoveCard }) {

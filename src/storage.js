@@ -2,7 +2,7 @@
 // 基本は localStorage。設定画面で Supabase(URL/anon key)を設定しログインすると、
 // キー単位の last-write-wins でクラウドと双方向同期する(オフライン時はローカルのみ→後で追送)。
 // get/set/delete/list の signature は従来どおりで、App.jsx は変更不要。
-import { decideSync } from "./sync.js";
+import { decideSync } from "./sync";
 
 const PREFIX = "kakeibo:";
 const CFG_KEY = "kakeibo-sync:config";    // { url, anonKey }

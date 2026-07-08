@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { MUTED } from '../theme.js';
-import { yen, uid } from '../utils.js';
+import { yen, uid } from '../utils';
 import { styles } from '../styles.js';
 import { Subs } from './subs.jsx';
 

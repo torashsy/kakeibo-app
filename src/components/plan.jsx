@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
-import { num, ymLabel, addMonth, acctRole, planMonths, fyStartOf, planLines, planValue, actualForLine, hasActualForLine, hasBalRecord, balTotalOf, planGroupSign, PLAN_GROUPS, isMonthClosed } from '../utils.js';
+import { num, ymLabel, addMonth, acctRole, planMonths, fyStartOf, planLines, planValue, actualForLine, hasActualForLine, hasBalRecord, balTotalOf, planGroupSign, PLAN_GROUPS, isMonthClosed } from '../utils';
 import { styles } from '../styles.js';
 
 // 計画 / 実績 / 見通し / 差異 を月×項目で見るビュー。グループは実績と同じ(給与系/カード/口座/その他)。

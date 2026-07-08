@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, planVsActualForMonth } from '../utils.js';
+import { yen, ymLabel, planVsActualForMonth } from '../utils';
 import { styles } from '../styles.js';
 
 export function Summary({ summary, prevBalTotal, plans, config, cards, memos, monthEntries, ym }) {
