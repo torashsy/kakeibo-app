@@ -168,8 +168,8 @@ export default function App() {
       {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); setSheet(cat); }} />}
       {sheet === "salary" && <SalaryForm key={ym} ym={ym} config={config} entries={entries} onClose={() => { setSheet(null); setEditing(null); }} onSave={(rows) => { replaceSalary(ym, rows); setSheet(null); }} />}
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
+      {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
+      {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
     </div>
   );
 }
