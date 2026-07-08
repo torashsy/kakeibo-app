@@ -98,20 +98,20 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
         <button aria-label="次の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o + 1)}>›</button>
         {fyOffset !== 0 && <button style={{ ...styles.chipGhost, marginLeft: 4 }} onClick={() => setFyOffset(0)}>今年度に戻す</button>}
       </div>
-      {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 0 12px", padding: "10px 14px", background: "var(--card-bg)", border: "1px solid var(--line)", borderRadius: 12 }}>
-          <span style={{ fontSize: 12.5, color: isMonthClosed(closedMonths, ym) ? ACCENT : MUTED }}>
-            {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)}は確定済み（未入力の項目は0円として扱います）` : `${ymLabel(ym)}の記録入力は終わりましたか？`}
-          </span>
-          <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定する"}</button>
-        </div>
-      )}
       <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
         {[["forecast", "見通し"], ["actual", "実績"], ["plan", "計画"], ["diff", "差異"]].map(([v, l]) => (
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{fyStart}年4月〜{fyStart + 1}年3月。{hint}横スクロール可。</div>
+      {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 4px 6px" }}>
+          <span style={{ fontSize: 11.5, color: isMonthClosed(closedMonths, ym) ? ACCENT : MUTED }}>
+            {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)}は確定済み（未入力は0円扱い）` : `${ymLabel(ym)}の入力は終わりましたか？`}
+          </span>
+          <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定する"}</button>
+        </div>
+      )}
+      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{hint}横スクロール可。</div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: tableWidth }}>
           <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
