@@ -5,6 +5,7 @@ import {
   planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
+  isMonthClosed, toggleMonthClosed,
 } from "./utils.js";
 
 describe("整形", () => {
@@ -200,5 +201,18 @@ describe("サブスク更新日の自動繰り越し", () => {
     const subs = [{ id: "1", renewal: "2024-03-01", cycle: "yearly" }];
     const r = rollForwardSubs(subs, "2026-06-10");
     expect(r[0].renewal).toBe("2027-03-01");
+  });
+});
+
+describe("月の締めフラグ", () => {
+  it("isMonthClosed: 含まれる/含まれない/未定義", () => {
+    expect(isMonthClosed(["2026-05", "2026-06"], "2026-06")).toBe(true);
+    expect(isMonthClosed(["2026-05"], "2026-06")).toBe(false);
+    expect(isMonthClosed(undefined, "2026-06")).toBe(false);
+  });
+  it("toggleMonthClosed: 無ければ追加、あれば削除(ソート済みで返す)", () => {
+    expect(toggleMonthClosed([], "2026-06")).toEqual(["2026-06"]);
+    expect(toggleMonthClosed(["2026-06"], "2026-06")).toEqual([]);
+    expect(toggleMonthClosed(["2026-07"], "2026-06")).toEqual(["2026-06", "2026-07"]);
   });
 });

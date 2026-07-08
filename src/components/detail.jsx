@@ -5,7 +5,7 @@ import { styles } from '../styles.js';
 import { Editable } from '../edit.jsx';
 import { PlanView } from './plan.jsx';
 
-export function Detail({ monthEntries, entries, ym, config, cards, memos, plans, onSavePlans, onEdit }) {
+export function Detail({ monthEntries, entries, ym, config, cards, memos, plans, onSavePlans, closedMonths, onToggleClosedMonth, onEdit }) {
   const [view, setView] = useState("card");
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
@@ -21,7 +21,7 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, plans,
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "table" && <DetailTable S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "year" && <YearTable entries={entries} ym={ym} config={config} cards={cards} />}
-      {view === "plan" && <PlanView plans={plans} onSave={onSavePlans} config={config} cards={cards} entries={entries} memos={memos} ym={ym} />}
+      {view === "plan" && <PlanView plans={plans} onSave={onSavePlans} config={config} cards={cards} entries={entries} memos={memos} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={onToggleClosedMonth} />}
     </div>
   );
 }

@@ -230,6 +230,15 @@ export const hasBalRecord = (monthEntries) => monthEntries.some((e) => e.cat ===
 export const balTotalOf = (monthEntries) => monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
 
 // 1か月分の 実績合計/計画合計/差 をグループ別・収支合計で算出(サマリの計画対比カード用)
+// 月の「締め」フラグ。締めた月は、記録が無い項目も「0円で確定」とみなし
+// (入力もれ=未入力ではなく実際に無かった、と判断)、見通しで計画に頼らず実績を優先させる。
+export const isMonthClosed = (closedMonths, ym) => Array.isArray(closedMonths) && closedMonths.includes(ym);
+export const toggleMonthClosed = (closedMonths, ym) => {
+  const set = new Set(Array.isArray(closedMonths) ? closedMonths : []);
+  if (set.has(ym)) set.delete(ym); else set.add(ym);
+  return [...set].sort();
+};
+
 export function planVsActualForMonth(plans, config, cards, memos, monthEntries, ym) {
   const lines = planLines(config, cards);
   const byGroup = (which) => {

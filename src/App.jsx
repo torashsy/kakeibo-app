@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs } from './utils.js';
+import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils.js';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -19,6 +19,7 @@ export default function App() {
   const [memos, setMemos] = useState([]);
   const [subs, setSubs] = useState([]);
   const [plans, setPlans] = useState(SEED_PLAN);
+  const [closedMonths, setClosedMonths] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("summary");
@@ -29,7 +30,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th, mm, sb, pl] = await Promise.all([
+        const [e, c, cd, d, th, mm, sb, pl, cm] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
@@ -38,6 +39,7 @@ export default function App() {
           window.storage.get("memos", true).catch(() => null),
           window.storage.get("subs", true).catch(() => null),
           window.storage.get("plans", true).catch(() => null),
+          window.storage.get("closedMonths", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -65,6 +67,8 @@ export default function App() {
         if (rolledSubs !== loadedSubs) { try { window.storage.set("subs", JSON.stringify(rolledSubs), true); } catch {} }
         const rawPlans = pl && pl.value ? JSON.parse(pl.value) : null;
         setPlans(rawPlans && rawPlans.lines ? rawPlans : SEED_PLAN);
+        const rawClosed = cm && cm.value ? JSON.parse(cm.value) : null;
+        setClosedMonths(Array.isArray(rawClosed) ? rawClosed : []);
       } catch {
         setEntries(SEED_ENTRIES.map((x) => ({ ...x, id: uid() }))); setCards(DEFAULT_CARDS); setDebt(SEED_DEBT);
       } finally { setLoaded(true); }
@@ -78,6 +82,7 @@ export default function App() {
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
   const commitSubs = (n) => { setSubs(n); save("subs", n); };
   const commitPlans = (n) => { setPlans(n); save("plans", n); };
+  const toggleClosedMonth = (targetYm) => { const n = toggleMonthClosed(closedMonths, targetYm); setClosedMonths(n); save("closedMonths", n); };
 
   // バックアップJSONからの復元。読み込み時と同じ移行・正規化を通して安全に取り込む
   const importData = (d) => {
@@ -88,6 +93,7 @@ export default function App() {
     if (Array.isArray(d.memos)) commitMemos(d.memos);
     if (Array.isArray(d.subs)) commitSubs(d.subs);
     if (d.plans && d.plans.lines) commitPlans(d.plans);
+    if (Array.isArray(d.closedMonths)) { setClosedMonths(d.closedMonths); save("closedMonths", d.closedMonths); }
     if (d.theme && typeof d.theme === "object") commitTheme({ ...DEFAULT_THEME, ...d.theme });
   };
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
@@ -152,10 +158,10 @@ export default function App() {
 
       <main style={{ ...styles.main, ...((tab === "summary" || tab === "detail") ? { paddingBottom: 96 } : {}) }}>
         {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} memos={memos} monthEntries={monthEntries} ym={ym} />}
-        {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
+        {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
         {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} ym={ym} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
       </main>
 
