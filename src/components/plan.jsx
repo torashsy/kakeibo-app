@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
-import { num, ymLabel, addMonth, acctRole, planMonths, fyStartOf, planLines, planValue, actualForLine, hasActualForLine, hasBalRecord, balTotalOf, planGroupSign, PLAN_GROUPS, isMonthClosed } from '../utils';
+import { num, ymLabel, addMonth, acctRole, planMonths, fyStartOf, planLines, planValue, actualForLine, monthHasInput, hasBalRecord, balTotalOf, planGroupSign, PLAN_GROUPS, isMonthClosed } from '../utils';
 import { styles } from '../styles.js';
 
 // 計画 / 実績 / 見通し / 差異 を月×項目で見るビュー。グループは実績と同じ(給与系/カード/口座/その他)。
-// 見通し=実績が入っている行/月は実績、まだの部分は計画。残高は実績を引き継いで先へ projection。
-// 締めた月は、記録の有無に関わらず実績を優先(入力もれと「本当に無かった」を区別する)。
+// 見通し=入力が始まった月は実績のみ(未入力の行は空欄)、まだの月は計画。残高は実績を引き継いで先へ projection。
+// 締めた月も同様に実績を優先(入力が1件もない月を「本当に無かった」と確定するのに使う)。
 export function PlanView({ plans, onSave, config, cards, entries, memos, ym, closedMonths, onToggleClosedMonth }) {
   const [mode, setMode] = useState("forecast"); // forecast | actual | plan | diff
   const [edit, setEdit] = useState(null);
@@ -22,7 +22,8 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
 
   const planOf = (key, mo) => planValue(plans, key, mo);
   const actualOf = (key, mo) => actualForLine(key, entriesByMonth[mo] || [], memos, mo);
-  const isActual = (key, mo) => isMonthClosed(closedMonths, mo) || hasActualForLine(key, entriesByMonth[mo] || [], memos, mo);
+  // 月単位で判定: 入力が1件でもある月は全行実績(未入力の行は空欄)。計画値で埋めるのは未入力の月だけ。
+  const isActual = (key, mo) => isMonthClosed(closedMonths, mo) || monthHasInput(entriesByMonth[mo] || [], memos, mo);
   const forecastOf = (key, mo) => (isActual(key, mo) ? actualOf(key, mo) : planOf(key, mo));
   const which = mode === "plan" ? "plan" : mode === "actual" ? "actual" : "forecast";
   const valFor = (key, mo, w) => (w === "plan" ? planOf(key, mo) : w === "actual" ? actualOf(key, mo) : forecastOf(key, mo));
@@ -87,7 +88,7 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
     next.lines[edit.key] = line; onSave(next); setEdit(null);
   };
 
-  const hint = mode === "forecast" ? "実績が入った分は実績、未入力は計画で表示。灰色=計画（見込み）。残高は実績を引き継いで先へ試算。"
+  const hint = mode === "forecast" ? "入力が始まった月は実績のみ、未入力の月は計画で表示。灰色=計画（見込み）。残高は実績を引き継いで先へ試算。"
     : mode === "actual" ? "記録から自動集計した実績です。" : mode === "plan" ? "セルをタップで計画を編集（この月／毎月の標準）。" : "実績−計画。緑=良い方向。";
 
   return (
@@ -103,10 +104,11 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
-      {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && (
+      {/* 入力が1件でもある月は自動で実績扱いになるため、締めバーは入力ゼロの月だけに出す */}
+      {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], memos, ym) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 4px 6px" }}>
           <span style={{ fontSize: 11.5, color: isMonthClosed(closedMonths, ym) ? ACCENT : MUTED }}>
-            {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)}は確定済み（未入力は0円扱い）` : `${ymLabel(ym)}の入力は終わりましたか？`}
+            {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)}は記録なしで確定済み` : `${ymLabel(ym)}は記録がありません。記録なしで確定しますか？`}
           </span>
           <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定する"}</button>
         </div>

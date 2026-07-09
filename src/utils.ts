@@ -291,6 +291,11 @@ export function actualForLine(key: string, monthEntries: Entry[], memos: Memo[],
   return 0;
 }
 
+// その月に何らかの入力(記録またはその月のメモ)があるか。
+// 見通しでは、入力が始まった月の空欄行に計画値を流し込まず実績(0)扱いにする判定に使う。
+export const monthHasInput = (monthEntries: Entry[], memos: Memo[], ym: string): boolean =>
+  monthEntries.length > 0 || (memos || []).some((m) => m.ym === ym);
+
 // その行・その月に実績記録があるか(見通しで実績/計画を切り替える判定)
 export function hasActualForLine(key: string, monthEntries: Entry[], memos: Memo[], ym: string): boolean {
   const [type, name] = key.split("|");

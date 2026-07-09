@@ -5,7 +5,7 @@ import {
   planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
-  isMonthClosed, toggleMonthClosed, cardBreakdown,
+  isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub,
 } from "./utils";
 
@@ -166,6 +166,12 @@ describe("計画", () => {
     expect(hasActualForLine("salary|給与", month, memos, "2026-06")).toBe(true);
     expect(hasActualForLine("flow|引出", month, memos, "2026-06")).toBe(false);
     expect(hasActualForLine("memo|交際費", [], memos, "2026-04")).toBe(false);
+  });
+  it("monthHasInput: 記録またはその月のメモがあればtrue(入力済み月の空欄に計画値を出さない判定)", () => {
+    expect(monthHasInput(month, [], "2026-06")).toBe(true);       // 記録あり
+    expect(monthHasInput([], memos, "2026-06")).toBe(true);       // その月のメモあり
+    expect(monthHasInput([], memos, "2026-04")).toBe(false);      // 記録もその月のメモもなし
+    expect(monthHasInput([], [], "2026-06")).toBe(false);         // 完全に未入力
   });
   it("残高記録の検出と合計", () => {
     expect(hasBalRecord(month)).toBe(true);
