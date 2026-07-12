@@ -33,13 +33,14 @@ describe("acctRole / flowTypesFor", () => {
     expect(acctRole("預入")).toBe("in");
     expect(acctRole("入金")).toBe("in");
     expect(acctRole("引出")).toBe("out");
-    expect(acctRole("送金")).toBe("out");
+    expect(acctRole("出金")).toBe("out");
     expect(acctRole("投資振替")).toBe("transfer");
   });
   it("旧称「受取」も収入として後方互換", () => expect(acctRole("受取")).toBe("in"));
+  it("旧称「送金」も支出として後方互換", () => expect(acctRole("送金")).toBe("out"));
   it("flowTypesFor: 設定があればそれ、無ければ全種類", () => {
-    expect(flowTypesFor("ゆうちょ", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "送金"]);
-    expect(flowTypesFor("未知の口座", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "送金", "投資振替"]);
+    expect(flowTypesFor("ゆうちょ", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "出金"]);
+    expect(flowTypesFor("未知の口座", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "出金", "投資振替"]);
   });
 });
 
@@ -53,6 +54,11 @@ describe("migrateEntry", () => {
     const e = migrateEntry({ ym: "2026-06", cat: "account", item: "受取", account: "ゆうちょ", amount: 500 })!;
     expect(e.item).toBe("入金");
     expect(e.amount).toBe(500);
+  });
+  it("口座の「送金」は「出金」へ改称", () => {
+    const e = migrateEntry({ ym: "2026-06", cat: "account", item: "送金", account: "ゆうちょ", amount: -500 })!;
+    expect(e.item).toBe("出金");
+    expect(e.amount).toBe(-500);
   });
   it("給与系の臨時収入は口座の入金へ移す", () => {
     const e = migrateEntry({ ym: "2026-05", cat: "salary", item: "臨時収入", amount: -300 });
@@ -73,10 +79,10 @@ describe("migrateEntry", () => {
 });
 
 describe("migrateConfig", () => {
-  it("accountFlowsの「受取」を「入金」へ", () => {
+  it("accountFlowsの「受取」を「入金」、「送金」を「出金」へ", () => {
     const c = migrateConfig({ accountFlows: { "ゆうちょ": ["預入", "受取"], "JRE BANK": ["受取", "送金"] } });
     expect(c.accountFlows["ゆうちょ"]).toEqual(["預入", "入金"]);
-    expect(c.accountFlows["JRE BANK"]).toEqual(["入金", "送金"]);
+    expect(c.accountFlows["JRE BANK"]).toEqual(["入金", "出金"]);
   });
   it("accountFlowsが無ければaccountFlowsはそのまま", () => {
     const c = { accounts: ["A"] };
@@ -128,7 +134,7 @@ describe("計画", () => {
   it("planLines: 実績と同じグループ構成(口座に入金を含む)", () => {
     const lines = planLines(DEFAULT_CONFIG, [{ id: "c1", name: "VIEW" }]);
     const acct = lines.filter((l) => l.group === "account").map((l) => l.label);
-    expect(acct).toEqual(["預入", "入金", "引出", "送金", "投資振替"]);
+    expect(acct).toEqual(["預入", "入金", "引出", "出金", "投資振替"]);
     expect(lines.some((l) => l.key === "card|VIEW" && l.group === "card")).toBe(true);
     expect(planGroupSign("card")).toBe(-1);
     expect(planGroupSign("salary")).toBe(1);

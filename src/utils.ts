@@ -83,6 +83,7 @@ export function migrateEntry(e: any): Entry | null {
   if (e.cat) {
     if (e.cat === "salary" && e.item === "臨時収入") return { id, ym: e.ym, cat: "account", item: "入金", account: e.account || "", amount: Math.abs(e.amount) };
     if (e.cat === "account" && e.item === "受取") return { ...e, id, item: "入金" };
+    if (e.cat === "account" && e.item === "送金") return { ...e, id, item: "出金" };
     return { ...e, id };
   }
   // 旧形式: kind = income/deduction/expense/card/transfer/balance
@@ -100,15 +101,15 @@ export function migrateEntry(e: any): Entry | null {
 
 
 // 入出金・振替の種類(残高を除く)。口座ごとに表示する種類を絞り込める。
-export const ALL_FLOW_TYPES: string[] = ["預入", "入金", "引出", "送金", "投資振替"];
+export const ALL_FLOW_TYPES: string[] = ["預入", "入金", "引出", "出金", "投資振替"];
 
 export const DEFAULT_CONFIG: Config = {
   accounts: ["ゆうちょ", "NEOBANK", "JRE BANK"],
   salaryItems: ["給与", "手当", "賞与", "控除"],
   // 口座ごとに表示する入出金・振替の種類(未指定の口座は全種類を表示)
   accountFlows: {
-    "ゆうちょ": ["預入", "入金", "引出", "送金"],   // 投資振替は使わない
-    "JRE BANK": ["入金", "送金", "投資振替"],        // 預入・引出は使わない
+    "ゆうちょ": ["預入", "入金", "引出", "出金"],   // 投資振替は使わない
+    "JRE BANK": ["入金", "出金", "投資振替"],        // 預入・引出は使わない
   },
   memoCategories: ["交際費"],
 };
@@ -123,13 +124,14 @@ export const ACCOUNT_TYPES = [
   { id: "預入", role: "in", hint: "口座への預け入れ。収入に入ります" },
   { id: "引出", role: "out", hint: "口座からの引き出し。支出に入ります" },
   { id: "入金", role: "in", hint: "送金などの受け取り。収入に入ります" },
-  { id: "送金", role: "out", hint: "他所への送金。支出に入ります" },
+  { id: "出金", role: "out", hint: "他所への送金・支払いなど。支出に入ります" },
   { id: "投資振替", role: "transfer", hint: "投資/ハイブリッド口座への振替。入れた分は支出、戻した分は収入" },
 ];
 
-export const acctRole = (item: string): "bal" | "in" | "out" | "transfer" => (ACCOUNT_TYPES.find((t) => t.id === item)?.role as any) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" ? "out" : item === "残高" ? "bal" : "out");
+// 旧称「送金」も後方互換で「out」として扱う(migrateEntry/migrateConfigで「出金」へ改称される)
+export const acctRole = (item: string): "bal" | "in" | "out" | "transfer" => (ACCOUNT_TYPES.find((t) => t.id === item)?.role as any) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" || item === "送金" ? "out" : item === "残高" ? "bal" : "out");
 
-// 設定(config)内の口座フロー種別の旧称「受取」を「入金」に移行し、
+// 設定(config)内の口座フロー種別の旧称「受取」を「入金」、「送金」を「出金」に移行し、
 // memoCategories(計画タブと連携するメモのカテゴリ)が無ければ既定値を補う
 export function migrateConfig(cfg: any): any {
   if (!cfg || typeof cfg !== "object") return cfg;
@@ -137,7 +139,7 @@ export function migrateConfig(cfg: any): any {
   const af = cfg.accountFlows;
   if (af && typeof af === "object") {
     const naf: Record<string, string[]> = {};
-    for (const [k, arr] of Object.entries(af)) naf[k] = (Array.isArray(arr) ? arr as string[] : []).map((t) => (t === "受取" ? "入金" : t));
+    for (const [k, arr] of Object.entries(af)) naf[k] = (Array.isArray(arr) ? arr as string[] : []).map((t) => (t === "受取" ? "入金" : t === "送金" ? "出金" : t));
     out = { ...out, accountFlows: naf };
   }
   if (!Array.isArray(out.memoCategories)) out = { ...out, memoCategories: ["交際費"] };

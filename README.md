@@ -33,7 +33,7 @@ npm test           # ユニットテスト(Vitest)
 - `theme` … テーマ設定 `{accent, dark}`（アクセント色・ダークモード）
 
 口座の記録種別と収支への算入は `ACCOUNT_TYPES` / `acctRole` を参照
-（残高=記録のみ / 預入・受取=収入 / 引出・送金=支出 / 投資振替=符号そのまま収支反映）。
+（残高=記録のみ / 預入・入金=収入 / 引出・出金=支出 / 投資振替=符号そのまま収支反映）。
 
 ## クラウド同期（Supabase・実装済み）
 `src/storage.js` は localStorage を基本に、設定するとSupabaseへキー単位の
