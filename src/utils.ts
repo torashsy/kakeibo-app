@@ -402,19 +402,22 @@ export function parseBankText(text: string): ParsedTxn[] {
     let amount: number | null = null;
     let linesForTxn = 0;
     // 取引額が見つかるまで摘要として蓄積し、見つけた直後の1行(残高)まで読んだら打ち切る。
-    // OCRが数字を読み違えて取引額を検出できない場合でも、後続行を延々と巻き込まないよう行数に上限を設ける。
+    // 金額を検出した後に金額を含まない行が来たら、それはフッターのナビ文字等の無関係な行なので
+    // 摘要に巻き込まずそこで打ち切る(取引額が見つかる前の行数にも上限を設け、暴走を防ぐ)。
     while (i < lines.length && !IMPORT_DATE_RE.test(lines[i]) && linesForTxn < 4) {
       const line = lines[i];
       const mm = line.match(MONEY_TOKEN_RE);
-      linesForTxn++; i++;
-      if (mm && mm.index != null) {
-        const before = line.slice(0, mm.index).trim();
-        if (before) descParts.push(before);
-        if (amount === null) amount = parseMoneyToken(mm);
-        else break; // 2つ目の金額(残高)を読んだら終了
-      } else {
+      if (!mm || mm.index == null) {
+        if (amount !== null) break;
         descParts.push(line);
+        linesForTxn++; i++;
+        continue;
       }
+      const before = line.slice(0, mm.index).trim();
+      if (before) descParts.push(before);
+      linesForTxn++; i++;
+      if (amount === null) amount = parseMoneyToken(mm);
+      else break; // 2つ目の金額(残高)を読んだら終了
     }
     if (amount === null) continue; // 金額を検出できなかった行は取引として扱わない
     out.push({ date, desc: descParts.join(""), amount });

@@ -432,6 +432,16 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(txns[4]).toEqual({ date: "2026-07-06", desc: "自 払 セ ソ * ン", amount: -10000 });
   });
 
+  it("parseBankText: 金額を検出した後にフッターのナビ文字等が続いても摘要に巻き込まない", () => {
+    // 最後の取引(数字がカナに誤読され金額行を検出できなかったケース)の直後に、
+    // アプリ下部のナビゲーション文字(フッター)が続く実際のケースを再現
+    const txns = parseBankText(realOcrText);
+    const last = txns[txns.length - 1]!;
+    expect(last.desc).not.toContain("ホーム");
+    expect(last.desc).not.toContain("メニュー");
+    expect(last.desc).not.toContain("和仁");
+  });
+
   it("normalizeForMatch: 濁点の脱落・OCRノイズ記号・空白を吸収する", () => {
     expect(normalizeForMatch("ミツ ヒ * シ")).toBe(normalizeForMatch("ミツビシ"));
     expect(normalizeForMatch("セ ソ ` ン")).toBe(normalizeForMatch("セゾン"));
