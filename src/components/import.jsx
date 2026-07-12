@@ -6,7 +6,7 @@ import { styles } from '../styles.js';
 // スクショ取込。銀行アプリなどの明細スクショをOCR(tesseract.js、取込時のみ動的読込・要通信)で
 // 文字起こしし、登録済みルール(config.importRules)で自動的にentryへ振り分ける。
 // OCRが誤読してもテキスト欄で修正・貼り付け直しができ、最後は必ずレビュー画面で内容を確認してから追加する。
-export function ImportSheet({ cards, config, onAddEntries, onSaveImportRules, onClose }) {
+export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules, onClose }) {
   const fileRef = useRef(null);
   const [rawText, setRawText] = useState("");
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -29,7 +29,8 @@ export function ImportSheet({ cards, config, onAddEntries, onSaveImportRules, on
   };
 
   const parse = () => {
-    const txns = parseBankText(rawText);
+    // "N日"だけの見出し形式(年月の表記が無い)は、今表示中の月を起点に判定する
+    const txns = parseBankText(rawText, ym);
     setRows(txns.map((txn) => {
       const auto = classifyTxn(txn.desc, config.importRules);
       return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };

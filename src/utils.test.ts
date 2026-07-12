@@ -463,4 +463,61 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(cardTargets).toEqual(expect.arrayContaining(["MDC", "JAL navi", "SAISON"]));
     expect(classified.some((c) => c && c.action === "skip")).toBe(true);
   });
+
+  // NEOBANK形式: 取引ごとの日付行が無く、"N日"の見出し1つに複数の取引がぶら下がる。
+  // 金額は"¥"ではなく"円"表記。月の表記も無いため、表示中の月(contextYm)を起点に判定する。
+  const neobankText = [
+    "10日",
+    "ＳＢＩハイブリッド預... +10,000円",
+    "残高14,660円",
+    "ATM　セブン銀行 -17,000円",
+    "残高4,660円",
+    "ATM　ゆうちょ銀行 +17,000円",
+    "残高21,660円",
+    "8日",
+    "ことら送金　ハヤシ　... -95,000円",
+    "残高20,660円",
+    "ＳＢＩハイブリッド預... +110,000円",
+    "残高115,660円",
+    "30日",
+    "ＳＢＩハイブリッド預... -4,000円",
+    "残高5,660円",
+    "29日",
+    "口座振替　エポスカー... -15,322円",
+    "残高9,660円",
+    "口座振替　ＰａｙＰａ... -5,314円",
+    "残高24,982円",
+  ].join("\n");
+
+  it("parseBankText: 'N日'見出し形式(NEOBANK等)を日ごとにグループ化し、年月はcontextYmを使う", () => {
+    const txns = parseBankText(neobankText, "2026-08");
+    expect(txns[0]).toEqual({ date: "2026-08-10", desc: "ＳＢＩハイブリッド預...", amount: 10000 });
+    expect(txns[1]).toEqual({ date: "2026-08-10", desc: "ATM　セブン銀行", amount: -17000 });
+    expect(txns[3]).toEqual({ date: "2026-08-08", desc: "ことら送金　ハヤシ　...", amount: -95000 });
+  });
+
+  it("parseBankText: 日が前より大きくなったら前月へ遡ったとみなす(新しい順の一覧を過去へ辿る想定)", () => {
+    const txns = parseBankText(neobankText, "2026-08");
+    // 8日→30日で前月(7月)に切り替わる(日が前より大きくなった=遡って前月に入った)
+    const afterRollover = txns.find((t) => t.desc.includes("エポス"));
+    expect(afterRollover!.date).toBe("2026-07-29");
+  });
+
+  it("classifyTxn/txnToEntry: ハイブリッド預金は投資振替、ATMは引出/預入として口座記録になる", () => {
+    const rules = DEFAULT_CONFIG.importRules;
+    const hybridIn = classifyTxn("ＳＢＩハイブリッド預...", rules);
+    expect(hybridIn).toMatchObject({ action: "account", target: "NEOBANK", negItem: "投資振替", posItem: "投資振替" });
+    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: 10000 }, hybridIn)).toEqual({ ym: "2026-08", cat: "account", item: "投資振替", account: "NEOBANK", amount: 10000 });
+    expect(txnToEntry({ date: "2026-07-30", desc: "x", amount: -4000 }, hybridIn)).toEqual({ ym: "2026-07", cat: "account", item: "投資振替", account: "NEOBANK", amount: -4000 });
+
+    const atm = classifyTxn("ATM　セブン銀行", rules);
+    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: -17000 }, atm)).toEqual({ ym: "2026-08", cat: "account", item: "引出", account: "NEOBANK", amount: -17000 });
+    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: 17000 }, atm)).toEqual({ ym: "2026-08", cat: "account", item: "預入", account: "NEOBANK", amount: 17000 });
+  });
+
+  it("classifyTxn: エポス/PayPayの口座振替はカード請求として仕分けられる(末尾が切れていても)", () => {
+    const rules = DEFAULT_CONFIG.importRules;
+    expect(classifyTxn("口座振替　エポスカー...", rules)).toEqual({ action: "card", target: "EPOS", negItem: undefined, posItem: undefined });
+    expect(classifyTxn("口座振替　ＰａｙＰａ...", rules)).toEqual({ action: "card", target: "PayPay", negItem: undefined, posItem: undefined });
+  });
 });
