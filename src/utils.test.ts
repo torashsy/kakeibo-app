@@ -520,4 +520,54 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(classifyTxn("口座振替　エポスカー...", rules)).toEqual({ action: "card", target: "EPOS", negItem: undefined, posItem: undefined });
     expect(classifyTxn("口座振替　ＰａｙＰａ...", rules)).toEqual({ action: "card", target: "PayPay", negItem: undefined, posItem: undefined });
   });
+
+  // 実機で実際に報告された生のOCR出力(NEOBANK)をそのまま再現。
+  // "N 日"のように日見出しに空白が入る/"円"が全く別の漢字(哲・折・四)に誤読される、という
+  // 新たなOCRノイズを含む
+  const neobankRealOcrText = [
+    "15:08 員 記念 経",
+    "X の )",
+    "30 日",
+    "( 紀 ) SB 1 ハイブ リッ ド 碧 ..…. -4.000 哲",
+    "残高 5.660 円",
+    "29 日",
+    "口座 振替 エポス カー... -15,322 哲",
+    "ーー 残高 9,660 円",
+    "口座 振替 PayPa... -5.314 哲",
+    "ーー 残高 24,982 円",
+    "26 日",
+    "( 紀 ) SB 1 ハイブ リッ ド 碧 ..…. -40.000 哲",
+    "残高 30,296 円",
+    "(上 こと ら 送 金 ハヤ シ .. +40.000 四",
+    "残高 70,296 円",
+    "25 日",
+    "の ② ATM ゆう ちょ 銀行 -25,000 哲",
+    "残高 30,296 円",
+    "24 日",
+    "( 紀 ) SB 1 ハイブ リッ ド 碧 ..…. -50,000 折",
+    "残高 55,296 円",
+    "(上 こと ら 送 金 ハヤ シ .. +100.000 哲",
+    "残高 105,296 円",
+    "く 〇",
+  ].join("\n");
+
+  it("parseBankText: 日見出しの空白・'円'の誤読(哲/折/四)を含む実機OCRでも取引を検出する", () => {
+    const txns = parseBankText(neobankRealOcrText, "2026-06");
+    expect(txns.length).toBeGreaterThanOrEqual(7);
+    expect(txns[0]!.amount).toBe(-4000);
+    expect(txns[0]!.date).toBe("2026-06-30"); // 最初の日見出しはcontextYmをそのまま使う
+    // 26日→25日→24日と減っていく中で問題なく同じ月に留まること
+    const atmTxn = txns.find((t) => t.desc.includes("ATM"));
+    expect(atmTxn!.date).toBe("2026-06-25");
+  });
+
+  it("エンドツーエンド: 実機OCR(NEOBANK)でもSBIハイブリッド/ATM/エポス/PayPay/ことらが正しく仕分けられる", () => {
+    const txns = parseBankText(neobankRealOcrText, "2026-06");
+    const classified = txns.map((t) => classifyTxn(t.desc, DEFAULT_CONFIG.importRules));
+    expect(classified.filter((c) => c && c.negItem === "投資振替").length).toBeGreaterThanOrEqual(2); // SBIハイブリッド
+    expect(classified.some((c) => c && c.negItem === "引出")).toBe(true); // ATM
+    expect(classified.some((c) => c && c.action === "card" && c.target === "EPOS")).toBe(true);
+    expect(classified.some((c) => c && c.action === "card" && c.target === "PayPay")).toBe(true);
+    expect(classified.some((c) => c && c.action === "skip")).toBe(true); // ことら
+  });
 });

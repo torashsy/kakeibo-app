@@ -387,11 +387,12 @@ export interface ParsedTxn { date: string; desc: string; amount: number; }
 //     呼び出し側が今表示中の月(contextYm)を渡す。日付が前の取引より大きくなったら
 //     (新しい順に並ぶ一覧を遡っていて前月に入った、とみなして)月を1つ戻す。
 // OCRは¥を"\"や"Y"に、-を"_"に誤読したり、桁区切りの","と"."を混同したり、
-// "円"表記だったりするため、行の途中にある金額トークンも拾えるようにしている。
+// "円"を全く別の漢字(哲/折/四など、実機で確認)に誤読したりするため、行の途中にある
+// 金額トークンも拾えるようにし、"円"自体は無くても3桁区切りの数字パターンで金額と判定する。
 const IMPORT_DATE_RE = /^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/;
-const IMPORT_DAY_RE = /^(\d{1,2})日$/;
-// 符号(-/−/ー/_、または明示的な+) + [円マーク相当(¥/\/Y)+数字 または 数字+"円"](カンマ・ピリオド・空白混じり)
-const MONEY_TOKEN_RE = /(?:([-−ー_])|\+)?\s*(?:[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)|(\d(?:[\d,.\s]*\d)?)\s*円)/;
+const IMPORT_DAY_RE = /^(\d{1,2})\s*日$/;
+// 符号(-/−/ー/_、または明示的な+) + [円マーク相当(¥/\/Y)+数字 または 3桁区切りの数字(+末尾の単位らしき1〜2文字、何でもよい)]
+const MONEY_TOKEN_RE = /(?:([-−ー_])|\+)?\s*(?:[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)|(\d{1,3}(?:[,.]\d{3})+)\s*[^\d\s]{0,2})/;
 const parseMoneyToken = (m: RegExpMatchArray): number => {
   const neg = !!m[1];
   const digits = (m[2] || m[3] || "").replace(/\D/g, "");
@@ -447,9 +448,9 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
         if (before) descParts.push(before);
         amount = parseMoneyToken(mm);
       } else {
-        // 2つ目の金額(残高)を読んだら終了。"残高"というラベル自体は摘要に含めないが、
-        // それ以外の文字が残っている場合は折り返した摘要の続きの可能性があるので拾う。
-        if (before && before.replace(/\s/g, "") !== "残高") descParts.push(before);
+        // 2つ目の金額(残高)を読んだら終了。"残高"ラベル(前後にOCRノイズが付くこともある)は
+        // 摘要に含めないが、それ以外の文字が残っている場合は折り返した摘要の続きの可能性があるので拾う。
+        if (before && !before.replace(/\s/g, "").includes("残高")) descParts.push(before);
         break;
       }
     }
