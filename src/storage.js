@@ -9,6 +9,10 @@ const CFG_KEY = "kakeibo-sync:config";    // { url, anonKey }
 const META_KEY = "kakeibo-sync:meta";     // { [key]: ローカル最終書込ISO }
 const PENDING_KEY = "kakeibo-sync:pending"; // 送信失敗キーの再送キュー [key,...]
 const TABLE = "kv";
+const BUILTIN_CONFIG = {
+  url: String(import.meta.env.VITE_SUPABASE_URL || "").trim(),
+  anonKey: String(import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim(),
+};
 
 const wrap = (v) => (v == null ? null : { value: v });
 const readJSON = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
@@ -17,8 +21,10 @@ const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); 
 let clientPromise = null;
 let initPromise = null;
 const listeners = new Set();
+let activity = { status: "idle", lastSyncAt: null, error: "" };
 
-export const getSyncConfig = () => readJSON(CFG_KEY, null);
+export const getSyncConfig = () => (BUILTIN_CONFIG.url && BUILTIN_CONFIG.anonKey ? BUILTIN_CONFIG : readJSON(CFG_KEY, null));
+export const hasBuiltInSyncConfig = () => !!(BUILTIN_CONFIG.url && BUILTIN_CONFIG.anonKey);
 export const setSyncConfig = (cfg) => { writeJSON(CFG_KEY, cfg); clientPromise = null; initPromise = null; notify(); };
 export const clearSyncConfig = () => { try { localStorage.removeItem(CFG_KEY); } catch {} clientPromise = null; initPromise = null; notify(); };
 
@@ -37,15 +43,16 @@ function getClient() {
 // 同期状態: off(未設定) / signedOut(設定済み未ログイン) / on(ログイン済み)
 export async function getSyncState() {
   const c = await getClient();
-  if (!c) return { mode: "off" };
+  if (!c) return { mode: "off", ...activity, builtIn: hasBuiltInSyncConfig() };
   try {
     const { data } = await c.auth.getSession();
     const email = data && data.session && data.session.user ? data.session.user.email : null;
-    return email ? { mode: "on", email } : { mode: "signedOut" };
-  } catch { return { mode: "signedOut" }; }
+    return email ? { mode: "on", email, ...activity, builtIn: hasBuiltInSyncConfig() } : { mode: "signedOut", ...activity, builtIn: hasBuiltInSyncConfig() };
+  } catch { return { mode: "signedOut", ...activity, builtIn: hasBuiltInSyncConfig() }; }
 }
 export const onSyncChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 const notify = () => listeners.forEach((fn) => { try { fn(); } catch {} });
+const setActivity = (patch) => { activity = { ...activity, ...patch }; notify(); };
 
 export async function signUp(email, password) {
   const c = await getClient(); if (!c) throw new Error("同期設定がありません");
@@ -89,17 +96,24 @@ async function fullSync() {
   const c = await getClient(); if (!c) return false;
   const { data: sess } = await c.auth.getSession();
   if (!sess || !sess.session) return false;
-  const { data: rows, error } = await c.from(TABLE).select("key,value,updated_at");
-  if (error) throw error;
-  const { toLocal, toPush } = decideSync(meta(), localValues(), rows || []);
-  for (const { key, value, ts } of toLocal) {
-    if (value == null) localStorage.removeItem(PREFIX + key); else localStorage.setItem(PREFIX + key, value);
-    setMetaKey(key, ts);
+  setActivity({ status: "syncing", error: "" });
+  try {
+    const { data: rows, error } = await c.from(TABLE).select("key,value,updated_at");
+    if (error) throw error;
+    const { toLocal, toPush } = decideSync(meta(), localValues(), rows || []);
+    for (const { key, value, ts } of toLocal) {
+      if (value == null) localStorage.removeItem(PREFIX + key); else localStorage.setItem(PREFIX + key, value);
+      setMetaKey(key, ts);
+    }
+    const pushes = [...new Set([...toPush, ...pending()])];
+    for (const key of pushes) { await pushKey(c, key); }
+    clearPending(pushes);
+    setActivity({ status: "synced", lastSyncAt: new Date().toISOString(), error: "" });
+    return toLocal.length > 0;
+  } catch (error) {
+    setActivity({ status: "error", error: error && error.message ? error.message : String(error) });
+    throw error;
   }
-  const pushes = [...new Set([...toPush, ...pending()])];
-  for (const key of pushes) { await pushKey(c, key); }
-  clearPending(pushes);
-  return toLocal.length > 0;
 }
 
 // 初回get前に一度だけ同期(失敗してもローカルで続行)。手動同期用にも公開。
@@ -111,6 +125,9 @@ function ensureInit() {
 
 if (typeof window !== "undefined") {
   window.addEventListener("online", () => { syncNow(); });
+  window.addEventListener("focus", () => { syncNow(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") syncNow(); });
+  window.setInterval(() => { if (document.visibilityState === "visible" && navigator.onLine) syncNow(); }, 30000);
 }
 
 window.storage = {
@@ -122,7 +139,13 @@ window.storage = {
     try {
       localStorage.setItem(PREFIX + key, value);
       setMetaKey(key, new Date().toISOString());
-      getClient().then((c) => { if (c) pushKey(c, key).catch(() => addPending(key)); });
+      getClient().then((c) => {
+        if (!c) return;
+        setActivity({ status: "syncing", error: "" });
+        pushKey(c, key)
+          .then(() => setActivity({ status: "synced", lastSyncAt: new Date().toISOString(), error: "" }))
+          .catch((error) => { addPending(key); setActivity({ status: "error", error: error && error.message ? error.message : String(error) }); });
+      });
       return { value };
     } catch { return null; }
   },

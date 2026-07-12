@@ -211,13 +211,14 @@ export default function App() {
 
 // ヘッダーの同期状態表示。ログイン中のみ「☁ 同期中」、それ以外は「ローカル保存」
 function CloudBadge() {
-  const [mode, setMode] = useState("off");
+  const [state, setState] = useState({ mode: "off", status: "idle" });
   useEffect(() => {
-    const refresh = () => getSyncState().then((s) => setMode(s.mode)).catch(() => {});
+    const refresh = () => getSyncState().then(setState).catch(() => {});
     refresh();
     return onSyncChange(refresh);
   }, []);
-  return <span style={styles.cloud}>{mode === "on" ? "☁ 同期中" : "ローカル保存"}</span>;
+  const label = state.mode !== "on" ? "ローカル保存" : state.status === "syncing" ? "☁ 同期中…" : state.status === "error" ? "⚠ 同期エラー" : "☁ 同期済み";
+  return <span style={{ ...styles.cloud, color: state.status === "error" ? "var(--expense)" : undefined }}>{label}</span>;
 }
 
 function TabBtn({ active, onClick, label, icon }) {

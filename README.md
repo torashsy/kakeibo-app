@@ -62,6 +62,15 @@ create policy "own rows" on public.kv for all
    （Settings → API）を入力 → 新規登録/ログイン
 5. 2台目の端末では同じURL/keyを入れてログインすればデータが揃う
 
+### 端末ごとのURL/key入力を不要にする
+GitHub Pagesでは、リポジトリの Settings → Secrets and variables → Actions に
+`VITE_SUPABASE_URL` と `VITE_SUPABASE_ANON_KEY` を登録してください。デプロイ時に
+公開接続情報がアプリへ組み込まれ、PC・スマホでは同じメールアドレスとパスワードで
+ログインするだけになります。anon keyはブラウザで利用する公開キーであり、service_role keyは使用しないでください。
+
+ローカル開発では `.env.example` を `.env.local` にコピーして値を設定できます。
+ログイン後は変更時、起動時、オンライン復帰時、画面復帰時、および表示中30秒ごとに自動同期します。
+
 ## Claude Code での進め方の目安
 - デザインの調整は指示ベースで少しずつ（`styles.js` は CSS 変数を参照。色は `theme.js` の `themeVars` で集中管理）。
 - 保存層は Supabase 対応済み（上記参照）。
