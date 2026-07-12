@@ -13,6 +13,7 @@ const BUILTIN_CONFIG = {
   url: String(import.meta.env.VITE_SUPABASE_URL || "").trim(),
   anonKey: String(import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim(),
 };
+const SYNC_OWNER_EMAIL = String(import.meta.env.VITE_SYNC_OWNER_EMAIL || "").trim().toLowerCase();
 
 const wrap = (v) => (v == null ? null : { value: v });
 const readJSON = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
@@ -25,6 +26,7 @@ let activity = { status: "idle", lastSyncAt: null, error: "" };
 
 export const getSyncConfig = () => (BUILTIN_CONFIG.url && BUILTIN_CONFIG.anonKey ? BUILTIN_CONFIG : readJSON(CFG_KEY, null));
 export const hasBuiltInSyncConfig = () => !!(BUILTIN_CONFIG.url && BUILTIN_CONFIG.anonKey);
+export const hasPersonalSync = () => hasBuiltInSyncConfig() && !!SYNC_OWNER_EMAIL;
 export const setSyncConfig = (cfg) => { writeJSON(CFG_KEY, cfg); clientPromise = null; initPromise = null; notify(); };
 export const clearSyncConfig = () => { try { localStorage.removeItem(CFG_KEY); } catch {} clientPromise = null; initPromise = null; notify(); };
 
@@ -43,12 +45,12 @@ function getClient() {
 // 同期状態: off(未設定) / signedOut(設定済み未ログイン) / on(ログイン済み)
 export async function getSyncState() {
   const c = await getClient();
-  if (!c) return { mode: "off", ...activity, builtIn: hasBuiltInSyncConfig() };
+  if (!c) return { mode: "off", ...activity, builtIn: hasBuiltInSyncConfig(), personal: hasPersonalSync() };
   try {
     const { data } = await c.auth.getSession();
     const email = data && data.session && data.session.user ? data.session.user.email : null;
-    return email ? { mode: "on", email, ...activity, builtIn: hasBuiltInSyncConfig() } : { mode: "signedOut", ...activity, builtIn: hasBuiltInSyncConfig() };
-  } catch { return { mode: "signedOut", ...activity, builtIn: hasBuiltInSyncConfig() }; }
+    return email ? { mode: "on", email, ...activity, builtIn: hasBuiltInSyncConfig(), personal: hasPersonalSync() } : { mode: "signedOut", ...activity, builtIn: hasBuiltInSyncConfig(), personal: hasPersonalSync() };
+  } catch { return { mode: "signedOut", ...activity, builtIn: hasBuiltInSyncConfig(), personal: hasPersonalSync() }; }
 }
 export const onSyncChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 const notify = () => listeners.forEach((fn) => { try { fn(); } catch {} });
@@ -63,6 +65,16 @@ export async function signIn(email, password) {
   const c = await getClient(); if (!c) throw new Error("同期設定がありません");
   const { error } = await c.auth.signInWithPassword({ email, password });
   if (error) throw error; notify();
+}
+export async function signInWithMagicLink() {
+  const c = await getClient();
+  if (!c || !SYNC_OWNER_EMAIL) throw new Error("個人同期の設定がありません");
+  const redirectTo = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : undefined;
+  const { error } = await c.auth.signInWithOtp({
+    email: SYNC_OWNER_EMAIL,
+    options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
+  });
+  if (error) throw error;
 }
 export async function signOut() {
   const c = await getClient(); if (c) { try { await c.auth.signOut(); } catch {} }
