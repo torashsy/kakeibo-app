@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { MUTED, RED } from '../theme.js';
-import { yen, num, ymLabel, uid, addMonth } from '../utils';
+import { yen, num, ymLabel, uid, addMonth, debtValueTotal } from '../utils';
 import { styles } from '../styles.js';
 
 export function Cards({ cards, debt, ym, entries, onSaveCards, onSaveDebt, onRemoveCard }) {
@@ -17,30 +17,52 @@ export function Cards({ cards, debt, ym, entries, onSaveCards, onSaveDebt, onRem
 }
 
 export function DebtTable({ cards, debt, ym, onSaveDebt }) {
-  const monthsCols = useMemo(() => Array.from({ length: 12 }, (_, i) => addMonth(ym, i)), [ym]);
-  const remaining = (name) => { const s = debt[name] || {}; return Object.entries(s).filter(([m]) => m >= ym).reduce((a, [, v]) => a + (v || 0), 0); };
+  const columns = useMemo(() => {
+    const [year, month] = ym.split("-").map(Number);
+    const fiscalYear = month >= 4 ? year : year - 1;
+    const months = Array.from({ length: month >= 4 ? 16 - month : 4 - month }, (_, i) => addMonth(ym, i));
+    const years = Array.from({ length: 5 }, (_, i) => `FY:${fiscalYear + i + 1}`);
+    return [...months, ...years];
+  }, [ym]);
+  const currentFiscalYear = Number(ym.slice(0, 4)) - (Number(ym.slice(5, 7)) < 4 ? 1 : 0);
+  const isFuturePeriod = (period) => period.startsWith("FY:")
+    ? Number(period.slice(3)) > currentFiscalYear
+    : period.includes("-") ? period >= ym : Number(period) >= Number(ym.slice(0, 4));
+  const remaining = (name) => Object.entries(debt[name] || {})
+    .filter(([period]) => isFuturePeriod(period))
+    .reduce((sum, [, value]) => sum + debtValueTotal(value), 0);
   const totalRemaining = cards.reduce((a, c) => a + remaining(c.name), 0);
   const [edit, setEdit] = useState(null);
-  const openEdit = (name, month) => setEdit({ name, month, value: (debt[name]?.[month] ?? "").toString() });
+  const openEdit = (name, period) => {
+    const current = debt[name]?.[period];
+    const items = current && typeof current === "object" && Array.isArray(current.items)
+      ? current.items.map((item) => ({ id: item.id || uid(), label: item.label || "", amount: String(item.amount ?? "") }))
+      : [{ id: uid(), label: "", amount: current == null ? "" : String(current) }];
+    setEdit({ name, period, items });
+  };
+  const setItem = (id, patch) => setEdit((prev) => ({ ...prev, items: prev.items.map((item) => item.id === id ? { ...item, ...patch } : item) }));
   const commitEdit = () => {
-    const v = edit.value === "" ? null : parseFloat(edit.value);
+    const items = edit.items
+      .map((item) => ({ id: item.id, label: item.label.trim(), amount: Number(item.amount) || 0 }))
+      .filter((item) => item.amount !== 0);
     const next = { ...debt, [edit.name]: { ...(debt[edit.name] || {}) } };
-    if (v == null || isNaN(v) || v === 0) delete next[edit.name][edit.month]; else next[edit.name][edit.month] = v;
+    if (!items.length) delete next[edit.name][edit.period];
+    else next[edit.name][edit.period] = { items };
     onSaveDebt(next); setEdit(null);
   };
   return (
     <div>
       <div style={styles.debtSummary}><span style={{ fontSize: 13, color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={{ fontSize: 22, fontWeight: 600, color: RED }}>{yen(totalRemaining)}</span></div>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>各月の支払予定額。セルをタップで編集。横スクロール可。</div>
+      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>今年は月単位、次年度以降は年単位です。セルをタップすると内訳を入力できます。</div>
       <div style={styles.tableScroll}>
-        <table style={{ ...styles.table, width: 132 + (monthsCols.length + 1) * 96 }}>
-          <colgroup><col style={{ width: 132 }} />{monthsCols.map((m) => <col key={"col-" + m} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
-          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>カード</th>{monthsCols.map((m) => <th key={m} style={styles.th}>{parseInt(m.split("-")[1], 10)}月</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>残債</th></tr></thead>
+        <table style={{ ...styles.table, width: 132 + (columns.length + 1) * 96 }}>
+          <colgroup><col style={{ width: 132 }} />{columns.map((p) => <col key={"col-" + p} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
+          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>カード</th>{columns.map((p) => <th key={p} style={styles.th}>{p.startsWith("FY:") ? `${p.slice(3)}年度` : `${Number(p.slice(5))}月`}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>残債</th></tr></thead>
           <tbody>
             {cards.map((c) => (
               <tr key={c.id}>
                 <td style={{ ...styles.td, ...styles.tdSticky }}>{c.name}</td>
-                {monthsCols.map((m) => <td key={m} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%", textAlign: "right" }} onClick={() => openEdit(c.name, m)}>{debt[c.name]?.[m] ? num(debt[c.name][m]) : " "}</button></td>)}
+                {columns.map((p) => <td key={p} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%", textAlign: "right" }} onClick={() => openEdit(c.name, p)}>{debtValueTotal(debt[c.name]?.[p]) ? num(debtValueTotal(debt[c.name][p])) : " "}</button></td>)}
                 <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}>{num(remaining(c.name))}</td>
               </tr>
             ))}
@@ -50,8 +72,16 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
       {edit && (
         <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.sheetTitle}>{edit.name}・{ymLabel(edit.month)}の支払額</div>
-            <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.value} onChange={(e) => setEdit({ ...edit, value: e.target.value })} placeholder="0" style={styles.amountInput} autoFocus /></div>
+            <div style={styles.sheetTitle}>{edit.name}・{edit.period.startsWith("FY:") ? `${edit.period.slice(3)}年度` : edit.period.includes("-") ? ymLabel(edit.period) : `${edit.period}年`}の残債内訳</div>
+            {edit.items.map((item, index) => (
+              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 120px 28px", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                <input value={item.label} onChange={(e) => setItem(item.id, { label: e.target.value })} placeholder={`内訳 ${index + 1}`} style={{ ...styles.textInput, margin: 0 }} autoFocus={index === 0} />
+                <input type="number" inputMode="numeric" value={item.amount} onChange={(e) => setItem(item.id, { amount: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} />
+                <button style={styles.removeBtn} aria-label="内訳を削除" onClick={() => setEdit((prev) => ({ ...prev, items: prev.items.filter((x) => x.id !== item.id) }))}>×</button>
+              </div>
+            ))}
+            <button style={styles.backupBtn} onClick={() => setEdit((prev) => ({ ...prev, items: [...prev.items, { id: uid(), label: "", amount: "" }] }))}>＋ 内訳を追加</button>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13 }}><span>合計</span><strong>{yen(edit.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0))}</strong></div>
             <button style={styles.saveBtn} onClick={commitEdit}>保存</button>
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
           </div>

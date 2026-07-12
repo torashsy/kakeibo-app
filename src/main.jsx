@@ -12,6 +12,21 @@ if (typeof document !== "undefined" && !document.querySelector('meta[name="forma
   document.head.appendChild(m);
 }
 
+// ソフトウェアキーボード表示中の実際の表示領域にボトムシートを収める。
+if (typeof window !== "undefined" && window.visualViewport) {
+  const syncViewportHeight = () => {
+    document.documentElement.style.setProperty("--visual-viewport-height", `${window.visualViewport.height}px`);
+  };
+  syncViewportHeight();
+  window.visualViewport.addEventListener("resize", syncViewportHeight);
+  window.visualViewport.addEventListener("scroll", syncViewportHeight);
+  document.addEventListener("focusin", (event) => {
+    if (event.target && event.target.matches?.("input, textarea, select")) {
+      window.setTimeout(() => event.target.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
+    }
+  });
+}
+
 createRoot(document.getElementById("root")).render(
   <React.StrictMode><App /></React.StrictMode>
 );

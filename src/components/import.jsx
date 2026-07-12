@@ -20,6 +20,7 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
   const [rawText, setRawText] = useState("");
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrError, setOcrError] = useState("");
+  const [importYm, setImportYm] = useState(ym);
   const [rows, setRows] = useState(null); // null=未解析。解析後は [{txn, cls, matchDraft}]
 
   const runOcr = async (file) => {
@@ -39,7 +40,7 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
 
   const parse = () => {
     // "N日"だけの見出し形式(年月の表記が無い)は、今表示中の月を起点に判定する
-    const txns = parseBankText(rawText, ym);
+    const txns = parseBankText(rawText, importYm);
     setRows(txns.map((txn) => {
       const auto = classifyTxn(txn.desc, config.importRules);
       return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
@@ -82,6 +83,8 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
               onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) runOcr(f); e.target.value = ""; }} />
             {ocrError && <div style={{ fontSize: 12.5, color: RED, margin: "8px 2px 0" }}>{ocrError}</div>}
+            <label style={styles.fieldLabel}>取り込む月</label>
+            <input type="month" value={importYm} onChange={(e) => setImportYm(e.target.value)} style={styles.textInput} />
             <label style={styles.fieldLabel}>読み取ったテキスト(編集・貼り付け可)</label>
             <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="ここにテキストを直接貼り付けてもOK" style={{ ...styles.memoTextarea, minHeight: 160 }} />
             <button style={{ ...styles.saveBtn, opacity: rawText.trim() ? 1 : 0.4 }} disabled={!rawText.trim()} onClick={parse}>解析する</button>
@@ -108,7 +111,7 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
                     <div style={{ fontSize: 11, color: MUTED, textAlign: "right", marginBottom: 4 }}>OCRの誤読があれば金額を直接修正できます</div>
                     <div style={{ fontSize: 13, marginBottom: 8, wordBreak: "break-all" }}>{r.txn.desc || "(摘要なし)"}</div>
                     <div style={styles.optionRow}>
-                      {[["skip", "スキップ"], ["card", "カード"], ["account", "口座"]].map(([v, l]) => (
+                      {[["skip", "取り込まない"], ["card", "カード"], ["account", "口座"]].map(([v, l]) => (
                         <button key={v} style={{ ...styles.optionChip, ...(r.cls.action === v ? styles.optionChipActive : {}) }}
                           onClick={() => setRow(i, { cls: { action: v, target: v === r.cls.action ? r.cls.target : undefined } })}>{l}</button>
                       ))}
