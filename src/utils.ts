@@ -19,9 +19,10 @@ export interface Config {
 }
 
 // スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
-// action="card"はtargetをカード名としてカード請求に、"account"はtargetを口座名として入金/出金に、
-// "skip"は記録しない(例: 自分名義の口座間送金)。
-export interface ImportRule { id: string; match: string; action: "card" | "account" | "skip"; target?: string; }
+// action="card"はtargetをカード名としてカード請求に、"account"はtargetを口座名として口座記録に、
+// "skip"は記録しない(例: 自分名義の口座間送金)。account用のnegItem/posItemを省略すると出金/入金になる
+// (ATMの引出/預入、投資振替のように項目名を変えたい場合に指定する。投資振替は符号のまま反映するので両方同じ値でよい)。
+export interface ImportRule { id: string; match: string; action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
 
 export interface Card {
   id: string;
@@ -124,6 +125,10 @@ export const DEFAULT_CONFIG: Config = {
     { id: uid(), match: "JCBカード", action: "card", target: "JAL navi" },
     { id: uid(), match: "セゾン", action: "card", target: "SAISON" },
     { id: uid(), match: "ことら", action: "skip" },
+    { id: uid(), match: "ハイブリッド", action: "account", target: "NEOBANK", negItem: "投資振替", posItem: "投資振替" },
+    { id: uid(), match: "ATM", action: "account", target: "NEOBANK", negItem: "引出", posItem: "預入" },
+    { id: uid(), match: "エポス", action: "card", target: "EPOS" },
+    { id: uid(), match: "PayPa", action: "card", target: "PayPay" },
   ],
 };
 
@@ -376,48 +381,80 @@ export function cardBreakdown(cards: Card[], debt: Record<string, Record<string,
 // ===== スクショ取込(OCR明細インポート) =====
 export interface ParsedTxn { date: string; desc: string; amount: number; }
 
-// 銀行アプリの明細画面の典型的な並び(日付行→[摘要+金額が同じ行のことが多い]→残高行)を
-// 前提にテキストを取引ごとへ分解する。OCRは¥を"\"や"Y"に、-を"_"に誤読したり、
-// 桁区切りの","と"."を混同したりするため、行の途中にある金額トークンも拾えるようにしている。
+// 銀行アプリの明細画面から、日付の表し方が2通りあるテキストを取引ごとへ分解する。
+// (a) 取引ごとに"YYYY.MM.DD"の行が付く形式(ゆうちょアプリ等)
+// (b) "N日"の見出し1つに複数の取引がぶら下がる形式(NEOBANK等)。年月の表記が無いため、
+//     呼び出し側が今表示中の月(contextYm)を渡す。日付が前の取引より大きくなったら
+//     (新しい順に並ぶ一覧を遡っていて前月に入った、とみなして)月を1つ戻す。
+// OCRは¥を"\"や"Y"に、-を"_"に誤読したり、桁区切りの","と"."を混同したり、
+// "円"表記だったりするため、行の途中にある金額トークンも拾えるようにしている。
 const IMPORT_DATE_RE = /^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/;
-// 符号(-/−/ー/_) + 円マーク相当(¥/\/Y) + 数字(カンマ・ピリオド・空白混じり)
-const MONEY_TOKEN_RE = /([-−ー_])?\s*[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)/;
+const IMPORT_DAY_RE = /^(\d{1,2})日$/;
+// 符号(-/−/ー/_、または明示的な+) + [円マーク相当(¥/\/Y)+数字 または 数字+"円"](カンマ・ピリオド・空白混じり)
+const MONEY_TOKEN_RE = /(?:([-−ー_])|\+)?\s*(?:[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)|(\d(?:[\d,.\s]*\d)?)\s*円)/;
 const parseMoneyToken = (m: RegExpMatchArray): number => {
   const neg = !!m[1];
-  const digits = (m[2] || "").replace(/\D/g, "");
+  const digits = (m[2] || m[3] || "").replace(/\D/g, "");
   const v = Number(digits) || 0;
   return neg ? -v : v;
 };
 
-export function parseBankText(text: string): ParsedTxn[] {
+export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
   const lines = (text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: ParsedTxn[] = [];
+  let curYm = contextYm || "";
+  let prevDay: number | null = null;
+  let currentDate: string | null = null;
   let i = 0;
   while (i < lines.length) {
-    const m = lines[i].match(IMPORT_DATE_RE);
-    if (!m) { i++; continue; }
-    const date = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-    i++;
+    const line = lines[i];
+    const fullMatch = line.match(IMPORT_DATE_RE);
+    if (fullMatch) {
+      currentDate = `${fullMatch[1]}-${fullMatch[2].padStart(2, "0")}-${fullMatch[3].padStart(2, "0")}`;
+      curYm = currentDate.slice(0, 7);
+      prevDay = Number(fullMatch[3]);
+      i++;
+      continue;
+    }
+    const dayMatch = line.match(IMPORT_DAY_RE);
+    if (dayMatch && curYm) {
+      const day = Number(dayMatch[1]);
+      if (prevDay !== null && day > prevDay) curYm = addMonth(curYm, -1);
+      prevDay = day;
+      currentDate = `${curYm}-${String(day).padStart(2, "0")}`;
+      i++;
+      continue;
+    }
+    if (!currentDate) { i++; continue; } // 最初の日付/日見出しより前の行(ヘッダー等)は無視
     const descParts: string[] = [];
     let amount: number | null = null;
     let linesForTxn = 0;
     // 取引額が見つかるまで摘要として蓄積し、見つけた直後の1行(残高)まで読んだら打ち切る。
-    // OCRが数字を読み違えて取引額を検出できない場合でも、後続行を延々と巻き込まないよう行数に上限を設ける。
-    while (i < lines.length && !IMPORT_DATE_RE.test(lines[i]) && linesForTxn < 4) {
-      const line = lines[i];
-      const mm = line.match(MONEY_TOKEN_RE);
+    // 金額を検出した後に金額を含まない行が来たら、それはフッターのナビ文字等の無関係な行なので
+    // 摘要に巻き込まずそこで打ち切る(取引額が見つかる前の行数にも上限を設け、暴走を防ぐ)。
+    while (i < lines.length && !IMPORT_DATE_RE.test(lines[i]) && !IMPORT_DAY_RE.test(lines[i]) && linesForTxn < 4) {
+      const l2 = lines[i];
+      const mm = l2.match(MONEY_TOKEN_RE);
+      if (!mm || mm.index == null) {
+        if (amount !== null) break;
+        descParts.push(l2);
+        linesForTxn++; i++;
+        continue;
+      }
+      const before = l2.slice(0, mm.index).trim();
       linesForTxn++; i++;
-      if (mm && mm.index != null) {
-        const before = line.slice(0, mm.index).trim();
+      if (amount === null) {
         if (before) descParts.push(before);
-        if (amount === null) amount = parseMoneyToken(mm);
-        else break; // 2つ目の金額(残高)を読んだら終了
+        amount = parseMoneyToken(mm);
       } else {
-        descParts.push(line);
+        // 2つ目の金額(残高)を読んだら終了。"残高"というラベル自体は摘要に含めないが、
+        // それ以外の文字が残っている場合は折り返した摘要の続きの可能性があるので拾う。
+        if (before && before.replace(/\s/g, "") !== "残高") descParts.push(before);
+        break;
       }
     }
     if (amount === null) continue; // 金額を検出できなかった行は取引として扱わない
-    out.push({ date, desc: descParts.join(""), amount });
+    out.push({ date: currentDate, desc: descParts.join(""), amount });
   }
   return out;
 }
@@ -446,22 +483,25 @@ export function normalizeForMatch(s: string): string {
   return Array.from(stripped).map((ch) => DAKUTEN_MAP[ch] || ch).join("");
 }
 
+export interface TxnClassification { action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
+
 // 摘要をルールに照らして分類する(登録順で先勝ち)。マッチ無しはnull(要手動判定)。
-export function classifyTxn(desc: string, rules: ImportRule[] | undefined): { action: "card" | "account" | "skip"; target?: string } | null {
+export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnClassification | null {
   const nd = normalizeForMatch(desc);
   for (const r of rules || []) {
-    if (r.match && nd.includes(normalizeForMatch(r.match))) return { action: r.action, target: r.target };
+    if (r.match && nd.includes(normalizeForMatch(r.match))) return { action: r.action, target: r.target, negItem: r.negItem, posItem: r.posItem };
   }
   return null;
 }
 
 // 分類結果をentry(id無し)に変換する。skip・未分類・対象未選択はnull。
-export function txnToEntry(txn: ParsedTxn, cls: { action: "card" | "account" | "skip"; target?: string } | null): Omit<Entry, "id"> | null {
+export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null): Omit<Entry, "id"> | null {
   if (!cls || cls.action === "skip") return null;
   if ((cls.action === "card" || cls.action === "account") && !cls.target) return null;
   const ym = txn.date.slice(0, 7);
   if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount) };
-  return { ym, cat: "account", item: txn.amount < 0 ? "出金" : "入金", account: cls.target!, amount: txn.amount };
+  const item = txn.amount < 0 ? (cls.negItem || "出金") : (cls.posItem || "入金");
+  return { ym, cat: "account", item, account: cls.target!, amount: txn.amount };
 }
 
 // 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。

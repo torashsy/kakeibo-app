@@ -204,7 +204,7 @@ export default function App() {
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "import" && <ImportSheet cards={cards} config={config} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => setSheet(null)} />}
+      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => setSheet(null)} />}
     </div>
   );
 }
