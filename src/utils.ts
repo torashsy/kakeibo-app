@@ -364,13 +364,23 @@ export interface CardBreakdownRow {
   linkedMemos: Memo[];  // このカードに紐づくメモ(収支には影響しない参考情報)
 }
 
+export interface DebtDetail { id?: string; label?: string; amount: number; }
+export interface DebtValue { items: DebtDetail[]; }
+
+// 旧形式の数値と、内訳を持つ新形式の両方から合計額を得る。
+export const debtValueTotal = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (!value || typeof value !== "object" || !Array.isArray((value as DebtValue).items)) return 0;
+  return (value as DebtValue).items.reduce((sum, item) => sum + (Number(item && item.amount) || 0), 0);
+};
+
 // カード請求額を「残債(分割払いのスケジュール分)」と「それ以外」に分けた内訳。
 // サマリのカード請求セルをタップした時の展開表示に使う。金額のみで収支計算には影響しない。
-export function cardBreakdown(cards: Card[], debt: Record<string, Record<string, number>>, memos: Memo[], monthEntries: Entry[], ym: string): CardBreakdownRow[] {
+export function cardBreakdown(cards: Card[], debt: Record<string, Record<string, unknown>>, memos: Memo[], monthEntries: Entry[], ym: string): CardBreakdownRow[] {
   return (cards || [])
     .map((c) => {
       const total = monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === c.name ? Math.abs(e.amount) : 0), 0);
-      const debtPortion = Math.min(total, Number(debt && debt[c.name] && debt[c.name][ym]) || 0);
+      const debtPortion = Math.min(total, debtValueTotal(debt && debt[c.name] && debt[c.name][ym]));
       const otherPortion = Math.max(0, total - debtPortion);
       const linkedMemos = (memos || []).filter((m) => m.linkedCard === c.name && (!m.ym || m.ym === ym));
       return { name: c.name, total, debtPortion, otherPortion, linkedMemos };

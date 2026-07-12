@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
 import { uid } from '../utils';
 import { styles } from '../styles.js';
-import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, signUp, signIn, signOut, syncNow } from '../storage.js';
+import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signOut, syncNow } from '../storage.js';
 
 // クラウド同期(Supabase)の設定・ログイン。URL/anon keyは端末のlocalStorageにのみ保存する。
 function SyncSection() {
@@ -14,7 +14,13 @@ function SyncSection() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const refresh = () => getSyncState().then(setState);
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    return onSyncChange(refresh);
+  }, []);
+  const syncLabel = state.status === "syncing" ? "同期中…"
+    : state.status === "error" ? "同期エラー"
+      : state.lastSyncAt ? `最終同期 ${new Date(state.lastSyncAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}` : "自動同期待機中";
 
   const saveCfg = () => {
     if (!url.trim() || !anonKey.trim()) { setMsg("URLとanon keyを入力してください"); return; }
@@ -51,7 +57,7 @@ function SyncSection() {
         )}
         {state.mode === "signedOut" && (
           <div style={{ padding: "6px 0" }}>
-            <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 8 }}>設定済み。ログインすると同期が始まります（初回は「新規登録」）。</div>
+            <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 8 }}>{state.builtIn ? "PCとスマホで同じアカウントにログインすると、自動で同期します。" : "設定済み。ログインすると同期が始まります（初回は「新規登録」）。"}</div>
             <label style={styles.fieldLabel}>メールアドレス</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" style={styles.textInput} autoCapitalize="none" />
             <label style={styles.fieldLabel}>パスワード</label>
@@ -60,15 +66,21 @@ function SyncSection() {
               <button style={{ ...styles.saveBtnHalf, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doAuth(signIn, "ログインしました。同期中…")}>ログイン</button>
               <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}`, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doAuth(signUp, "登録しました。同期中…")}>新規登録</button>
             </div>
-            <button style={styles.cancelBtn} onClick={unconfigure}>同期設定を削除</button>
+            {!state.builtIn && <button style={styles.cancelBtn} onClick={unconfigure}>同期設定を削除</button>}
           </div>
         )}
         {state.mode === "on" && (
           <div style={{ padding: "6px 0" }}>
             <div style={{ fontSize: 13, padding: "4px 2px 8px" }}>ログイン中：<span style={{ color: ACCENT, fontWeight: 600 }}>{state.email}</span></div>
-            <button style={{ ...styles.backupBtn, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={doSync}>今すぐ同期</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: state.status === "error" ? RED : MUTED, padding: "4px 2px 8px" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: state.status === "error" ? RED : state.status === "syncing" ? "#d49b2b" : "var(--income)" }} />
+              <span>{syncLabel}</span>
+            </div>
+            {state.error && <div style={{ fontSize: 11.5, color: RED, padding: "0 2px 4px", wordBreak: "break-word" }}>{state.error}</div>}
+            <div style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.6, padding: "0 2px 4px" }}>変更時・アプリ起動時・オンライン復帰時に自動同期します。</div>
+            <button style={{ ...styles.backupBtn, opacity: busy || state.status === "syncing" ? 0.5 : 1 }} disabled={busy || state.status === "syncing"} onClick={doSync}>今すぐ同期</button>
             <button style={styles.backupBtn} onClick={doSignOut}>ログアウト</button>
-            <button style={styles.cancelBtn} onClick={unconfigure}>同期設定を削除</button>
+            {!state.builtIn && <button style={styles.cancelBtn} onClick={unconfigure}>同期設定を削除</button>}
           </div>
         )}
       </div>

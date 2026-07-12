@@ -5,7 +5,7 @@ import {
   planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
-  isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput,
+  isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
@@ -26,6 +26,14 @@ describe("整形", () => {
     expect(addMonth("2026-06", 0)).toBe("2026-06");
   });
   it("ymLabel", () => expect(ymLabel("2026-06")).toBe("2026年6月"));
+});
+
+describe("残債", () => {
+  it("旧形式の数値と新形式の内訳を合計できる", () => {
+    expect(debtValueTotal(12000)).toBe(12000);
+    expect(debtValueTotal({ items: [{ label: "端末", amount: 3000 }, { label: "家具", amount: 4500 }] })).toBe(7500);
+    expect(debtValueTotal(null)).toBe(0);
+  });
 });
 
 describe("acctRole / flowTypesFor", () => {
