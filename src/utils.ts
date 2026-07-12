@@ -15,7 +15,13 @@ export interface Config {
   salaryItems: string[];
   accountFlows?: Record<string, string[]>;
   memoCategories?: string[]; // メモのカテゴリのうち、計画タブで目安/実績を追跡するもの
+  importRules?: ImportRule[]; // スクショ取込で摘要から自動振り分けするルール(先勝ち)
 }
+
+// スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
+// action="card"はtargetをカード名としてカード請求に、"account"はtargetを口座名として入金/出金に、
+// "skip"は記録しない(例: 自分名義の口座間送金)。
+export interface ImportRule { id: string; match: string; action: "card" | "account" | "skip"; target?: string; }
 
 export interface Card {
   id: string;
@@ -112,6 +118,13 @@ export const DEFAULT_CONFIG: Config = {
     "JRE BANK": ["入金", "出金", "投資振替"],        // 預入・引出は使わない
   },
   memoCategories: ["交際費"],
+  // スクショ取込の初期ルール例(自払=カード引き落とし、ことら=自分名義の口座間送金なので未計上)
+  importRules: [
+    { id: uid(), match: "ミツビシ", action: "card", target: "MDC" },
+    { id: uid(), match: "JCBカード", action: "card", target: "JAL navi" },
+    { id: uid(), match: "セゾン", action: "card", target: "SAISON" },
+    { id: uid(), match: "ことら", action: "skip" },
+  ],
 };
 
 // その口座で表示する入出金・振替の種類を返す(未設定なら全種類)
@@ -143,6 +156,7 @@ export function migrateConfig(cfg: any): any {
     out = { ...out, accountFlows: naf };
   }
   if (!Array.isArray(out.memoCategories)) out = { ...out, memoCategories: ["交際費"] };
+  if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
   return out;
 }
 
@@ -357,6 +371,61 @@ export function cardBreakdown(cards: Card[], debt: Record<string, Record<string,
       return { name: c.name, total, debtPortion, otherPortion, linkedMemos };
     })
     .filter((r) => r.total > 0 || r.linkedMemos.length > 0);
+}
+
+// ===== スクショ取込(OCR明細インポート) =====
+export interface ParsedTxn { date: string; desc: string; amount: number; }
+
+// 銀行アプリの明細画面の典型的な並び(日付行→摘要行(1行以上)→金額行(取引額)→金額行(残高、無視))を
+// 前提にテキストを取引ごとへ分解する。OCR/コピペのどちらのテキストにも使える純粋関数。
+const IMPORT_DATE_RE = /^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/;
+const IMPORT_AMOUNT_RE = /^[-−ー]?¥?[\d,，]+$/;
+const isImportAmountLine = (line: string): boolean => IMPORT_AMOUNT_RE.test(line.replace(/\s/g, ""));
+const parseImportAmount = (line: string): number => {
+  const s = line.replace(/\s/g, "");
+  const neg = /^[-−ー]/.test(s);
+  const digits = s.replace(/[^\d]/g, "");
+  const v = Number(digits) || 0;
+  return neg ? -v : v;
+};
+
+export function parseBankText(text: string): ParsedTxn[] {
+  const lines = (text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const out: ParsedTxn[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const m = lines[i].match(IMPORT_DATE_RE);
+    if (!m) { i++; continue; }
+    const date = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+    i++;
+    const descParts: string[] = [];
+    while (i < lines.length && !isImportAmountLine(lines[i]) && !IMPORT_DATE_RE.test(lines[i])) { descParts.push(lines[i]); i++; }
+    if (i >= lines.length || !isImportAmountLine(lines[i])) continue; // 金額行が見つからない不完全な取引は捨てる
+    const amount = parseImportAmount(lines[i]); i++;
+    if (i < lines.length && isImportAmountLine(lines[i])) i++;   // 直後の金額行(残高)は読み飛ばす
+    out.push({ date, desc: descParts.join(""), amount });
+  }
+  return out;
+}
+
+// 摘要をルールに照らして分類する(登録順で先勝ち)。マッチ無しはnull(要手動判定)。
+// 全角/半角ゆれ・スペースはNFKC正規化で吸収し、OCRの空白ノイズにある程度強くする。
+export function classifyTxn(desc: string, rules: ImportRule[] | undefined): { action: "card" | "account" | "skip"; target?: string } | null {
+  const norm = (s: string) => (s || "").normalize("NFKC").replace(/\s/g, "");
+  const nd = norm(desc);
+  for (const r of rules || []) {
+    if (r.match && nd.includes(norm(r.match))) return { action: r.action, target: r.target };
+  }
+  return null;
+}
+
+// 分類結果をentry(id無し)に変換する。skip・未分類・対象未選択はnull。
+export function txnToEntry(txn: ParsedTxn, cls: { action: "card" | "account" | "skip"; target?: string } | null): Omit<Entry, "id"> | null {
+  if (!cls || cls.action === "skip") return null;
+  if ((cls.action === "card" || cls.action === "account") && !cls.target) return null;
+  const ym = txn.date.slice(0, 7);
+  if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount) };
+  return { ym, cat: "account", item: txn.amount < 0 ? "出金" : "入金", account: cls.target!, amount: txn.amount };
 }
 
 // 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。

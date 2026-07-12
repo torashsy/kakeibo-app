@@ -8,6 +8,7 @@ import { Cards } from './components/cards.jsx';
 import { MemoTab } from './components/memos.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
+import { ImportSheet } from './components/import.jsx';
 import { Icon } from './icons.jsx';
 import { getSyncState, onSyncChange } from './storage.js';
 
@@ -114,6 +115,9 @@ export default function App() {
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
 
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
+  // スクショ取込でまとめて追加する時用。1件ずつではなく一括で保存する
+  const addEntries = (list) => setEntries((prev) => { const n = [...prev, ...list.map((e) => ({ ...e, id: uid() }))]; save("entries", n); return n; });
+  const commitImportRules = (rules) => commitConfig({ ...config, importRules: rules });
   const updateEntry = (e) => setEntries((prev) => { const n = prev.map((x) => (x.id === e.id ? e : x)); save("entries", n); return n; });
   const removeEntry = (id) => setEntries((prev) => { const n = prev.filter((x) => x.id !== id); save("entries", n); return n; });
   const removeEntriesMatching = (pred) => setEntries((prev) => { const n = prev.filter((x) => !pred(x)); save("entries", n); return n; });
@@ -200,6 +204,7 @@ export default function App() {
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
+      {sheet === "import" && <ImportSheet cards={cards} config={config} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => setSheet(null)} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
+import { uid } from '../utils';
 import { styles } from '../styles.js';
 import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, signUp, signIn, signOut, syncNow } from '../storage.js';
 
@@ -75,6 +76,62 @@ function SyncSection() {
   );
 }
 
+// スクショ取込の振り分けルール管理。摘要のキーワード→カード請求/口座記録/スキップ、を登録・編集できる
+function ImportRulesSection({ rules, cards, accounts, onSave }) {
+  const [edit, setEdit] = useState(null);
+  const actionLabel = { card: "カード", account: "口座", skip: "スキップ" };
+  const commit = () => {
+    if (!edit.match.trim()) return;
+    const rule = { ...edit, match: edit.match.trim() };
+    const next = edit.id && (rules || []).some((r) => r.id === edit.id) ? rules.map((r) => (r.id === edit.id ? rule : r)) : [...(rules || []), rule];
+    onSave(next); setEdit(null);
+  };
+  const remove = () => { onSave((rules || []).filter((r) => r.id !== edit.id)); setEdit(null); };
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={styles.detailHead}><span>スクショ取込のルール</span><button style={styles.addBtn} onClick={() => setEdit({ id: uid(), match: "", action: "card", target: "" })}>＋ 追加</button></div>
+      <div style={{ fontSize: 12, color: MUTED, margin: "0 4px 10px", lineHeight: 1.6 }}>摘要にキーワードが含まれる取引を、登録順で先勝ちして自動振り分けします。</div>
+      {(rules || []).length === 0 ? (
+        <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだルールがありません。「＋ 追加」または取込時の「覚える」から登録できます。</div></div>
+      ) : (
+        <div style={styles.detailCard}>
+          {(rules || []).map((r) => (
+            <button key={r.id} style={styles.settingRow} onClick={() => setEdit({ ...r })}>
+              <span style={{ textAlign: "left" }}>「{r.match}」<span style={{ color: MUTED }}>→ {actionLabel[r.action]}{r.target ? `：${r.target}` : ""}</span></span>
+              <span style={{ color: MUTED, fontSize: 18 }}>›</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {edit && (
+        <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
+          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetHandle} />
+            <div style={styles.sheetTitle}>振り分けルール</div>
+            <label style={styles.fieldLabel}>キーワード（摘要にこの文字列が含まれたら適用）</label>
+            <input value={edit.match} onChange={(e) => setEdit({ ...edit, match: e.target.value })} placeholder="例）ミツビシ" style={styles.textInput} autoFocus />
+            <label style={styles.fieldLabel}>振り分け先</label>
+            <div style={styles.optionRow}>
+              {["card", "account", "skip"].map((v) => (
+                <button key={v} style={{ ...styles.optionChip, ...(edit.action === v ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, action: v, target: v === edit.action ? edit.target : "" })}>{actionLabel[v]}</button>
+              ))}
+            </div>
+            {edit.action === "card" && (
+              <div style={styles.optionRow}>{(cards || []).map((c) => <button key={c.id} style={{ ...styles.optionChip, ...(edit.target === c.name ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, target: c.name })}>{c.name}</button>)}</div>
+            )}
+            {edit.action === "account" && (
+              <div style={styles.optionRow}>{(accounts || []).map((a) => <button key={a} style={{ ...styles.optionChip, ...(edit.target === a ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, target: a })}>{a}</button>)}</div>
+            )}
+            <button style={{ ...styles.saveBtn, opacity: edit.match.trim() && (edit.action === "skip" || edit.target) ? 1 : 0.4 }} disabled={!edit.match.trim() || (edit.action !== "skip" && !edit.target)} onClick={commit}>保存する</button>
+            <button style={styles.deleteBtn} onClick={remove}>このルールを削除</button>
+            <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Settings({ config, onSave, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onRemoveItem }) {
   const [c, setC] = useState(config);
   const [flash, setFlash] = useState("");
@@ -124,6 +181,7 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
           <div style={styles.detailCard}>{(c[g.key] || []).map((name, i) => <div key={i} style={styles.settingRow}><span>{name}</span><button style={styles.removeBtn} onClick={() => removeItem(g.key, i)}>削除</button></div>)}</div>
         </div>
       ))}
+      <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
       <SyncSection />
 
       <div style={{ marginBottom: 8 }}>

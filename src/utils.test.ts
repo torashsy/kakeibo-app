@@ -6,7 +6,8 @@ import {
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput,
-  type Entry, type Memo, type Card, type Config, type Plan, type Sub,
+  parseBankText, classifyTxn, txnToEntry,
+  type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
 describe("整形", () => {
@@ -307,5 +308,89 @@ describe("月の締めフラグ", () => {
     expect(toggleMonthClosed([], "2026-06")).toEqual(["2026-06"]);
     expect(toggleMonthClosed(["2026-06"], "2026-06")).toEqual([]);
     expect(toggleMonthClosed(["2026-07"], "2026-06")).toEqual(["2026-06", "2026-07"]);
+  });
+});
+
+describe("スクショ取込(OCR明細インポート)", () => {
+  // ゆうちょ通帳アプリの明細画面をOCRしたテキストを想定(実際のスクリーンショットから再現)
+  const bankText = `
+2026.07.10
+自払　ミツビシUFJニコス
+-¥548
+¥2,856
+2026.07.10
+自払　JCBカード
+-¥93,846
+¥3,404
+2026.07.08
+ことら　ハヤシ　シユンヤ
+¥95,000
+¥97,250
+2026.07.06
+自払　セゾン
+-¥3,600
+¥2,250
+`;
+
+  it("parseBankText: 日付→摘要→取引額→残高(無視)の並びを取引ごとに分解する", () => {
+    const txns = parseBankText(bankText);
+    expect(txns).toHaveLength(4);
+    expect(txns[0]).toEqual({ date: "2026-07-10", desc: "自払　ミツビシUFJニコス", amount: -548 });
+    expect(txns[1]).toEqual({ date: "2026-07-10", desc: "自払　JCBカード", amount: -93846 });
+    expect(txns[2]).toEqual({ date: "2026-07-08", desc: "ことら　ハヤシ　シユンヤ", amount: 95000 });
+    expect(txns[3]).toEqual({ date: "2026-07-06", desc: "自払　セゾン", amount: -3600 });
+  });
+  it("parseBankText: 摘要が複数行に折り返されても連結する", () => {
+    const t = `2026.07.10\n自払　ミツビ゛シUFJニコ\nス\n-¥548\n¥2,856`;
+    const txns = parseBankText(t);
+    expect(txns).toHaveLength(1);
+    expect(txns[0]!.desc).toBe("自払　ミツビ゛シUFJニコス");
+  });
+  it("parseBankText: 空文字・ヘッダー行(日付でも金額でもない行)は無視する", () => {
+    const t = `9:18\n明細\nすべて\n2026.07.10\n自払　セゾン\n-¥3,600\n¥2,250`;
+    expect(parseBankText(t)).toHaveLength(1);
+  });
+
+  it("classifyTxn: キーワードにマッチしたルールを適用(登録順で先勝ち)", () => {
+    const rules: ImportRule[] = [
+      { id: "1", match: "ミツビシ", action: "card", target: "MDC" },
+      { id: "2", match: "JCBカード", action: "card", target: "JAL navi" },
+      { id: "3", match: "セゾン", action: "card", target: "SAISON" },
+      { id: "4", match: "ことら", action: "skip" },
+    ];
+    expect(classifyTxn("自払　ミツビシUFJニコス", rules)).toEqual({ action: "card", target: "MDC" });
+    expect(classifyTxn("自払　JCBカード", rules)).toEqual({ action: "card", target: "JAL navi" });
+    expect(classifyTxn("ことら　ハヤシ　シユンヤ", rules)).toEqual({ action: "skip", target: undefined });
+  });
+  it("classifyTxn: マッチしなければnull(要手動判定)", () => {
+    expect(classifyTxn("謎の取引", [{ id: "1", match: "ミツビシ", action: "card", target: "MDC" }])).toBeNull();
+  });
+  it("classifyTxn: 全角/半角・空白ゆれを吸収する(NFKC正規化)", () => {
+    const rules: ImportRule[] = [{ id: "1", match: "ＪＣＢ カード", action: "card", target: "JAL navi" }];
+    expect(classifyTxn("自払 JCBカード", rules)).toEqual({ action: "card", target: "JAL navi" });
+  });
+
+  it("txnToEntry: cardアクションはカード請求のentryへ(金額は絶対値)", () => {
+    const e = txnToEntry({ date: "2026-07-10", desc: "自払　ミツビシ", amount: -548 }, { action: "card", target: "MDC" });
+    expect(e).toEqual({ ym: "2026-07", cat: "card", item: "MDC", account: "", amount: 548 });
+  });
+  it("txnToEntry: accountアクションは符号で出金/入金を判定", () => {
+    const out = txnToEntry({ date: "2026-07-06", desc: "x", amount: -3600 }, { action: "account", target: "ゆうちょ" });
+    expect(out).toEqual({ ym: "2026-07", cat: "account", item: "出金", account: "ゆうちょ", amount: -3600 });
+    const inn = txnToEntry({ date: "2026-07-08", desc: "x", amount: 95000 }, { action: "account", target: "ゆうちょ" });
+    expect(inn).toEqual({ ym: "2026-07", cat: "account", item: "入金", account: "ゆうちょ", amount: 95000 });
+  });
+  it("txnToEntry: skip・未分類(null)・対象未選択はnull", () => {
+    expect(txnToEntry({ date: "2026-07-08", desc: "x", amount: 95000 }, { action: "skip" })).toBeNull();
+    expect(txnToEntry({ date: "2026-07-08", desc: "x", amount: 95000 }, null)).toBeNull();
+    expect(txnToEntry({ date: "2026-07-08", desc: "x", amount: 95000 }, { action: "card" })).toBeNull();
+  });
+
+  it("エンドツーエンド: 実際のスクショ相当のテキストが正しい件数のentryになる", () => {
+    const txns = parseBankText(bankText);
+    const entries = txns.map((t) => txnToEntry(t, classifyTxn(t.desc, DEFAULT_CONFIG.importRules))).filter(Boolean);
+    // ミツビシ/JCBカード/セゾンの3件はentry化、ことらの1件はskipで除外
+    expect(entries).toHaveLength(3);
+    expect(entries.map((e) => e!.item)).toEqual(["MDC", "JAL navi", "SAISON"]);
   });
 });
