@@ -6,7 +6,7 @@ import {
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput,
-  parseBankText, classifyTxn, txnToEntry,
+  parseBankText, classifyTxn, txnToEntry, normalizeForMatch,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -392,5 +392,65 @@ describe("スクショ取込(OCR明細インポート)", () => {
     // ミツビシ/JCBカード/セゾンの3件はentry化、ことらの1件はskipで除外
     expect(entries).toHaveLength(3);
     expect(entries.map((e) => e!.item)).toEqual(["MDC", "JAL navi", "SAISON"]);
+  });
+
+  // 実際にユーザーから報告された生のOCR出力をそのまま再現(濁点の脱落・¥の誤読(\/Y)・
+  // -の誤読(_)・桁区切りの,と.の混在・摘要と金額が同じ行に入る、というOCR特有のノイズを含む)
+  const realOcrText = [
+    "9:18 員 HH 半生 ら 送 25",
+    "く _ 前 の 月 品 2026 年 7 月 <",
+    "すべ て <・ 。 新着 順 ~ 残高 門 )",
+    "2026.07.10",
+    "自 払 ミツ ヒ * シ UF J ニ コ _Y 548",
+    "ス \\ 2.,856",
+    "2026.07.10",
+    "自 払 JCB カー ト * -\\ 93.846",
+    "\\ 3.404",
+    "2026.07.08",
+    "こと ら ハヤ シ シュ ユ ュ ン ヤ \\ 95,000",
+    "\\ 97.250",
+    "2026.07.06",
+    "自 払 セ ソ ` ン -\\ 3.600",
+    "\\ 2.250",
+    "2026.07.06",
+    "自 払 セ ソ * ン -\\ 10.000",
+    "\\ 5,850",
+    "2026.07.06",
+    "自 払 セ ソ ` ン -\\ フ 746",
+    "\\ 15,850",
+    "人 和仁 _ 丘 ご ピピ に 三",
+    "ホー ム 明細 送金 支払 グラ フ メニ ュー",
+  ].join("\n");
+
+  it("parseBankText: 実際のOCRノイズ(濁点脱落・¥の誤読・行内に金額が入る)を含む生テキストからも取引を検出する", () => {
+    const txns = parseBankText(realOcrText);
+    expect(txns.length).toBeGreaterThanOrEqual(5);
+    expect(txns[0]).toEqual({ date: "2026-07-10", desc: "自 払 ミツ ヒ * シ UF J ニ コス", amount: -548 });
+    expect(txns[1]).toEqual({ date: "2026-07-10", desc: "自 払 JCB カー ト *", amount: -93846 });
+    expect(txns[2]).toEqual({ date: "2026-07-08", desc: "こと ら ハヤ シ シュ ユ ュ ン ヤ", amount: 95000 });
+    expect(txns[3]).toEqual({ date: "2026-07-06", desc: "自 払 セ ソ ` ン", amount: -3600 });
+    expect(txns[4]).toEqual({ date: "2026-07-06", desc: "自 払 セ ソ * ン", amount: -10000 });
+  });
+
+  it("normalizeForMatch: 濁点の脱落・OCRノイズ記号・空白を吸収する", () => {
+    expect(normalizeForMatch("ミツ ヒ * シ")).toBe(normalizeForMatch("ミツビシ"));
+    expect(normalizeForMatch("セ ソ ` ン")).toBe(normalizeForMatch("セゾン"));
+    expect(normalizeForMatch("カー ト *")).toBe(normalizeForMatch("カード"));
+  });
+
+  it("classifyTxn: 濁点が脱落した実際のOCR結果でもキーワードにマッチする", () => {
+    const rules = DEFAULT_CONFIG.importRules;
+    expect(classifyTxn("自 払 ミツ ヒ * シ UF J ニ コス", rules)).toEqual({ action: "card", target: "MDC" });
+    expect(classifyTxn("自 払 JCB カー ト *", rules)).toEqual({ action: "card", target: "JAL navi" });
+    expect(classifyTxn("自 払 セ ソ ` ン", rules)).toEqual({ action: "card", target: "SAISON" });
+    expect(classifyTxn("こと ら ハヤ シ シュ ユ ュ ン ヤ", rules)).toEqual({ action: "skip", target: undefined });
+  });
+
+  it("エンドツーエンド: 実際のOCRノイズを含むテキストでもMDC/JAL navi/SAISON/ことらが正しく自動仕分けされる", () => {
+    const txns = parseBankText(realOcrText);
+    const classified = txns.map((t) => classifyTxn(t.desc, DEFAULT_CONFIG.importRules));
+    const cardTargets = classified.filter((c) => c && c.action === "card").map((c) => c!.target);
+    expect(cardTargets).toEqual(expect.arrayContaining(["MDC", "JAL navi", "SAISON"]));
+    expect(classified.some((c) => c && c.action === "skip")).toBe(true);
   });
 });
