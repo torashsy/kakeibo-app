@@ -9,6 +9,7 @@ export function PickCategory({ onClose, onPick }) {
     { id: "salary", label: "給与系", desc: "給与・手当・賞与・控除をまとめて", color: GREEN, icon: "yen" },
     { id: "card", label: "カード", desc: "カードの請求額を記録", color: RED, icon: "card" },
     { id: "account", label: "口座", desc: "入金・出金・残高を記録", color: ACCENT, icon: "bank" },
+    { id: "import", label: "スクショ取込", desc: "明細のスクショから自動で仕分け", color: MUTED, icon: "camera" },
   ];
   return (
     <div style={styles.sheetBackdrop} onClick={onClose}>

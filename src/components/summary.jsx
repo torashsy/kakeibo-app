@@ -29,8 +29,8 @@ export function Summary({ summary, prevBalTotal, plans, config, cards, debt, mem
           </div>
           <div style={{ ...styles.sumCellValue, color: RED }}>{yen(-summary.cardTotal)}</div>
         </button>
-        <SumCell label="入金(現金・送金)" value={summary.cashIn} color={GREEN} />
-        <SumCell label="出金(現金・送金)" value={-summary.cashOut} color={RED} />
+        <SumCell label="入金(預入・入金)" value={summary.cashIn} color={GREEN} />
+        <SumCell label="出金(引出・出金)" value={-summary.cashOut} color={RED} />
       </div>
       {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} />}
       <PlanCompareCard plans={plans} config={config} cards={cards} memos={memos} monthEntries={monthEntries} ym={ym} />
