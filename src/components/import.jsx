@@ -3,6 +3,15 @@ import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
 import { parseBankText, classifyTxn, txnToEntry, uid } from '../utils';
 import { styles } from '../styles.js';
 
+// 口座記録の内訳スタイル。既定は出金/入金だが、ATMの現金引出/預入や
+// 投資/ハイブリッド口座への振替など、記録したい項目名に応じて選べるようにする。
+const ACCOUNT_ITEM_STYLES = [
+  { id: "inout", label: "出金/入金", neg: "出金", pos: "入金" },
+  { id: "cash", label: "引出/預入", neg: "引出", pos: "預入" },
+  { id: "invest", label: "投資振替", neg: "投資振替", pos: "投資振替" },
+];
+const styleOf = (cls) => ACCOUNT_ITEM_STYLES.find((s) => s.neg === (cls.negItem || "出金") && s.pos === (cls.posItem || "入金")) || ACCOUNT_ITEM_STYLES[0];
+
 // スクショ取込。銀行アプリなどの明細スクショをOCR(tesseract.js、取込時のみ動的読込・要通信)で
 // 文字起こしし、登録済みルール(config.importRules)で自動的にentryへ振り分ける。
 // OCRが誤読してもテキスト欄で修正・貼り付け直しができ、最後は必ずレビュー画面で内容を確認してから追加する。
@@ -43,7 +52,7 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
     const r = rows[i];
     const match = (r.matchDraft || "").trim();
     if (!match || r.cls.action === "skip" || !r.cls.target) return;
-    const rule = { id: uid(), match, action: r.cls.action, target: r.cls.target };
+    const rule = { id: uid(), match, action: r.cls.action, target: r.cls.target, negItem: r.cls.negItem, posItem: r.cls.posItem };
     onSaveImportRules([...(config.importRules || []), rule]);
   };
 
@@ -113,12 +122,21 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
                       </div>
                     )}
                     {r.cls.action === "account" && (
-                      <div style={styles.optionRow}>
-                        {(config.accounts || []).map((a) => (
-                          <button key={a} style={{ ...styles.optionChip, ...(r.cls.target === a ? styles.optionChipActive : {}) }}
-                            onClick={() => setRow(i, { cls: { ...r.cls, target: a } })}>{a}</button>
-                        ))}
-                      </div>
+                      <>
+                        <div style={styles.optionRow}>
+                          {(config.accounts || []).map((a) => (
+                            <button key={a} style={{ ...styles.optionChip, ...(r.cls.target === a ? styles.optionChipActive : {}) }}
+                              onClick={() => setRow(i, { cls: { ...r.cls, target: a } })}>{a}</button>
+                          ))}
+                        </div>
+                        <div style={styles.optionRow}>
+                          {ACCOUNT_ITEM_STYLES.map((s) => (
+                            <button key={s.id} style={{ ...styles.optionChip, ...(styleOf(r.cls).id === s.id ? styles.optionChipActive : {}) }}
+                              onClick={() => setRow(i, { cls: { ...r.cls, negItem: s.neg, posItem: s.pos } })}>{s.label}</button>
+                          ))}
+                        </div>
+                        {entry && <div style={{ fontSize: 11.5, color: MUTED, margin: "2px 2px 0" }}>「{entry.item}」として記録されます</div>}
+                      </>
                     )}
                     {needsTarget && <div style={{ fontSize: 11.5, color: RED, marginTop: 2 }}>{r.cls.action === "card" ? "カード" : "口座"}を選んでください</div>}
                     {!r.autoMatched && r.cls.action !== "skip" && r.cls.target && (
