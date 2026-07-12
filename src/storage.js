@@ -21,6 +21,7 @@ const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); 
 
 let clientPromise = null;
 let initPromise = null;
+let activeSyncPromise = null;
 const listeners = new Set();
 let activity = { status: "idle", lastSyncAt: null, error: "" };
 
@@ -121,6 +122,9 @@ async function fullSync() {
     for (const key of pushes) { await pushKey(c, key); }
     clearPending(pushes);
     setActivity({ status: "synced", lastSyncAt: new Date().toISOString(), error: "" });
+    if (toLocal.length > 0 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("kakeibo:remote-update", { detail: { keys: toLocal.map((x) => x.key) } }));
+    }
     return toLocal.length > 0;
   } catch (error) {
     setActivity({ status: "error", error: error && error.message ? error.message : String(error) });
@@ -129,9 +133,13 @@ async function fullSync() {
 }
 
 // 初回get前に一度だけ同期(失敗してもローカルで続行)。手動同期用にも公開。
-export function syncNow() { initPromise = null; return ensureInit(); }
+const runFullSync = () => {
+  if (!activeSyncPromise) activeSyncPromise = fullSync().catch(() => false).finally(() => { activeSyncPromise = null; });
+  return activeSyncPromise;
+};
+export function syncNow() { initPromise = null; return runFullSync(); }
 function ensureInit() {
-  if (!initPromise) initPromise = fullSync().catch(() => false);
+  if (!initPromise) initPromise = runFullSync();
   return initPromise;
 }
 
