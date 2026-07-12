@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { yen, parseBankText, classifyTxn, txnToEntry, uid } from '../utils';
+import { parseBankText, classifyTxn, txnToEntry, uid } from '../utils';
 import { styles } from '../styles.js';
 
 // スクショ取込。銀行アプリなどの明細スクショをOCR(tesseract.js、取込時のみ動的読込・要通信)で
@@ -89,10 +89,13 @@ export function ImportSheet({ cards, config, onAddEntries, onSaveImportRules, on
                 const needsTarget = r.cls.action !== "skip" && !r.cls.target;
                 return (
                   <div key={i} style={{ ...styles.detailCard, opacity: entry ? 1 : 0.55 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "8px 0 2px" }}>
-                      <span style={{ fontSize: 12.5, color: MUTED }}>{r.txn.date}</span>
-                      <span style={{ fontSize: 14.5, fontWeight: 600, color: r.txn.amount < 0 ? RED : GREEN }}>{yen(r.txn.amount)}</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0 2px", gap: 8 }}>
+                      <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>{r.txn.date}</span>
+                      <input type="number" inputMode="numeric" value={r.txn.amount}
+                        onChange={(e) => setRow(i, { txn: { ...r.txn, amount: e.target.value === "" ? 0 : Number(e.target.value) } })}
+                        style={{ ...styles.textInput, width: 120, textAlign: "right", padding: "5px 8px", fontSize: 14.5, fontWeight: 600, color: r.txn.amount < 0 ? RED : GREEN }} />
                     </div>
+                    <div style={{ fontSize: 11, color: MUTED, textAlign: "right", marginBottom: 4 }}>OCRの誤読があれば金額を直接修正できます</div>
                     <div style={{ fontSize: 13, marginBottom: 8, wordBreak: "break-all" }}>{r.txn.desc || "(摘要なし)"}</div>
                     <div style={styles.optionRow}>
                       {[["skip", "スキップ"], ["card", "カード"], ["account", "口座"]].map(([v, l]) => (
