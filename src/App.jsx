@@ -76,6 +76,14 @@ export default function App() {
     })();
   }, []);
 
+  // バックグラウンド同期で別端末の更新を取り込んだら、古いReact状態を残さず再読込する。
+  // 古い画面のまま編集してクラウドを巻き戻す事故を防ぐ。
+  useEffect(() => {
+    const applyRemoteUpdate = () => window.location.reload();
+    window.addEventListener("kakeibo:remote-update", applyRemoteUpdate);
+    return () => window.removeEventListener("kakeibo:remote-update", applyRemoteUpdate);
+  }, []);
+
   const save = (k, v) => { try { window.storage.set(k, JSON.stringify(v), true); } catch (e) { console.error(e); } };
   const commitConfig = (n) => { setConfig(n); save("config", n); };
   // カード名は entries/debt/plans/subs/memos が文字列で参照しているため、
