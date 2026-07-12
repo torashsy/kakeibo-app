@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
 import { uid } from '../utils';
 import { styles } from '../styles.js';
-import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signOut, syncNow } from '../storage.js';
+import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInWithMagicLink, signOut, syncNow } from '../storage.js';
 
 // クラウド同期(Supabase)の設定・ログイン。URL/anon keyは端末のlocalStorageにのみ保存する。
 function SyncSection() {
@@ -36,6 +36,12 @@ function SyncSection() {
     } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); }
   };
   const doSync = async () => { setBusy(true); setMsg(""); try { await syncNow(); setMsg("同期しました"); setTimeout(() => location.reload(), 600); } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); } };
+  const doMagicLink = async () => {
+    setBusy(true); setMsg("");
+    try { await signInWithMagicLink(); setMsg("ログイン用メールを送りました。メールの「Log In」を開いてください。"); }
+    catch (e) { setMsg("エラー: " + (e.message || e)); }
+    finally { setBusy(false); }
+  };
   const doSignOut = async () => { await signOut(); refresh(); };
   const unconfigure = () => { if (window.confirm("同期設定を削除します（データは端末に残ります）。よろしいですか？")) { clearSyncConfig(); refresh(); } };
 
@@ -57,15 +63,24 @@ function SyncSection() {
         )}
         {state.mode === "signedOut" && (
           <div style={{ padding: "6px 0" }}>
-            <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 8 }}>{state.builtIn ? "PCとスマホで同じアカウントにログインすると、自動で同期します。" : "設定済み。ログインすると同期が始まります（初回は「新規登録」）。"}</div>
-            <label style={styles.fieldLabel}>メールアドレス</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" style={styles.textInput} autoCapitalize="none" />
-            <label style={styles.fieldLabel}>パスワード</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8文字以上" style={styles.textInput} />
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button style={{ ...styles.saveBtnHalf, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doAuth(signIn, "ログインしました。同期中…")}>ログイン</button>
-              <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}`, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doAuth(signUp, "登録しました。同期中…")}>新規登録</button>
-            </div>
+            {state.personal ? (
+              <>
+                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.7, marginBottom: 10 }}>この端末を家計簿のクラウド同期につなぎます。パスワードは不要です。</div>
+                <button style={{ ...styles.saveBtn, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={doMagicLink}>{busy ? "送信中…" : "同期を開始"}</button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 8 }}>{state.builtIn ? "PCとスマホで同じアカウントにログインすると、自動で同期します。" : "設定済み。ログインすると同期が始まります（初回は「新規登録」）。"}</div>
+                <label style={styles.fieldLabel}>メールアドレス</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" style={styles.textInput} autoCapitalize="none" />
+                <label style={styles.fieldLabel}>パスワード</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8文字以上" style={styles.textInput} />
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button style={{ ...styles.saveBtnHalf, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doAuth(signIn, "ログインしました。同期中…")}>ログイン</button>
+                  <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}`, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doAuth(signUp, "登録しました。同期中…")}>新規登録</button>
+                </div>
+              </>
+            )}
             {!state.builtIn && <button style={styles.cancelBtn} onClick={unconfigure}>同期設定を削除</button>}
           </div>
         )}
