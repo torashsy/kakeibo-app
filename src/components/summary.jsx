@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
+import { yen, ymLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
 import { styles } from '../styles.js';
 
 export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan }) {
@@ -95,8 +95,19 @@ function CardBreakdownPanel({ rows }) {
 
 // 使いすぎメーター。今月の支出(実績)を計画支出(固定費+変動費)と並べ、
 // バーと一言で「使いすぎ/計画内」を判定できるようにする。副次的に収支の実績/計画も添える。
+// 「内訳」を開くと、その月の支出をカード別＋現金(出金)で確認できる(既存の記録から表示。入力は不要)。
 function SpendingMeter({ plans, subs, monthEntries, ym }) {
+  const [open, setOpen] = useState(false);
   const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym), [plans, subs, monthEntries, ym]);
+  const bd = useMemo(() => {
+    const cardMap = {}; let cashOut = 0;
+    for (const e of monthEntries) {
+      if (e.cat === "card") cardMap[e.item] = (cardMap[e.item] || 0) + Math.abs(e.amount);
+      else if (e.cat === "account" && acctRole(e.item) === "out") cashOut += Math.abs(e.amount);
+    }
+    return { cards: Object.entries(cardMap).sort((a, b) => b[1] - a[1]), cashOut };
+  }, [monthEntries]);
+  const hasBd = bd.cards.length > 0 || bd.cashOut > 0;
   const over = r.actualSpending - r.planSpending;   // +なら使いすぎ
   const pct = r.planSpending > 0 ? Math.min(1, r.actualSpending / r.planSpending) : (r.actualSpending > 0 ? 1 : 0);
   const barColor = over > 0 ? RED : ACCENT;
@@ -115,6 +126,27 @@ function SpendingMeter({ plans, subs, monthEntries, ym }) {
           {over > 0 ? `${yen(over)} 使いすぎ` : over < 0 ? `計画まで あと ${yen(-over)}` : "計画どおり"}
         </div>
         <div style={{ marginTop: 4, fontSize: 11.5, color: MUTED }}>収支の実績 {yen(r.actualNet)}（計画 {yen(r.planNet)}）。計画支出＝固定費（定期費）＋変動費。</div>
+        {hasBd && (
+          <>
+            <button style={{ ...styles.chipGhost, marginTop: 10 }} onClick={() => setOpen((o) => !o)}>
+              内訳を{open ? "閉じる" : "見る"}<span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform .15s", verticalAlign: -2, marginLeft: 4 }}>›</span>
+            </button>
+            {open && (
+              <div style={{ marginTop: 8, borderTop: `1px solid ${LINE}`, paddingTop: 8 }}>
+                {bd.cards.map(([name, v]) => (
+                  <div key={name} style={{ display: "flex", justifyContent: "space-between", padding: "4px 2px", fontSize: 13 }}>
+                    <span style={{ color: MUTED }}>{name}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{yen(v)}</span>
+                  </div>
+                ))}
+                {bd.cashOut > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 2px", fontSize: 13 }}>
+                    <span style={{ color: MUTED }}>現金（出金）</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{yen(bd.cashOut)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
