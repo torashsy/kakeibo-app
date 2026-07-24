@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
-  num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue,
+  num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
   plannedIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedMonthly, variableBuckets,
   hasBalRecord, balTotalOf, monthHasInput, isMonthClosed,
   PLAN_INCOME, PLAN_VARIABLE, PLAN_INVEST,
 } from '../utils';
 import { styles } from '../styles.js';
+import { AmountField } from './amount.jsx';
 
 // 簡素化した計画ビュー。計画は「収入」「変動費」「投資振替」の3本だけを持ち、
 // 支出見込み総額 = 固定費(定期費から自動) + 変動費。年度(4月開始)の月×項目で見る。
@@ -94,13 +95,14 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
   const commitOver = () => {
     const next = { ...plans, lines: { ...(plans.lines || {}) } };
     const line = { ...(next.lines[edit.key] || { std: 0, over: {} }) }; line.over = { ...(line.over || {}) };
-    if (edit.value === "" || isNaN(Number(edit.value))) delete line.over[edit.ym]; else line.over[edit.ym] = Number(edit.value);
+    const v = evalAmount(edit.value);
+    if (v == null) delete line.over[edit.ym]; else line.over[edit.ym] = Math.round(v);
     next.lines[edit.key] = line; onSave(next); setEdit(null);
   };
   const commitStd = () => {
     const next = { ...plans, lines: { ...(plans.lines || {}) } };
     const line = { ...(next.lines[edit.key] || { std: 0, over: {} }) };
-    line.std = edit.value === "" ? 0 : Number(edit.value) || 0; line.over = { ...(line.over || {}) }; delete line.over[edit.ym];
+    line.std = Math.round(evalAmount(edit.value) ?? 0); line.over = { ...(line.over || {}) }; delete line.over[edit.ym];
     next.lines[edit.key] = line; onSave(next); setEdit(null);
   };
 
@@ -203,7 +205,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetTitle}>{edit.label}・{edit.mlabel}の計画</div>
             <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 8px" }}>毎月の標準：{num(edit.std)}（空欄で標準を使用）</div>
-            <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.value} onChange={(e) => setEdit({ ...edit, value: e.target.value })} placeholder={String(edit.std)} style={styles.amountInput} autoFocus /></div>
+            <AmountField value={edit.value} onChange={(v) => setEdit({ ...edit, value: v })} placeholder={String(edit.std)} autoFocus />
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
               <button style={styles.saveBtnHalf} onClick={commitOver}>この月に設定</button>
               <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}` }} onClick={commitStd}>毎月の標準に</button>

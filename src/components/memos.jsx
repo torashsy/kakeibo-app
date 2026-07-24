@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { MUTED } from '../theme.js';
-import { yen, uid } from '../utils';
+import { yen, uid, evalAmount } from '../utils';
 import { styles } from '../styles.js';
 import { Subs } from './subs.jsx';
+import { AmountField } from './amount.jsx';
 
 // メモタブ。「メモ(自由メモ・カテゴリ別小計)」と「サブスク(定期支払い管理)」の切替。
 // いずれも収支計算(entries/computeSummary)とは無関係の独立データ。
@@ -34,7 +35,7 @@ export function MemoList({ memos, onSave, cards, config, ym }) {
   }, [memos]);
   const commit = () => {
     if (!edit.title.trim()) return;
-    const m = { ...edit, title: edit.title.trim(), category: (edit.category || "").trim(), amount: Number(edit.amount) || 0, linkedCard: edit.linkedCard || "" };
+    const m = { ...edit, title: edit.title.trim(), category: (edit.category || "").trim(), amount: Math.round(evalAmount(edit.amount) || 0), linkedCard: edit.linkedCard || "" };
     const next = edit.id ? memos.map((x) => (x.id === edit.id ? m : x)) : [...memos, { ...m, id: uid() }];
     onSave(next); setEdit(null);
   };
@@ -77,7 +78,7 @@ export function MemoList({ memos, onSave, cards, config, ym }) {
             {cats.length > 0 && <div style={styles.optionRow}>{cats.map((c) => <button key={c} style={{ ...styles.optionChip, ...(edit.category === c ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, category: c })}>{c}</button>)}</div>}
             <input value={edit.category ?? ""} onChange={(e) => setEdit({ ...edit, category: e.target.value })} placeholder="新しいカテゴリ名を入力（例：交際費）" style={styles.textInput} />
             <label style={styles.fieldLabel}>金額（円・任意）</label>
-            <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.amount ?? ""} onChange={(e) => setEdit({ ...edit, amount: e.target.value })} placeholder="0" style={styles.amountInput} /></div>
+            <AmountField value={edit.amount ?? ""} onChange={(v) => setEdit({ ...edit, amount: v })} />
             <label style={styles.fieldLabel}>月（任意・計画との比較に使用）</label>
             <input type="month" value={edit.ym ?? ""} onChange={(e) => setEdit({ ...edit, ym: e.target.value })} style={styles.textInput} />
             {cards && cards.length > 0 && (

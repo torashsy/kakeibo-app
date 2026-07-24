@@ -73,6 +73,44 @@ export const yen = (n: number) => (n < 0 ? "-" : "") + "¥" + Math.abs(Math.roun
 
 export const num = (n: number | null | undefined) => (n == null ? "" : Math.round(n).toLocaleString("ja-JP"));
 
+// 金額欄の四則演算パーサ。"1000+2000"、"50,000-3,000*2"、"(1+2)*3" 等を評価して数値を返す。
+// ¥・カンマ・空白・全角演算子(＋−×÷)を吸収する。評価できなければ null。eval は使わず自前の再帰下降で安全に計算。
+export function evalAmount(input: string | number | null | undefined): number | null {
+  if (input == null) return null;
+  if (typeof input === "number") return Number.isFinite(input) ? input : null;
+  let s = String(input).trim();
+  if (s === "") return null;
+  s = s.replace(/[×✕Xx＊]/g, "*").replace(/[÷]/g, "/").replace(/＋/g, "+").replace(/[－−ー]/g, "-").replace(/[¥￥,\s]/g, "");
+  if (!/^[-+*/().0-9]+$/.test(s)) return null;
+  let i = 0;
+  const parseExpr = (): number => {
+    let v = parseTerm();
+    while (s[i] === "+" || s[i] === "-") { const op = s[i++]; const r = parseTerm(); v = op === "+" ? v + r : v - r; }
+    return v;
+  };
+  const parseTerm = (): number => {
+    let v = parseFactor();
+    while (s[i] === "*" || s[i] === "/") { const op = s[i++]; const r = parseFactor(); v = op === "*" ? v * r : v / r; }
+    return v;
+  };
+  const parseFactor = (): number => {
+    if (s[i] === "+") { i++; return parseFactor(); }
+    if (s[i] === "-") { i++; return -parseFactor(); }
+    if (s[i] === "(") { i++; const v = parseExpr(); if (s[i] !== ")") throw new Error("paren"); i++; return v; }
+    const start = i;
+    while (i < s.length && /[0-9.]/.test(s[i])) i++;
+    if (i === start) throw new Error("num");
+    const n = parseFloat(s.slice(start, i));
+    if (!Number.isFinite(n)) throw new Error("nan");
+    return n;
+  };
+  try {
+    const v = parseExpr();
+    if (i !== s.length) return null;
+    return Number.isFinite(v) ? v : null;
+  } catch { return null; }
+}
+
 export const ymLabel = (ym: string) => { const [y, m] = ym.split("-"); return `${y}年${parseInt(m, 10)}月`; };
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);

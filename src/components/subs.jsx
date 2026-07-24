@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { MUTED } from '../theme.js';
-import { yen, uid, subMonthly, subYearly } from '../utils';
+import { yen, uid, subMonthly, subYearly, evalAmount } from '../utils';
 import { styles } from '../styles.js';
+import { AmountField } from './amount.jsx';
 
 // 定期費(サブスク・通信費・光熱費・保険など、毎月/毎年決まって出ていく支払い)の台帳。
 // 計画タブの「固定費」の土台になり、分類ごとの小計で解約検討にも使える。収支の実績集計には影響しない。
@@ -39,7 +40,7 @@ export function Subs({ subs, onSave, cards }) {
 
   const commit = () => {
     if (!edit.name.trim()) return;
-    const s = { ...edit, name: edit.name.trim(), category: (edit.category || "").trim(), amount: Number(edit.amount) || 0, cycle: edit.cycle || "monthly" };
+    const s = { ...edit, name: edit.name.trim(), category: (edit.category || "").trim(), amount: Math.round(evalAmount(edit.amount) || 0), cycle: edit.cycle || "monthly" };
     const next = edit.id ? subs.map((x) => (x.id === edit.id ? s : x)) : [...subs, { ...s, id: uid() }];
     onSave(next); setEdit(null);
   };
@@ -103,7 +104,7 @@ export function Subs({ subs, onSave, cards }) {
               ))}
             </div>
             <label style={styles.fieldLabel}>料金</label>
-            <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.amount ?? ""} onChange={(e) => setEdit({ ...edit, amount: e.target.value })} placeholder="0" style={styles.amountInput} /></div>
+            <AmountField value={edit.amount ?? ""} onChange={(v) => setEdit({ ...edit, amount: v })} />
             <label style={styles.fieldLabel}>周期</label>
             <div style={styles.kindRow}>
               {[["monthly", "月額"], ["yearly", "年払い"]].map(([v, l]) => (

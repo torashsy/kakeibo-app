@@ -7,7 +7,7 @@ import {
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
-  parseBankText, classifyTxn, txnToEntry, normalizeForMatch,
+  parseBankText, classifyTxn, txnToEntry, normalizeForMatch, evalAmount,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -596,5 +596,34 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(classified.some((c) => c && c.action === "card" && c.target === "EPOS")).toBe(true);
     expect(classified.some((c) => c && c.action === "card" && c.target === "PayPay")).toBe(true);
     expect(classified.some((c) => c && c.action === "skip")).toBe(true); // ことら
+  });
+});
+
+describe("evalAmount", () => {
+  it("四則演算を評価する", () => {
+    expect(evalAmount("1000+2000")).toBe(3000);
+    expect(evalAmount("50000-3000")).toBe(47000);
+    expect(evalAmount("2*3+4")).toBe(10);
+    expect(evalAmount("10000/4")).toBe(2500);
+    expect(evalAmount("(1+2)*3")).toBe(9);
+  });
+  it("¥・カンマ・全角演算子・空白を吸収する", () => {
+    expect(evalAmount("¥1,200")).toBe(1200);
+    expect(evalAmount("50,000 - 3,000")).toBe(47000);
+    expect(evalAmount("1000＋2000")).toBe(3000);
+    expect(evalAmount("2000×3")).toBe(6000);
+    expect(evalAmount("9000÷3")).toBe(3000);
+  });
+  it("通常の数値・負数もそのまま数値化", () => {
+    expect(evalAmount("1500")).toBe(1500);
+    expect(evalAmount("-500")).toBe(-500);
+    expect(evalAmount(3000)).toBe(3000);
+  });
+  it("無効な式は null", () => {
+    expect(evalAmount("")).toBe(null);
+    expect(evalAmount("abc")).toBe(null);
+    expect(evalAmount("1000+")).toBe(null);
+    expect(evalAmount("×")).toBe(null);
+    expect(evalAmount(null)).toBe(null);
   });
 });

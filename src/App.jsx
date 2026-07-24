@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, addMonth, evalAmount, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -162,8 +162,8 @@ export default function App() {
   const replaceSalary = (targetYm, rows) => {
     setEntries((prev) => {
       const kept = prev.filter((x) => !(x.ym === targetYm && x.cat === "salary"));
-      const added = rows.filter((r) => r.amount !== "" && !isNaN(parseFloat(r.amount)))
-        .map((r) => ({ id: uid(), ym: targetYm, cat: "salary", item: r.item, account: "", amount: r.item === "控除" ? -Math.abs(parseFloat(r.amount)) : parseFloat(r.amount) }));
+      const added = rows.filter((r) => evalAmount(r.amount) != null)
+        .map((r) => { const v = Math.round(evalAmount(r.amount) || 0); return { id: uid(), ym: targetYm, cat: "salary", item: r.item, account: "", amount: r.item === "控除" ? -Math.abs(v) : v }; });
       const n = [...kept, ...added]; save("entries", n); return n;
     });
   };

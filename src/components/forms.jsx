@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, addMonth, ACCOUNT_TYPES, acctRole } from '../utils';
+import { yen, ymLabel, addMonth, evalAmount, ACCOUNT_TYPES, acctRole } from '../utils';
 import { styles } from '../styles.js';
 import { Icon } from '../icons.jsx';
+import { AmountField } from './amount.jsx';
 
 export function PickCategory({ onClose, onPick }) {
   const cats = [
@@ -32,10 +33,10 @@ export function PickCategory({ onClose, onPick }) {
 export function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
   const isDeduction = editing.item === "控除";
   const [amount, setAmount] = useState(Math.abs(editing.amount).toString());
-  const canSave = amount && !isNaN(parseFloat(amount));
+  const canSave = evalAmount(amount) != null;
   const submit = () => {
     if (!canSave) return;
-    const v = Math.abs(parseFloat(amount));
+    const v = Math.abs(Math.round(evalAmount(amount) || 0));
     onUpdate({ ...editing, amount: isDeduction ? -v : v });
     onClose();
   };
@@ -46,7 +47,7 @@ export function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
         <div style={styles.sheetTitle}>{editing.item}を編集（{ymLabel(editing.ym)}）</div>
         <div style={styles.signHint}>{isDeduction ? "控除は手取りから差し引かれます（マイナス不要）" : "金額をプラスで入力"}</div>
         <label style={styles.fieldLabel}>金額</label>
-        <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={styles.amountInput} autoFocus /></div>
+        <AmountField value={amount} onChange={setAmount} autoFocus />
         <button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={submit} disabled={!canSave}>更新する</button>
         <button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>この記録を削除</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
@@ -62,7 +63,7 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
   const [rows, setRows] = useState(config.salaryItems.map((it) => { const f = existing.find((e) => e.item === it); return { item: it, amount: f ? Math.abs(f.amount).toString() : "" }; }));
   const setAmt = (i, v) => setRows(rows.map((r, idx) => (idx === i ? { ...r, amount: v } : r)));
   const copyPrev = () => setRows(config.salaryItems.map((it) => { const f = prevEntries.find((e) => e.item === it); return { item: it, amount: f ? Math.abs(f.amount).toString() : "" }; }));
-  const takeHome = rows.reduce((a, r) => { const v = parseFloat(r.amount); if (isNaN(v)) return a; return a + (r.item === "控除" ? -Math.abs(v) : v); }, 0);
+  const takeHome = rows.reduce((a, r) => { const v = evalAmount(r.amount); if (v == null) return a; return a + (r.item === "控除" ? -Math.abs(v) : v); }, 0);
   return (
     <div style={styles.sheetBackdrop} onClick={onClose}>
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
@@ -75,9 +76,8 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
         {rows.map((r, i) => (
           <div key={r.item} style={styles.salaryRow}>
             <span style={{ fontSize: 14, width: 64, color: r.item === "控除" ? MUTED : INK, fontWeight: 600 }}>{r.item}</span>
-            <div style={{ ...styles.amountWrap, flex: 1, padding: "5px 12px", border: `1px solid ${LINE}` }}>
-              <span style={{ ...styles.yenMark, fontSize: 16 }}>¥</span>
-              <input type="number" inputMode="numeric" value={r.amount} onChange={(e) => setAmt(i, e.target.value)} placeholder="0" style={{ ...styles.amountInput, fontSize: 18 }} />
+            <div style={{ flex: 1 }}>
+              <AmountField value={r.amount} onChange={(v) => setAmt(i, v)} wrapStyle={{ padding: "5px 12px", border: `1px solid ${LINE}` }} inputStyle={{ fontSize: 18 }} />
             </div>
           </div>
         ))}
@@ -94,19 +94,19 @@ export function CardForm({ ym, cards, entries, editing, onClose, onAdd, onUpdate
   const [amount, setAmount] = useState(editing ? Math.abs(editing.amount).toString() : "");
   const [entryYm, setEntryYm] = useState(editing ? editing.ym : ym);
   const [flash, setFlash] = useState("");
-  const canSave = item && amount && !isNaN(parseFloat(amount));
+  const canSave = item && evalAmount(amount) != null;
   const prevAmt = useMemo(() => {
     if (!item || editing) return null;
     const prevYm = addMonth(entryYm, -1);
     const f = (entries || []).find((e) => e.cat === "card" && e.item === item && e.ym === prevYm);
     return f ? Math.abs(f.amount) : null;
   }, [item, entryYm, entries, editing]);
-  const build = () => ({ id: editing ? editing.id : undefined, ym: entryYm, cat: "card", item, account: "", amount: Math.abs(parseFloat(amount)) });
+  const build = () => ({ id: editing ? editing.id : undefined, ym: entryYm, cat: "card", item, account: "", amount: Math.abs(Math.round(evalAmount(amount) || 0)) });
   const saveOne = (cont) => {
     if (!canSave) return;
     if (editing) { onUpdate({ ...build(), id: editing.id }); onClose(); return; }
     onAdd(build());
-    if (cont) { setFlash(`${item} ${yen(Math.abs(parseFloat(amount)))} を追加`); setItem(""); setAmount(""); setTimeout(() => setFlash(""), 1600); } else onClose();
+    if (cont) { setFlash(`${item} ${yen(Math.abs(Math.round(evalAmount(amount) || 0)))} を追加`); setItem(""); setAmount(""); setTimeout(() => setFlash(""), 1600); } else onClose();
   };
   return (
     <div style={styles.sheetBackdrop} onClick={onClose}>
@@ -120,7 +120,7 @@ export function CardForm({ ym, cards, entries, editing, onClose, onAdd, onUpdate
           <label style={styles.fieldLabel}>請求額</label>
           {prevAmt != null && <button style={styles.chipGhost} onClick={() => setAmount(String(prevAmt))}>前月 {yen(prevAmt)} をコピー</button>}
         </div>
-        <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={styles.amountInput} autoFocus /></div>
+        <AmountField value={amount} onChange={setAmount} autoFocus />
         <label style={styles.fieldLabel}>月</label>
         <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />
         {editing ? (
@@ -145,7 +145,7 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
   const [entryYm, setEntryYm] = useState(editing ? editing.ym : ym);
   const [flash, setFlash] = useState("");
   const isTransfer = acctRole(type) === "transfer";
-  const canSave = account && amount && !isNaN(parseFloat(amount));
+  const canSave = account && evalAmount(amount) != null;
   const prevEntry = useMemo(() => {
     if (editing || !account) return null;
     const prevYm = addMonth(entryYm, -1);
@@ -153,7 +153,7 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
   }, [type, account, entryYm, entries, editing]);
   const usePrev = () => { setAmount(String(Math.abs(prevEntry.amount))); if (isTransfer) setDir(prevEntry.amount < 0 ? "out" : "in"); };
   const signed = () => {
-    const v = Math.abs(parseFloat(amount));
+    const v = Math.abs(Math.round(evalAmount(amount) || 0));
     if (isTransfer) return dir === "out" ? -v : v;   // 入れる=−(支出方向) / 戻す=＋(収入方向)
     return acctRole(type) === "out" ? -v : v;
   };
@@ -189,7 +189,7 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
           <label style={styles.fieldLabel}>金額</label>
           {prevEntry && <button style={styles.chipGhost} onClick={usePrev}>前月 {yen(Math.abs(prevEntry.amount))} をコピー</button>}
         </div>
-        <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={styles.amountInput} autoFocus /></div>
+        <AmountField value={amount} onChange={setAmount} autoFocus />
         <label style={styles.fieldLabel}>月</label>
         <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />
         {editing ? (
