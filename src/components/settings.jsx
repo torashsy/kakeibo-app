@@ -56,6 +56,7 @@ function SyncSection() {
     <div style={{ marginBottom: 18 }}>
       <div style={styles.detailHead}><span>クラウド同期</span></div>
       <div style={styles.detailCard}>
+        {(() => { const u = (getSyncConfig() || {}).url; return u ? <div style={{ fontSize: 11.5, color: MUTED, padding: "6px 2px 0", wordBreak: "break-all" }}>接続先（Supabaseのプロジェクト）：<span style={{ color: ACCENT }}>{u}</span></div> : null; })()}
         {msg && <div style={{ ...styles.flash, marginTop: 8 }}>{msg}</div>}
         {state.mode === "loading" && <div style={{ color: MUTED, fontSize: 13, padding: 6 }}>確認中…</div>}
         {state.mode === "off" && (
