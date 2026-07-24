@@ -71,6 +71,25 @@ const ICONS = {
       <circle cx="12" cy="14" r="3.5" />
     </>
   ),
+  // 計画 … カレンダーにチェック(先を見立てる)
+  plan: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <line x1="3.5" y1="9.5" x2="20.5" y2="9.5" />
+      <line x1="8" y1="3" x2="8" y2="6.5" />
+      <line x1="16" y1="3" x2="16" y2="6.5" />
+      <path d="M8.5 14.5l2.3 2.3 4.2-4.4" />
+    </>
+  ),
+  // 定期費 … 繰り返し(循環矢印)
+  recurring: (
+    <>
+      <path d="M20 12a8 8 0 0 1-13.7 5.6" />
+      <path d="M4 12A8 8 0 0 1 17.7 6.4" />
+      <path d="M17.5 3v3.6h-3.6" />
+      <path d="M6.5 21v-3.6h3.6" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 22, strokeWidth = 1.8, style }) {

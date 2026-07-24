@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, planVsActualForMonth, cardBreakdown } from '../utils';
+import { yen, ymLabel, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
 import { styles } from '../styles.js';
 
-export function Summary({ summary, prevBalTotal, plans, config, cards, debt, memos, monthEntries, ym }) {
+export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan }) {
   const [cardOpen, setCardOpen] = useState(false);
   const hasBal = Object.keys(summary.balances).length > 0;
   const balChange = (hasBal && prevBalTotal != null) ? summary.balTotal - prevBalTotal : null;
@@ -17,6 +17,8 @@ export function Summary({ summary, prevBalTotal, plans, config, cards, debt, mem
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
       </div>
+      <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} />
+      <AnnualOutlookCard plans={plans} subs={subs} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={onOpenPlan} />
       <div style={styles.sumGrid}>
         <SumCell label="給与(手取り)" value={summary.gross + summary.deduction} color={GREEN} />
         <button
@@ -33,7 +35,6 @@ export function Summary({ summary, prevBalTotal, plans, config, cards, debt, mem
         <SumCell label="出金(引出・出金)" value={-summary.cashOut} color={RED} />
       </div>
       {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} />}
-      <PlanCompareCard plans={plans} config={config} cards={cards} memos={memos} monthEntries={monthEntries} ym={ym} />
       <div style={styles.sectionTitle}>口座残高</div>
       <div style={styles.balCard}>
         {!hasBal && <div style={{ color: MUTED, fontSize: 13, padding: "6px 2px" }}>この月の残高記録はまだありません</div>}
@@ -92,24 +93,45 @@ function CardBreakdownPanel({ rows }) {
   );
 }
 
-// 今月の実績と計画を比較する小カード。計画レイヤー(計画/実績/見通し)とは別に、
-// サマリから一目で「計画どおり進んでいるか」を確認できるようにする。
-function PlanCompareCard({ plans, config, cards, memos, monthEntries, ym }) {
-  const r = useMemo(() => planVsActualForMonth(plans, config, cards, memos, monthEntries, ym), [plans, config, cards, memos, monthEntries, ym]);
-  const diffColor = r.diff === 0 ? MUTED : r.diff > 0 ? GREEN : RED;
+// 使いすぎメーター。今月の支出(実績)を計画支出(固定費+変動費)と並べ、
+// バーと一言で「使いすぎ/計画内」を判定できるようにする。副次的に収支の実績/計画も添える。
+function SpendingMeter({ plans, subs, monthEntries, ym }) {
+  const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym), [plans, subs, monthEntries, ym]);
+  const over = r.actualSpending - r.planSpending;   // +なら使いすぎ
+  const pct = r.planSpending > 0 ? Math.min(1, r.actualSpending / r.planSpending) : (r.actualSpending > 0 ? 1 : 0);
+  const barColor = over > 0 ? RED : ACCENT;
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={styles.sectionTitle}>計画との比較（{ymLabel(ym)}）</div>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>計画ベースの収支です（交際費などのメモは含みません）。</div>
+      <div style={styles.sectionTitle}>使いすぎ？（{ymLabel(ym)}の支出）</div>
       <div style={styles.balCard}>
-        <div style={styles.balRow}><span style={styles.balAcc}>実績</span><span style={styles.balVal}>{yen(r.actualNet)}</span></div>
-        <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED }}>計画</span><span style={{ ...styles.balVal, color: MUTED }}>{yen(r.planNet)}</span></div>
-        <div style={{ ...styles.balRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 10 }}>
-          <span style={{ ...styles.balAcc, fontWeight: 600 }}>差（実績−計画）</span>
-          <span style={{ ...styles.balVal, fontWeight: 600, color: diffColor }}>{r.diff > 0 ? "+" : ""}{yen(r.diff)}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+          <span style={{ fontSize: 21, fontWeight: 700, color: over > 0 ? RED : "inherit" }}>{yen(r.actualSpending)}</span>
+          <span style={{ fontSize: 12.5, color: MUTED }}>計画 {yen(r.planSpending)}</span>
         </div>
+        <div style={{ height: 10, borderRadius: 6, background: "var(--group-bg)", overflow: "hidden" }}>
+          <div style={{ width: `${pct * 100}%`, height: "100%", background: barColor, borderRadius: 6, transition: "width .3s" }} />
+        </div>
+        <div style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: over > 0 ? RED : GREEN }}>
+          {over > 0 ? `${yen(over)} 使いすぎ` : over < 0 ? `計画まで あと ${yen(-over)}` : "計画どおり"}
+        </div>
+        <div style={{ marginTop: 4, fontSize: 11.5, color: MUTED }}>収支の実績 {yen(r.actualNet)}（計画 {yen(r.planNet)}）。計画支出＝固定費（定期費）＋変動費。</div>
       </div>
     </div>
+  );
+}
+
+// 今年の着地見込み。年度末の収支(累計)と残高の見込みを一目で。タップで計画タブへ。
+function AnnualOutlookCard({ plans, subs, entries, closedMonths, ym, onOpenPlan }) {
+  const o = useMemo(() => annualOutlook(plans, subs, entries || [], closedMonths, ym), [plans, subs, entries, closedMonths, ym]);
+  return (
+    <button style={{ ...styles.balCard, width: "100%", textAlign: "left", fontFamily: "inherit", cursor: onOpenPlan ? "pointer" : "default", display: "block", marginBottom: 14 }} onClick={() => onOpenPlan && onOpenPlan()}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{o.fyStart}年度の見込み</span>
+        {onOpenPlan && <span style={{ color: MUTED, fontSize: 16 }}>›</span>}
+      </div>
+      <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED, fontSize: 13 }}>年間の収支</span><span style={{ ...styles.balVal, color: o.netForecast >= 0 ? GREEN : RED }}>{yen(o.netForecast)}</span></div>
+      <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED, fontSize: 13 }}>年度末の残高</span><span style={styles.balVal}>{yen(o.balEnd)}</span></div>
+    </button>
   );
 }
 

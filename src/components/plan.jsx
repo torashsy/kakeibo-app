@@ -1,79 +1,90 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
-import { num, ymLabel, addMonth, acctRole, planMonths, fyStartOf, planLines, planValue, actualForLine, monthHasInput, hasBalRecord, balTotalOf, planGroupSign, PLAN_GROUPS, isMonthClosed } from '../utils';
+import {
+  num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary,
+  plannedIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedMonthly,
+  hasBalRecord, balTotalOf, monthHasInput, isMonthClosed,
+  PLAN_INCOME, PLAN_VARIABLE, PLAN_INVEST,
+} from '../utils';
 import { styles } from '../styles.js';
 
-// 計画 / 実績 / 見通し / 差異 を月×項目で見るビュー。グループは実績と同じ(給与系/カード/口座/その他)。
-// 見通し=入力が始まった月は実績のみ(未入力の行は空欄)、まだの月は計画。残高は実績を引き継いで先へ projection。
-// 締めた月も同様に実績を優先(入力が1件もない月を「本当に無かった」と確定するのに使う)。
-export function PlanView({ plans, onSave, config, cards, entries, memos, ym, closedMonths, onToggleClosedMonth }) {
-  const [mode, setMode] = useState("forecast"); // forecast | actual | plan | diff
+// 簡素化した計画ビュー。計画は「収入」「変動費」「投資振替」の3本だけを持ち、
+// 支出見込み総額 = 固定費(定期費から自動) + 変動費。年度(4月開始)の月×項目で見る。
+//  - 見通し: 入力が始まった/締めた月は実績、それ以外は計画。残高は実績を引き継いで先へ試算。
+//  - 計画: セルをタップして収入・変動費・投資を編集(この月/毎月の標準)。固定費は定期費から自動表示。
+//  - 差異: 実績−計画。
+export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onToggleClosedMonth }) {
+  const [mode, setMode] = useState("forecast"); // forecast | plan | diff
   const [edit, setEdit] = useState(null);
-  const [fyOffset, setFyOffset] = useState(0); // 表示中の月とは独立に年度を前後できる
+  const [fyOffset, setFyOffset] = useState(0);
 
   const fyStart = fyStartOf(ym) + fyOffset;
   const months = useMemo(() => planMonths(fyStart), [fyStart]);
-  const lines = useMemo(() => planLines(config, cards), [config, cards]);
   const entriesByMonth = useMemo(() => {
     const m = {}; for (const mo of months) m[mo] = [];
     for (const e of entries) if (m[e.ym]) m[e.ym].push(e);
     return m;
   }, [entries, months]);
+  const fixed = useMemo(() => fixedMonthly(subs), [subs]);
 
-  const planOf = (key, mo) => planValue(plans, key, mo);
-  const actualOf = (key, mo) => actualForLine(key, entriesByMonth[mo] || [], memos, mo);
-  // 月単位で判定: 入力が1件でもある月は全行実績(未入力の行は空欄)。計画値で埋めるのは未入力の月だけ。
-  const isActual = (key, mo) => isMonthClosed(closedMonths, mo) || monthHasInput(entriesByMonth[mo] || [], memos, mo);
-  const forecastOf = (key, mo) => (isActual(key, mo) ? actualOf(key, mo) : planOf(key, mo));
-  const which = mode === "plan" ? "plan" : mode === "actual" ? "actual" : "forecast";
-  const valFor = (key, mo, w) => (w === "plan" ? planOf(key, mo) : w === "actual" ? actualOf(key, mo) : forecastOf(key, mo));
-  const cellOf = (key, mo) => (mode === "diff" ? actualOf(key, mo) - planOf(key, mo) : valFor(key, mo, which));
+  const actualOf = (k, mo) => {
+    const s = computeSummary(entriesByMonth[mo] || []);
+    return k === "income" ? s.income : k === "spending" ? s.expense : k === "invest" ? s.invest : k === "net" ? s.net : 0;
+  };
+  const planOf = (k, mo) => (
+    k === "income" ? plannedIncome(plans, mo)
+      : k === "spending" ? plannedSpending(plans, subs, mo)
+        : k === "variable" ? plannedVariable(plans, mo)
+          : k === "fixed" ? fixed
+            : k === "invest" ? plannedInvest(plans, mo)
+              : k === "net" ? plannedNet(plans, subs, mo) : 0
+  );
+  const isActualMonth = (mo) => isMonthClosed(closedMonths, mo) || (entriesByMonth[mo] || []).length > 0;
+  const forecastOf = (k, mo) => (isActualMonth(mo) ? actualOf(k, mo) : planOf(k, mo));
+  const cellOf = (k, mo) => (mode === "diff" ? actualOf(k, mo) - planOf(k, mo) : mode === "plan" ? planOf(k, mo) : forecastOf(k, mo));
 
-  const linesOf = (gid) => lines.filter((l) => l.group === gid);
-  const groupSum = (gid, mo, w) => linesOf(gid).reduce((a, l) => a + valFor(l.key, mo, w), 0);
-  const subCell = (gid, mo) => (mode === "diff" ? groupSum(gid, mo, "actual") - groupSum(gid, mo, "plan") : groupSum(gid, mo, which));
-  // 収支計に含めるグループ(countsTowardNet)だけを合算する。交際費などの「その他」は収支に影響させない。
-  const netOf = (mo, w) => PLAN_GROUPS.reduce((a, [gid, , , countsTowardNet]) => a + (countsTowardNet ? planGroupSign(gid) * groupSum(gid, mo, w) : 0), 0);
-  const netCell = (mo) => (mode === "diff" ? netOf(mo, "actual") - netOf(mo, "plan") : netOf(mo, which));
-
-  // 残高見通し: 実績残高があればアンカー、無ければ前月+当月の収支
+  // 残高見通し: 実績残高があればアンカー、無ければ前月+当月の収支(見通し)
   const balByMonth = useMemo(() => {
     const res = {}; const prevMo = addMonth(months[0], -1);
-    let bal = entries.reduce((a, e) => a + (e.ym === prevMo && e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
+    let bal = entries.reduce((a, e) => a + (e.ym === prevMo && e.cat === "account" && e.item === "残高" ? e.amount : 0), 0);
     for (const mo of months) {
       const es = entriesByMonth[mo] || [];
       if (hasBalRecord(es)) bal = balTotalOf(es);
-      else bal += netOf(mo, mode === "actual" ? "actual" : "forecast");
+      else bal += forecastOf("net", mo);
       res[mo] = { bal, anchored: hasBalRecord(es) };
     }
     return res;
-  }, [entries, months, entriesByMonth, plans, mode]);
+  }, [entries, months, entriesByMonth, plans, subs, mode]);
 
-  const diffColor = (sign, v) => (v === 0 ? MUTED : (v * sign > 0 ? GREEN : RED));
+  const diffColor = (k, v) => (v === 0 ? MUTED : k === "spending" ? (v > 0 ? RED : GREEN) : k === "invest" ? MUTED : (v > 0 ? GREEN : RED));
   const cellText = (v) => (v === 0 ? "" : (mode === "diff" && v > 0 ? "+" + num(v) : num(v)));
   const mlabel = (mo) => parseInt(mo.split("-")[1], 10) + "月";
-  const showBal = mode === "forecast" || mode === "actual";
 
-  const rows = [];
-  PLAN_GROUPS.forEach(([gid, label, sub]) => {
-    rows.push({ kind: "head", label });
-    linesOf(gid).forEach((l) => rows.push({ kind: "row", line: l, gid }));
-    if (sub) rows.push({ kind: "sub", label: sub, gid });
-  });
-  rows.push({ kind: "net", label: "収支計" });
-  if (showBal) rows.push({ kind: "bal", label: "残高見通し" });
+  const rows = mode === "plan"
+    ? [
+      { k: "income", label: "収入", editable: PLAN_INCOME },
+      { k: "fixed", label: "固定費（定期費より）", muted: true },
+      { k: "variable", label: "変動費", editable: PLAN_VARIABLE },
+      { k: "spending", label: "支出計", sub: true },
+      { k: "invest", label: "投資振替", editable: PLAN_INVEST },
+      { k: "net", label: "収支", net: true },
+    ]
+    : [
+      { k: "income", label: "収入" },
+      { k: "spending", label: "支出" },
+      { k: "invest", label: "投資振替" },
+      { k: "net", label: "収支", net: true },
+    ];
 
-  const rowTotal = (r) => {
-    if (r.kind === "bal") return null;
-    return months.reduce((a, mo) => a + (r.kind === "row" ? cellOf(r.line.key, mo) : r.kind === "net" ? netCell(mo) : subCell(r.gid, mo)), 0);
-  };
-  const tableWidth = 132 + (months.length + 1) * 96;
+  const rowTotal = (r) => months.reduce((a, mo) => a + cellOf(r.k, mo), 0);
+  const tableWidth = 150 + (months.length + 1) * 92;
+  const showBal = mode === "forecast";
 
-  const openEdit = (line, mo) => {
-    if (mode !== "plan") return;
-    const l = plans && plans.lines && plans.lines[line.key];
+  const openEdit = (r, mo) => {
+    if (mode !== "plan" || !r.editable) return;
+    const l = plans && plans.lines && plans.lines[r.editable];
     const ov = l && l.over && l.over[mo] != null ? String(l.over[mo]) : "";
-    setEdit({ key: line.key, ym: mo, label: line.label, mlabel: ymLabel(mo), std: (l ? Number(l.std) || 0 : 0), value: ov });
+    setEdit({ key: r.editable, ym: mo, label: r.label, mlabel: ymLabel(mo), std: (l ? Number(l.std) || 0 : 0), value: ov });
   };
   const commitOver = () => {
     const next = { ...plans, lines: { ...(plans.lines || {}) } };
@@ -88,8 +99,9 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
     next.lines[edit.key] = line; onSave(next); setEdit(null);
   };
 
-  const hint = mode === "forecast" ? "入力が始まった月は実績のみ、未入力の月は計画で表示。灰色=計画（見込み）。残高は実績を引き継いで先へ試算。"
-    : mode === "actual" ? "記録から自動集計した実績です。" : mode === "plan" ? "セルをタップで計画を編集（この月／毎月の標準）。" : "実績−計画。緑=良い方向。";
+  const hint = mode === "forecast" ? "入力が始まった月は実績、未入力の月は計画で表示。灰色=計画（見込み）。残高は実績を引き継いで先へ試算。"
+    : mode === "plan" ? "セルをタップで計画を編集（この月／毎月の標準）。固定費は定期費から自動集計。支出計＝固定費＋変動費。"
+      : "実績−計画。支出は赤=使いすぎ、収支は緑=良い方向。";
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -100,12 +112,12 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
         {fyOffset !== 0 && <button style={{ ...styles.chipGhost, marginLeft: 4 }} onClick={() => setFyOffset(0)}>今年度に戻す</button>}
       </div>
       <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
-        {[["forecast", "見通し"], ["actual", "実績"], ["plan", "計画"], ["diff", "差異"]].map(([v, l]) => (
+        {[["forecast", "見通し"], ["plan", "計画"], ["diff", "差異"]].map(([v, l]) => (
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
-      {/* 入力が1件でもある月は自動で実績扱いになるため、締めバーは入力ゼロの月だけに出す */}
-      {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], memos, ym) && (
+      {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
+      {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 4px 6px" }}>
           <span style={{ fontSize: 11.5, color: isMonthClosed(closedMonths, ym) ? ACCENT : MUTED }}>
             {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)}は記録なしで確定済み` : `${ymLabel(ym)}は記録がありません。記録なしで確定しますか？`}
@@ -116,32 +128,36 @@ export function PlanView({ plans, onSave, config, cards, entries, memos, ym, clo
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{hint}横スクロール可。</div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: tableWidth }}>
-          <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
+          <colgroup><col style={{ width: 150 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 92 }} />)}<col style={{ width: 92 }} /></colgroup>
           <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th key={mo} style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>通期</th></tr></thead>
           <tbody>
-            {rows.map((r, i) => {
-              if (r.kind === "head") return <tr key={i}><td colSpan={months.length + 2} style={styles.tdGroup}>{r.label}</td></tr>;
-              const isSub = r.kind === "sub" || r.kind === "net";
-              const sign = r.kind === "net" ? 1 : r.kind === "row" ? planGroupSign(r.line.group) : planGroupSign(r.gid);
+            {rows.map((r) => {
+              const isSub = !!(r.sub || r.net);
               return (
-                <tr key={i}>
-                  <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub || r.kind === "bal" ? styles.tdSubLabel : {}) }}>{r.kind === "row" ? r.line.label : r.label}</td>
+                <tr key={r.k}>
+                  <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.muted ? { color: MUTED } : {}) }}>{r.label}</td>
                   {months.map((mo) => {
-                    if (r.kind === "bal") { const b = balByMonth[mo]; return <td key={mo} style={{ ...styles.tdNum, ...styles.tdSubTotal, fontWeight: 600, ...(mo === ym ? { background: "var(--col-hl)" } : {}), color: b.anchored ? INK : MUTED }}>{b.bal ? num(b.bal) : ""}</td>; }
-                    const v = r.kind === "row" ? cellOf(r.line.key, mo) : r.kind === "net" ? netCell(mo) : subCell(r.gid, mo);
-                    const projected = mode === "forecast" && r.kind === "row" && !isActual(r.line.key, mo);
+                    const v = cellOf(r.k, mo);
+                    const projected = mode === "forecast" && !isActualMonth(mo);
                     let color;
-                    if (mode === "diff") color = diffColor(sign, v);
-                    else if (r.kind === "net") color = v === 0 ? undefined : v > 0 ? GREEN : RED;
-                    else if (projected) color = MUTED;
+                    if (mode === "diff") color = diffColor(r.k, v);
+                    else if (r.net) color = v === 0 ? undefined : v > 0 ? GREEN : RED;
+                    else if (r.muted || projected) color = MUTED;
                     const base = { ...styles.tdNum, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 600 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
-                    if (r.kind === "row" && mode === "plan") return <td key={mo} style={base}><button style={{ ...styles.cellBtn, display: "block", width: "100%", textAlign: "right", color: "inherit" }} onClick={() => openEdit(r.line, mo)}>{cellText(v) || " "}</button></td>;
+                    if (r.editable && mode === "plan") return <td key={mo} style={base}><button style={{ ...styles.cellBtn, display: "block", width: "100%", textAlign: "right", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
                     return <td key={mo} style={base}>{cellText(v)}</td>;
                   })}
-                  {(() => { const t = rowTotal(r); if (t == null) return <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}></td>; const c = mode === "diff" ? diffColor(sign, t) : r.kind === "net" ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? { fontWeight: 700 } : {}), ...(c ? { color: c } : {}) }}>{cellText(t)}</td>; })()}
+                  {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? { fontWeight: 700 } : {}), ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
                 </tr>
               );
             })}
+            {showBal && (
+              <tr>
+                <td style={{ ...styles.td, ...styles.tdSticky, ...styles.tdSubLabel }}>残高見通し</td>
+                {months.map((mo) => { const b = balByMonth[mo]; return <td key={mo} style={{ ...styles.tdNum, ...styles.tdSubTotal, fontWeight: 600, ...(mo === ym ? { background: "var(--col-hl)" } : {}), color: b.anchored ? INK : MUTED }}>{b.bal ? num(b.bal) : ""}</td>; })}
+                <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}></td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

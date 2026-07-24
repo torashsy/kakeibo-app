@@ -2,9 +2,10 @@ import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils';
 import { styles } from '../styles.js';
-import { PlanView } from './plan.jsx';
 
-export function Detail({ monthEntries, entries, ym, config, cards, memos, plans, onSavePlans, closedMonths, onToggleClosedMonth, onEdit }) {
+// 記録タブ。その月に入力した実績(給与・カード・口座)を、履歴/項目別/表/年間で見返す。
+// 計画は独立した「計画」タブへ分離した。
+export function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
   const [view, setView] = useState("card");
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
@@ -14,13 +15,11 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, plans,
         <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>項目別</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "table" ? styles.viewToggleActive : {}) }} onClick={() => setView("table")}>表</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
-        <button style={{ ...styles.viewToggleBtn, ...(view === "plan" ? styles.viewToggleActive : {}) }} onClick={() => setView("plan")}>計画</button>
       </div>
       {view === "list" && <DetailList monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "table" && <DetailTable S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "year" && <YearTable entries={entries} ym={ym} config={config} cards={cards} />}
-      {view === "plan" && <PlanView plans={plans} onSave={onSavePlans} config={config} cards={cards} entries={entries} memos={memos} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={onToggleClosedMonth} />}
     </div>
   );
 }
