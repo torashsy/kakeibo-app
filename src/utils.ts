@@ -406,6 +406,35 @@ export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined,
   return { planIncome, actualIncome, planSpending, actualSpending, planNet, actualNet, diff: actualNet - planNet };
 }
 
+export interface AnnualOutlook {
+  fyStart: number;       // 年度開始年(4月)
+  netForecast: number;   // 年度の収支(累計)見込み: 実績が入った月は実績、未入力の月は計画
+  actualNet: number;     // うち実績で確定した分の収支
+  balStart: number;      // 年度開始前月の残高合計(アンカー)
+  balEnd: number;        // 年度末の残高見込み
+}
+
+// 今の月(ym)が属する年度について、年度末の収支(累計)と残高の見込みを算出する。
+// 入力が始まった/締めた月は実績、未入力の月は計画。残高は実績記録があればアンカーし、無ければ収支で試算。
+export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string): AnnualOutlook {
+  const fyStart = fyStartOf(ym);
+  const months = planMonths(fyStart);
+  const byMonth: Record<string, Entry[]> = {}; for (const m of months) byMonth[m] = [];
+  for (const e of entries) if (byMonth[e.ym]) byMonth[e.ym].push(e);
+  const prevMo = addMonth(months[0], -1);
+  const balStart = entries.reduce((a, e) => a + (e.ym === prevMo && e.cat === "account" && e.item === "残高" ? e.amount : 0), 0);
+  let bal = balStart, netForecast = 0, actualNet = 0;
+  for (const mo of months) {
+    const es = byMonth[mo];
+    const isActual = isMonthClosed(closedMonths, mo) || es.length > 0;
+    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo);
+    netForecast += net;
+    if (isActual) actualNet += net;
+    if (hasBalRecord(es)) bal = balTotalOf(es); else bal += net;
+  }
+  return { fyStart, netForecast, actualNet, balStart, balEnd: bal };
+}
+
 export interface CardBreakdownRow {
   name: string;
   total: number;        // その月のカード請求額(絶対値)

@@ -5,7 +5,7 @@ import {
   planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
-  migratePlan, fixedMonthly, plannedSpending,
+  migratePlan, fixedMonthly, plannedSpending, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
@@ -249,6 +249,22 @@ describe("計画", () => {
     expect(p.lines.invest.std).toBe(-46000);
     // 既に新形式なら素通し
     expect(migratePlan(p, subs)).toBe(p);
+  });
+
+  it("annualOutlook: 実績月は実績・未入力月は計画で年度の収支/残高を試算", () => {
+    const subs: Sub[] = [];
+    const plan: Plan = { lines: { income: { std: 100000, over: {} }, variable: { std: 60000, over: {} }, invest: { std: 0, over: {} } } };
+    const entries: Entry[] = [
+      { ym: "2026-03", cat: "account", item: "残高", account: "A", amount: 50000 },  // 年度開始前月の残高
+      { ym: "2026-04", cat: "salary", item: "給与", amount: 100000 },
+      { ym: "2026-04", cat: "card", item: "X", amount: 70000 },
+    ];
+    const o = annualOutlook(plan, subs, entries, [], "2026-04");
+    expect(o.fyStart).toBe(2026);
+    expect(o.actualNet).toBe(30000);                       // 4月実績: 100000 − 70000
+    expect(o.netForecast).toBe(30000 + 40000 * 11);        // 残り11か月は計画: 100000 − 60000
+    expect(o.balStart).toBe(50000);
+    expect(o.balEnd).toBe(50000 + 30000 + 40000 * 11);     // 残高記録が無いので収支を積み上げ
   });
 });
 
