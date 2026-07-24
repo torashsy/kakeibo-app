@@ -10,6 +10,7 @@ import { PlanView } from './components/plan.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
 import { ImportSheet } from './components/import.jsx';
+import { MonthlyClose } from './components/monthly.jsx';
 import { Icon } from './icons.jsx';
 import { getSyncState, onSyncChange } from './storage.js';
 
@@ -171,6 +172,38 @@ export default function App() {
     });
   };
 
+  // 「今月をまとめて入力」の一括保存。給与・カード合計・月末残高を1回で反映する。
+  // カードは「変えたときだけ」既存明細を1件の合計へ置き換える(触らなければ明細を保つ)。
+  // 残高は口座ごとに1件へ上書き。空欄は既存を残す(消したい時は0を入れる)。
+  const saveMonthlyClose = (targetYm, data) => {
+    setEntries((prev) => {
+      let list = prev;
+      // 給与: その月の給与をまとめて置換
+      list = list.filter((x) => !(x.ym === targetYm && x.cat === "salary"));
+      for (const r of (data.salary || [])) {
+        const v = evalAmount(r.amount); if (v == null) continue;
+        const rounded = Math.round(v);
+        list.push({ id: uid(), ym: targetYm, cat: "salary", item: r.item, account: "", amount: r.item === "控除" ? -Math.abs(rounded) : rounded });
+      }
+      // カード: 入力値が既存合計と同じなら明細を保持、違えば1件の合計へ置換
+      for (const c of (data.cards || [])) {
+        const v = evalAmount(c.amount); if (v == null) continue; // 空欄は現状維持
+        const rounded = Math.abs(Math.round(v));
+        if (rounded === (c.baseSum || 0)) continue; // 変更なし → 明細をそのまま残す
+        list = list.filter((x) => !(x.ym === targetYm && x.cat === "card" && x.item === c.name));
+        if (rounded > 0) list.push({ id: uid(), ym: targetYm, cat: "card", item: c.name, account: "", amount: rounded });
+      }
+      // 残高: 口座ごとに1件へ上書き
+      for (const b of (data.balances || [])) {
+        const v = evalAmount(b.amount); if (v == null) continue; // 空欄は現状維持
+        list = list.filter((x) => !(x.ym === targetYm && x.cat === "account" && x.account === b.account && acctRole(x.item) === "bal"));
+        list.push({ id: uid(), ym: targetYm, cat: "account", item: "残高", account: b.account, amount: Math.round(v) });
+      }
+      save("entries", list);
+      return list;
+    });
+  };
+
   const months = useMemo(() => { const s = new Set(entries.map((e) => e.ym)); s.add(ym); return Array.from(s).sort(); }, [entries, ym]);
   const monthEntries = useMemo(() => entries.filter((e) => e.ym === ym), [entries, ym]);
 
@@ -201,7 +234,7 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { paddingBottom: 96 } : {}) }}>
-        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} />}
+        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}
@@ -226,6 +259,7 @@ export default function App() {
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => setSheet(null)} />}
+      {sheet === "close" && <MonthlyClose key={ym} ym={ym} config={config} cards={cards} entries={entries} onSave={saveMonthlyClose} onClose={() => setSheet(null)} />}
     </div>
   );
 }

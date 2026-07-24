@@ -90,6 +90,12 @@ const ICONS = {
       <path d="M6.5 21v-3.6h3.6" />
     </>
   ),
+  // まとめて入力 … チェック(今月をまとめて確定)
+  check: (
+    <>
+      <path d="M4 12.5l5 5 11-11" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 22, strokeWidth = 1.8, style }) {
