@@ -16,6 +16,7 @@ export interface Config {
   accountFlows?: Record<string, string[]>;
   memoCategories?: string[]; // メモのカテゴリのうち、計画タブで目安/実績を追跡するもの
   importRules?: ImportRule[]; // スクショ取込で摘要から自動振り分けするルール(先勝ち)
+  cycleStartDay?: number;     // 家計の月の締め日(開始日)。未設定/1は暦通り。11なら11日〜翌月10日を1周期
 }
 
 // スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
@@ -116,6 +117,33 @@ export const ymLabel = (ym: string) => { const [y, m] = ym.split("-"); return `$
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 export const addMonth = (ym: string, d: number) => { const [y, m] = ym.split("-").map(Number); const dt = new Date(y, m - 1 + d, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
+
+// ===== 締め日(サイクル) =====
+// 家計の「月」を締め日で区切る。startDay=1(既定)は暦通り。startDay=11なら 11日〜翌月10日 を1周期とし、
+// 周期は「開始月」で呼ぶ(例: 6/11〜7/10 = "2026-06" = 6月度)。給与とそれで払うカードを同じ周期に揃えられる。
+// 日付(YYYY-MM-DD)が属する周期の ym を返す。日<締め日なら前月始まりの周期。
+export const cycleYm = (dateStr: string, startDay: number = 1): string => {
+  if (!dateStr) return "";
+  const ym = dateStr.slice(0, 7);
+  const day = Number(dateStr.slice(8, 10));
+  return (!startDay || startDay <= 1 || !day || day >= startDay) ? ym : addMonth(ym, -1);
+};
+// 今日が属する周期の ym
+export const currentCycleYm = (startDay: number = 1): string => {
+  const d = new Date();
+  const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return cycleYm(ds, startDay);
+};
+// 周期の表示名。締め日ありなら「2026年6月度」。
+export const periodLabel = (ym: string, startDay: number = 1): string => (!startDay || startDay <= 1 ? ymLabel(ym) : `${ymLabel(ym)}度`);
+// 周期の日付範囲「6/11〜7/10」。締め日が無ければ空。
+export const periodRange = (ym: string, startDay: number = 1): string => {
+  if (!startDay || startDay <= 1) return "";
+  const [, m] = ym.split("-").map(Number);
+  const end = addMonth(ym, 1);
+  const em = Number(end.split("-")[1]);
+  return `${m}/${startDay}〜${em}/${startDay - 1}`;
+};
 
 
 // 旧バージョン(kindベース)のデータを新形式(catベース)に変換して救済する
@@ -586,10 +614,11 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
 }
 
 // 分類結果をentry(id無し)に変換する。skip・未分類・対象未選択はnull。
-export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null): Omit<Entry, "id"> | null {
+// startDay(締め日)を渡すと、取引日をその周期の月バケツへ自動で振り分ける(例: 締め日11で7/5→6月度)。
+export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, startDay: number = 1): Omit<Entry, "id"> | null {
   if (!cls || cls.action === "skip") return null;
   if ((cls.action === "card" || cls.action === "account") && !cls.target) return null;
-  const ym = txn.date.slice(0, 7);
+  const ym = cycleYm(txn.date, startDay);
   if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount) };
   const item = txn.amount < 0 ? (cls.negItem || "出金") : (cls.posItem || "入金");
   return { ym, cat: "account", item, account: cls.target!, amount: txn.amount };

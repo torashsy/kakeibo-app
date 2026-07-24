@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
+import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
 import { styles } from '../styles.js';
 
 export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan }) {
@@ -17,7 +17,7 @@ export function Summary({ summary, prevBalTotal, plans, subs, config, cards, deb
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
       </div>
-      <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} />
+      <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} startDay={config.cycleStartDay} />
       <AnnualOutlookCard plans={plans} subs={subs} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={onOpenPlan} />
       <div style={styles.sumGrid}>
         <SumCell label="給与(手取り)" value={summary.gross + summary.deduction} color={GREEN} />
@@ -96,7 +96,7 @@ function CardBreakdownPanel({ rows }) {
 // 使いすぎメーター。今月の支出(実績)を計画支出(固定費+変動費)と並べ、
 // バーと一言で「使いすぎ/計画内」を判定できるようにする。副次的に収支の実績/計画も添える。
 // 「内訳」を開くと、その月の支出をカード別＋現金(出金)で確認できる(既存の記録から表示。入力は不要)。
-function SpendingMeter({ plans, subs, monthEntries, ym }) {
+function SpendingMeter({ plans, subs, monthEntries, ym, startDay }) {
   const [open, setOpen] = useState(false);
   const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym), [plans, subs, monthEntries, ym]);
   const bd = useMemo(() => {
@@ -113,7 +113,7 @@ function SpendingMeter({ plans, subs, monthEntries, ym }) {
   const barColor = over > 0 ? RED : ACCENT;
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={styles.sectionTitle}>使いすぎ？（{ymLabel(ym)}の支出）</div>
+      <div style={styles.sectionTitle}>使いすぎ？（{periodLabel(ym, startDay)}の支出）</div>
       <div style={styles.balCard}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
           <span style={{ fontSize: 21, fontWeight: 700, color: over > 0 ? RED : "inherit" }}>{yen(r.actualSpending)}</span>

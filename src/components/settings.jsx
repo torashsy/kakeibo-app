@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid } from '../utils';
+import { uid, periodRange } from '../utils';
 import { styles } from '../styles.js';
 import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -224,6 +224,24 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
         </span>
         <span style={{ color: MUTED, fontSize: 20 }}>›</span>
       </button>
+
+      {/* 月の締め日(サイクル) */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={styles.detailHead}><span>月の締め日</span></div>
+        <div style={styles.detailCard}>
+          <div style={{ fontSize: 12, color: MUTED, padding: "8px 2px 4px", lineHeight: 1.6 }}>
+            家計の1ヶ月をこの日から始めます（1＝暦通り）。例）11なら「11日〜翌月10日」を1周期とし、6月度＝6/11〜7/10。給与とそれで払うカードを同じ月にまとめられます。スクショ取込は取引日をこの周期へ自動で振り分けます。
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 2px 8px" }}>
+            <span style={{ fontSize: 14 }}>毎月</span>
+            <input type="number" inputMode="numeric" min={1} max={28} value={c.cycleStartDay ?? 1}
+              onChange={(e) => { const v = Math.max(1, Math.min(28, Number(e.target.value) || 1)); const next = { ...c, cycleStartDay: v }; setC(next); onSave(next); }}
+              style={{ ...styles.textInput, width: 72, textAlign: "center", margin: 0 }} />
+            <span style={{ fontSize: 14 }}>日 始まり</span>
+            {Number(c.cycleStartDay) > 1 && <span style={{ fontSize: 12, color: ACCENT, marginLeft: "auto" }}>例：6月度＝{periodRange("2026-06", c.cycleStartDay)}</span>}
+          </div>
+        </div>
+      </div>
 
       {groups.map((g) => (
         <div key={g.key} style={{ marginBottom: 18 }}>

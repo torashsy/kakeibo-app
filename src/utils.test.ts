@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  yen, num, addMonth, ymLabel,
+  yen, num, addMonth, ymLabel, cycleYm, periodLabel, periodRange,
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG,
@@ -596,6 +596,26 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(classified.some((c) => c && c.action === "card" && c.target === "EPOS")).toBe(true);
     expect(classified.some((c) => c && c.action === "card" && c.target === "PayPay")).toBe(true);
     expect(classified.some((c) => c && c.action === "skip")).toBe(true); // ことら
+  });
+});
+
+describe("cycleYm / periodLabel / periodRange", () => {
+  it("cycleYm: 締め日で周期(開始月)へ振り分ける", () => {
+    // 締め日1(既定)は暦通り
+    expect(cycleYm("2026-07-05", 1)).toBe("2026-07");
+    // 締め日11: 11日〜翌月10日を1周期、開始月で呼ぶ
+    expect(cycleYm("2026-06-11", 11)).toBe("2026-06");
+    expect(cycleYm("2026-06-24", 11)).toBe("2026-06"); // 給与
+    expect(cycleYm("2026-06-26", 11)).toBe("2026-06"); // カード
+    expect(cycleYm("2026-07-05", 11)).toBe("2026-06"); // 翌月5日引き落とし → 6月度
+    expect(cycleYm("2026-07-10", 11)).toBe("2026-06"); // 翌月10日 → 6月度
+    expect(cycleYm("2026-07-11", 11)).toBe("2026-07"); // 11日から次の周期
+  });
+  it("periodLabel / periodRange", () => {
+    expect(periodLabel("2026-06", 1)).toBe("2026年6月");
+    expect(periodLabel("2026-06", 11)).toBe("2026年6月度");
+    expect(periodRange("2026-06", 1)).toBe("");
+    expect(periodRange("2026-06", 11)).toBe("6/11〜7/10");
   });
 });
 
