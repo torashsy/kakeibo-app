@@ -17,7 +17,7 @@ export function Summary({ summary, prevBalTotal, plans, subs, config, cards, deb
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
       </div>
-      <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} startDay={config.cycleStartDay} />
+      <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
       <AnnualOutlookCard plans={plans} subs={subs} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={onOpenPlan} />
       <div style={styles.sumGrid}>
         <SumCell label="給与(手取り)" value={summary.gross + summary.deduction} color={GREEN} />

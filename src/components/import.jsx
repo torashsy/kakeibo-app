@@ -57,7 +57,7 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
     onSaveImportRules([...(config.importRules || []), rule]);
   };
 
-  const entries = (rows || []).map((r) => txnToEntry(r.txn, r.cls, config.cycleStartDay));
+  const entries = (rows || []).map((r) => txnToEntry(r.txn, r.cls, config.cycleCutoffDay));
   const includedCount = entries.filter(Boolean).length;
   const commit = () => {
     const list = entries.filter(Boolean);

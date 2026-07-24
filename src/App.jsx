@@ -57,7 +57,7 @@ export default function App() {
         const loadedConfig = migrateConfig(c && c.value ? { ...DEFAULT_CONFIG, ...JSON.parse(c.value) } : DEFAULT_CONFIG);
         setConfig(loadedConfig);
         // 締め日(サイクル)設定があれば、起動時は「今の周期」を表示する
-        setYm(currentCycleYm(loadedConfig.cycleStartDay));
+        setYm(currentCycleYm(loadedConfig.cycleCutoffDay));
         const rawCards = cd && cd.value ? JSON.parse(cd.value) : null;
         setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "", annualFee: 0 } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "", annualFee: Number(c.annualFee) || 0 }) : DEFAULT_CARDS);
         const rawDebt = d && d.value ? JSON.parse(d.value) : null;
@@ -191,12 +191,12 @@ export default function App() {
         {(tab === "today" || tab === "records" || tab === "plan") && (
           <div style={styles.monthPicker}>
             <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, -1))}>‹</button>
-            <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{periodLabel(m, config.cycleStartDay)}</option>)}</select>
+            <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{periodLabel(m, config.cycleCutoffDay)}</option>)}</select>
             <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, 1))}>›</button>
           </div>
         )}
-        {(tab === "today" || tab === "records" || tab === "plan") && periodRange(ym, config.cycleStartDay) && (
-          <div style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 2 }}>{periodRange(ym, config.cycleStartDay)}</div>
+        {(tab === "today" || tab === "records" || tab === "plan") && periodRange(ym, config.cycleCutoffDay) && (
+          <div style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 2 }}>{periodRange(ym, config.cycleCutoffDay)}</div>
         )}
       </header>
 
