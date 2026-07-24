@@ -16,7 +16,7 @@ export interface Config {
   accountFlows?: Record<string, string[]>;
   memoCategories?: string[]; // メモのカテゴリのうち、計画タブで目安/実績を追跡するもの
   importRules?: ImportRule[]; // スクショ取込で摘要から自動振り分けするルール(先勝ち)
-  cycleStartDay?: number;     // 家計の月の締め日(開始日)。未設定/1は暦通り。11なら11日〜翌月10日を1周期
+  cycleCutoffDay?: number;    // 家計の月の締め日。0/未設定は暦通り。10なら「10日締め」=11日〜翌月10日を1周期(土日祝は翌営業日)
 }
 
 // スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
@@ -162,32 +162,32 @@ function businessCutoffDay(year: number, month: number, day: number): number {
 }
 
 // ===== 締め日(サイクル) =====
-// 家計の「月」を締め日で区切る。startDay=1(既定)は暦通り。startDay=11なら 11日〜翌月10日 を1周期とし、
-// 周期は「開始月」で呼ぶ(例: 6/11〜7/10 = "2026-06" = 6月度)。給与とそれで払うカードを同じ周期に揃えられる。
-// 締め日(=開始日の前日)が土日祝なら引き落としは翌営業日にずれるので、その分も同じ周期に含める。
-export const cycleYm = (dateStr: string, startDay: number = 1): string => {
+// 家計の「月」を締め日で区切る。cutoffDay=0(既定は暦通り)。cutoffDay=10なら「10日締め」=
+// 11日〜翌月10日 を1周期とし、周期は「開始月」で呼ぶ(例: 6/11〜7/10 = "2026-06" = 6月度)。
+// 締め日(引き落とし日)が土日祝なら翌営業日にずれるので、その分も同じ周期に含める。
+export const cycleYm = (dateStr: string, cutoffDay: number = 0): string => {
   if (!dateStr) return "";
   const ym = dateStr.slice(0, 7);
-  if (!startDay || startDay <= 1) return ym;
+  if (!cutoffDay || cutoffDay < 1) return ym;
   const [y, m, d] = dateStr.split("-").map(Number);
-  const cutoff = businessCutoffDay(y, m, startDay - 1); // 締め日を営業日で自動調整
+  const cutoff = businessCutoffDay(y, m, cutoffDay); // 締め日を営業日で自動調整
   return d > cutoff ? ym : addMonth(ym, -1);
 };
 // 今日が属する周期の ym
-export const currentCycleYm = (startDay: number = 1): string => {
+export const currentCycleYm = (cutoffDay: number = 0): string => {
   const d = new Date();
   const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return cycleYm(ds, startDay);
+  return cycleYm(ds, cutoffDay);
 };
 // 周期の表示名。締め日ありなら「2026年6月度」。
-export const periodLabel = (ym: string, startDay: number = 1): string => (!startDay || startDay <= 1 ? ymLabel(ym) : `${ymLabel(ym)}度`);
+export const periodLabel = (ym: string, cutoffDay: number = 0): string => (!cutoffDay || cutoffDay < 1 ? ymLabel(ym) : `${ymLabel(ym)}度`);
 // 周期の日付範囲「6/11〜7/10」。締め日が無ければ空。
-export const periodRange = (ym: string, startDay: number = 1): string => {
-  if (!startDay || startDay <= 1) return "";
+export const periodRange = (ym: string, cutoffDay: number = 0): string => {
+  if (!cutoffDay || cutoffDay < 1) return "";
   const [, m] = ym.split("-").map(Number);
   const end = addMonth(ym, 1);
   const em = Number(end.split("-")[1]);
-  return `${m}/${startDay}〜${em}/${startDay - 1}`;
+  return `${m}/${cutoffDay + 1}〜${em}/${cutoffDay}`;
 };
 
 
@@ -240,6 +240,7 @@ export const DEFAULT_CONFIG: Config = {
     { id: uid(), match: "エポス", action: "card", target: "EPOS" },
     { id: uid(), match: "PayPa", action: "card", target: "PayPay" },
   ],
+  cycleCutoffDay: 10, // 10日締め(11日〜翌月10日を1周期)。土日祝は翌営業日に自動調整
 };
 
 // その口座で表示する入出金・振替の種類を返す(未設定なら全種類)
@@ -272,6 +273,11 @@ export function migrateConfig(cfg: any): any {
   }
   if (!Array.isArray(out.memoCategories)) out = { ...out, memoCategories: ["交際費"] };
   if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
+  // 旧「開始日(cycleStartDay)」→「締め日(cycleCutoffDay=開始日-1)」へ移行
+  if (out.cycleCutoffDay == null && out.cycleStartDay != null) {
+    const c = Number(out.cycleStartDay) - 1;
+    out = { ...out, cycleCutoffDay: c >= 1 ? c : 0 };
+  }
   return out;
 }
 
@@ -659,11 +665,11 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
 }
 
 // 分類結果をentry(id無し)に変換する。skip・未分類・対象未選択はnull。
-// startDay(締め日)を渡すと、取引日をその周期の月バケツへ自動で振り分ける(例: 締め日11で7/5→6月度)。
-export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, startDay: number = 1): Omit<Entry, "id"> | null {
+// cutoffDay(締め日)を渡すと、取引日をその周期の月バケツへ自動で振り分ける(例: 締め日10で7/5→6月度)。
+export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, cutoffDay: number = 0): Omit<Entry, "id"> | null {
   if (!cls || cls.action === "skip") return null;
   if ((cls.action === "card" || cls.action === "account") && !cls.target) return null;
-  const ym = cycleYm(txn.date, startDay);
+  const ym = cycleYm(txn.date, cutoffDay);
   if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount) };
   const item = txn.amount < 0 ? (cls.negItem || "出金") : (cls.posItem || "入金");
   return { ym, cat: "account", item, account: cls.target!, amount: txn.amount };

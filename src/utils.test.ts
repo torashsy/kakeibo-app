@@ -601,21 +601,21 @@ describe("スクショ取込(OCR明細インポート)", () => {
 
 describe("cycleYm / periodLabel / periodRange", () => {
   it("cycleYm: 締め日で周期(開始月)へ振り分ける", () => {
-    // 締め日1(既定)は暦通り
-    expect(cycleYm("2026-07-05", 1)).toBe("2026-07");
-    // 締め日11: 11日〜翌月10日を1周期、開始月で呼ぶ
-    expect(cycleYm("2026-06-11", 11)).toBe("2026-06");
-    expect(cycleYm("2026-06-24", 11)).toBe("2026-06"); // 給与
-    expect(cycleYm("2026-06-26", 11)).toBe("2026-06"); // カード
-    expect(cycleYm("2026-07-05", 11)).toBe("2026-06"); // 翌月5日引き落とし → 6月度
-    expect(cycleYm("2026-07-10", 11)).toBe("2026-06"); // 翌月10日 → 6月度
-    expect(cycleYm("2026-07-11", 11)).toBe("2026-07"); // 11日から次の周期
+    // 締め日0(未設定)は暦通り
+    expect(cycleYm("2026-07-05", 0)).toBe("2026-07");
+    // 締め日10: 11日〜翌月10日を1周期、開始月で呼ぶ
+    expect(cycleYm("2026-06-11", 10)).toBe("2026-06");
+    expect(cycleYm("2026-06-24", 10)).toBe("2026-06"); // 給与
+    expect(cycleYm("2026-06-26", 10)).toBe("2026-06"); // カード
+    expect(cycleYm("2026-07-05", 10)).toBe("2026-06"); // 翌月5日引き落とし → 6月度
+    expect(cycleYm("2026-07-10", 10)).toBe("2026-06"); // 翌月10日 → 6月度
+    expect(cycleYm("2026-07-11", 10)).toBe("2026-07"); // 11日から次の周期
   });
   it("periodLabel / periodRange", () => {
-    expect(periodLabel("2026-06", 1)).toBe("2026年6月");
-    expect(periodLabel("2026-06", 11)).toBe("2026年6月度");
-    expect(periodRange("2026-06", 1)).toBe("");
-    expect(periodRange("2026-06", 11)).toBe("6/11〜7/10");
+    expect(periodLabel("2026-06", 0)).toBe("2026年6月");
+    expect(periodLabel("2026-06", 10)).toBe("2026年6月度");
+    expect(periodRange("2026-06", 0)).toBe("");
+    expect(periodRange("2026-06", 10)).toBe("6/11〜7/10");
   });
   it("isBankHoliday: 土日・祝日・年末年始", () => {
     expect(isBankHoliday("2026-01-12")).toBe(true);  // 成人の日(1月第2月曜)
@@ -627,10 +627,10 @@ describe("cycleYm / periodLabel / periodRange", () => {
   });
   it("cycleYm: 締め日が土日祝なら翌営業日まで同じ周期に含める", () => {
     // 2026-01は 1/10(土)・1/11(日)・1/12(成人の日) と続き、締め日10は営業日1/13へ送られる
-    expect(cycleYm("2026-01-10", 11)).toBe("2025-12"); // 前周期(12月度)
-    expect(cycleYm("2026-01-12", 11)).toBe("2025-12"); // 振替でずれた分も前周期
-    expect(cycleYm("2026-01-13", 11)).toBe("2025-12"); // 実際の引き落とし日(営業日)まで前周期
-    expect(cycleYm("2026-01-14", 11)).toBe("2026-01"); // 翌日から新周期(1月度)
+    expect(cycleYm("2026-01-10", 10)).toBe("2025-12"); // 前周期(12月度)
+    expect(cycleYm("2026-01-12", 10)).toBe("2025-12"); // 振替でずれた分も前周期
+    expect(cycleYm("2026-01-13", 10)).toBe("2025-12"); // 実際の引き落とし日(営業日)まで前周期
+    expect(cycleYm("2026-01-14", 10)).toBe("2026-01"); // 翌日から新周期(1月度)
   });
 });
 
