@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -69,7 +69,11 @@ export default function App() {
         // 更新日を過ぎたサブスクを自動で繰り越した場合はそのまま保存(次回起動時も同じ結果に)
         if (rolledSubs !== loadedSubs) { try { window.storage.set("subs", JSON.stringify(rolledSubs), true); } catch {} }
         const rawPlans = pl && pl.value ? JSON.parse(pl.value) : null;
-        setPlans(rawPlans && rawPlans.lines ? rawPlans : SEED_PLAN);
+        // 旧形式(カード別・口座フロー別)の計画は、簡素化モデル(収入/変動費/投資)へ移行する。
+        // 固定費の算出に定期費(subs)を使うため、移行にはこの時点の subs を渡す。
+        const loadedPlan = rawPlans && rawPlans.lines ? migratePlan(rawPlans, rolledSubs) : SEED_PLAN;
+        setPlans(loadedPlan);
+        if (rawPlans && rawPlans.lines && loadedPlan !== rawPlans) { try { window.storage.set("plans", JSON.stringify(loadedPlan), true); } catch {} }
         const rawClosed = cm && cm.value ? JSON.parse(cm.value) : null;
         setClosedMonths(Array.isArray(rawClosed) ? rawClosed : []);
       } catch {
@@ -118,7 +122,7 @@ export default function App() {
     if (d.debt && typeof d.debt === "object") commitDebt(d.debt);
     if (Array.isArray(d.memos)) commitMemos(d.memos);
     if (Array.isArray(d.subs)) commitSubs(d.subs);
-    if (d.plans && d.plans.lines) commitPlans(d.plans);
+    if (d.plans && d.plans.lines) commitPlans(migratePlan(d.plans, Array.isArray(d.subs) ? d.subs : subs));
     if (Array.isArray(d.closedMonths)) { setClosedMonths(d.closedMonths); save("closedMonths", d.closedMonths); }
     if (d.theme && typeof d.theme === "object") commitTheme({ ...DEFAULT_THEME, ...d.theme });
   };
@@ -191,9 +195,9 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { paddingBottom: 96 } : {}) }}>
-        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} ym={ym} />}
+        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} ym={ym} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
-        {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} config={config} cards={cards} entries={entries} memos={memos} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
+        {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onOpenMemos={() => setTab("memos")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}

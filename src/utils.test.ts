@@ -5,6 +5,7 @@ import {
   planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
   hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
+  migratePlan, fixedMonthly, plannedSpending,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
@@ -194,39 +195,60 @@ describe("計画", () => {
     expect(hasBalRecord([])).toBe(false);
   });
 
-  it("planVsActualForMonth: 実績合計/計画合計/差を算出", () => {
-    const cards: Card[] = [{ id: "c1", name: "VIEW" }];
-    const config: Config = { accounts: [], salaryItems: ["給与"] };
-    const plans: Plan = { lines: { "salary|給与": { std: 300000, over: {} }, "card|VIEW": { std: 40000, over: {} } } };
+  it("planVsActualForMonth: 収入/支出/収支の計画・実績・差を算出(簡素化モデル)", () => {
+    // 固定費=定期費(subs)の月換算合計。変動費30万+固定費 が支出見込み。
+    const subs: Sub[] = [{ id: "s1", name: "Netflix", amount: 1000, cycle: "monthly" }];
+    const plans: Plan = { lines: { income: { std: 300000, over: {} }, variable: { std: 100000, over: {} }, invest: { std: 0, over: {} } } };
     const monthEntries: Entry[] = [
       { ym: "2026-06", cat: "salary", item: "給与", amount: 310000 },
-      { ym: "2026-06", cat: "card", item: "VIEW", amount: 35000 },
+      { ym: "2026-06", cat: "card", item: "VIEW", amount: 120000 },
     ];
-    const r = planVsActualForMonth(plans, config, cards, [], monthEntries, "2026-06");
-    expect(r.planNet).toBe(300000 - 40000);
-    expect(r.actualNet).toBe(310000 - 35000);
+    const r = planVsActualForMonth(plans, subs, monthEntries, "2026-06");
+    expect(r.planIncome).toBe(300000);
+    expect(r.planSpending).toBe(100000 + 1000);        // 変動費 + 固定費
+    expect(r.planNet).toBe(300000 - 101000);
+    expect(r.actualIncome).toBe(310000);
+    expect(r.actualSpending).toBe(120000);
+    expect(r.actualNet).toBe(310000 - 120000);
     expect(r.diff).toBe(r.actualNet - r.planNet);
   });
 
-  it("planVsActualForMonth: 交際費(その他)は計画/実績があっても収支計には含まない", () => {
-    const cards: Card[] = [{ id: "c1", name: "VIEW" }];
-    const config: Config = { accounts: [], salaryItems: ["給与"] };
-    const plans: Plan = {
+  it("fixedMonthly/plannedSpending: 年払いは1/12で月換算し固定費に足す", () => {
+    const subs: Sub[] = [
+      { id: "s1", name: "月額", amount: 1000, cycle: "monthly" },
+      { id: "s2", name: "年払い", amount: 12000, cycle: "yearly" },
+    ];
+    expect(fixedMonthly(subs)).toBe(1000 + 1000);
+    const plans: Plan = { lines: { variable: { std: 50000, over: { "2026-06": 60000 } } } };
+    expect(plannedSpending(plans, subs, "2026-05")).toBe(2000 + 50000);
+    expect(plannedSpending(plans, subs, "2026-06")).toBe(2000 + 60000);
+  });
+
+  it("migratePlan: 旧形式(カード別・フロー別)を 収入/変動費/投資 の総額へ移行(総額を保つ)", () => {
+    const subs: Sub[] = [{ id: "s1", name: "sub", amount: 2000, cycle: "monthly" }];
+    const legacy: any = {
+      fyStart: 2026,
       lines: {
-        "salary|給与": { std: 300000, over: {} },
-        "card|VIEW": { std: 40000, over: {} },
-        "memo|交際費": { std: 25000, over: {} },
+        "salary|給与": { std: 300000, over: { "2026-06": 286000 } },
+        "salary|控除": { std: -60000, over: {} },
+        "flow|入金": { std: 0, over: { "2026-11": 100000 } },
+        "flow|投資振替": { std: -46000, over: {} },
+        "card|VIEW": { std: 60000, over: {} },
+        "card|SAISON": { std: 40000, over: {} },
+        "memo|交際費": { std: 25000, over: {} },   // 引き継がれない
       },
     };
-    const monthEntries: Entry[] = [
-      { ym: "2026-06", cat: "salary", item: "給与", amount: 310000 },
-      { ym: "2026-06", cat: "card", item: "VIEW", amount: 35000 },
-    ];
-    const memosWithEntertainment: Memo[] = [{ id: "m1", title: "飲み会", category: "交際費", ym: "2026-06", amount: 12000 }];
-    const r = planVsActualForMonth(plans, config, cards, memosWithEntertainment, monthEntries, "2026-06");
-    // 交際費の計画(25000)・実績(12000)が入っていても、収支計は給与とカードのみで決まる
-    expect(r.planNet).toBe(300000 - 40000);
-    expect(r.actualNet).toBe(310000 - 35000);
+    const p = migratePlan(legacy, subs);
+    expect(Object.keys(p.lines).sort()).toEqual(["income", "invest", "variable"]);
+    expect(p.lines.income.std).toBe(300000 - 60000);
+    expect(p.lines.income.over["2026-06"]).toBe(286000 - 60000);
+    expect(p.lines.income.over["2026-11"]).toBe(300000 - 60000 + 100000);
+    // 変動費 = (カード計 100000) − 固定費(2000)。総額=固定費+変動費=カード計 を保つ
+    expect(p.lines.variable.std).toBe(100000 - 2000);
+    expect(plannedSpending(p, subs, "2026-05")).toBe(100000);
+    expect(p.lines.invest.std).toBe(-46000);
+    // 既に新形式なら素通し
+    expect(migratePlan(p, subs)).toBe(p);
   });
 });
 

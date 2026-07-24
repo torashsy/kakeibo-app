@@ -3,7 +3,7 @@ import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, planVsActualForMonth, cardBreakdown } from '../utils';
 import { styles } from '../styles.js';
 
-export function Summary({ summary, prevBalTotal, plans, config, cards, debt, memos, monthEntries, ym }) {
+export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, ym }) {
   const [cardOpen, setCardOpen] = useState(false);
   const hasBal = Object.keys(summary.balances).length > 0;
   const balChange = (hasBal && prevBalTotal != null) ? summary.balTotal - prevBalTotal : null;
@@ -33,7 +33,7 @@ export function Summary({ summary, prevBalTotal, plans, config, cards, debt, mem
         <SumCell label="出金(引出・出金)" value={-summary.cashOut} color={RED} />
       </div>
       {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} />}
-      <PlanCompareCard plans={plans} config={config} cards={cards} memos={memos} monthEntries={monthEntries} ym={ym} />
+      <PlanCompareCard plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} />
       <div style={styles.sectionTitle}>口座残高</div>
       <div style={styles.balCard}>
         {!hasBal && <div style={{ color: MUTED, fontSize: 13, padding: "6px 2px" }}>この月の残高記録はまだありません</div>}
@@ -94,8 +94,8 @@ function CardBreakdownPanel({ rows }) {
 
 // 今月の実績と計画を比較する小カード。計画レイヤー(計画/実績/見通し)とは別に、
 // サマリから一目で「計画どおり進んでいるか」を確認できるようにする。
-function PlanCompareCard({ plans, config, cards, memos, monthEntries, ym }) {
-  const r = useMemo(() => planVsActualForMonth(plans, config, cards, memos, monthEntries, ym), [plans, config, cards, memos, monthEntries, ym]);
+function PlanCompareCard({ plans, subs, monthEntries, ym }) {
+  const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym), [plans, subs, monthEntries, ym]);
   const diffColor = r.diff === 0 ? MUTED : r.diff > 0 ? GREEN : RED;
   return (
     <div style={{ marginBottom: 14 }}>

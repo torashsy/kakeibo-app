@@ -63,11 +63,10 @@ export interface Summary {
 }
 
 export interface PlanVsActual {
-  planSums: Record<string, number>;
-  actualSums: Record<string, number>;
-  planNet: number;
-  actualNet: number;
-  diff: number;
+  planIncome: number; actualIncome: number;
+  planSpending: number; actualSpending: number;   // 支出は正の額(カード請求＋現金出金)
+  planNet: number; actualNet: number;
+  diff: number;   // 収支の差(実績−計画)
 }
 
 export const yen = (n: number) => (n < 0 ? "-" : "") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
@@ -301,6 +300,60 @@ export const planValue = (plan: Plan | null | undefined, key: string, ym: string
   return Number(v) || 0;
 };
 
+// ----- 簡素化した計画モデル -----
+// 計画は「収入見込み」「変動費見込み」「投資振替見込み」の3本だけを持つ(いずれも標準月std＋例外月over)。
+// 支出見込みの総額 = 固定費(定期費=subsから自動集計) + 変動費。固定費は計画に保存せず毎回算出する。
+export const PLAN_INCOME = "income";
+export const PLAN_VARIABLE = "variable";
+export const PLAN_INVEST = "invest";
+
+// サブスク1件の月換算/年換算(月額はそのまま、年払いは/12)
+export const subMonthly = (s: Sub): number => (s && s.cycle === "yearly" ? (Number(s.amount) || 0) / 12 : (Number(s && s.amount) || 0));
+export const subYearly = (s: Sub): number => (s && s.cycle === "yearly" ? (Number(s.amount) || 0) : (Number(s && s.amount) || 0) * 12);
+// 定期費(subs)の月あたり固定費合計。計画の「固定費」はこれを土台にする。
+export const fixedMonthly = (subs: Sub[] | null | undefined): number => (subs || []).reduce((a, s) => a + subMonthly(s), 0);
+
+export const plannedIncome = (plan: Plan, ym: string): number => planValue(plan, PLAN_INCOME, ym);
+export const plannedVariable = (plan: Plan, ym: string): number => planValue(plan, PLAN_VARIABLE, ym);
+export const plannedInvest = (plan: Plan, ym: string): number => planValue(plan, PLAN_INVEST, ym);
+// 支出見込み総額 = 固定費(subs) + 変動費見込み
+export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string): number => fixedMonthly(subs) + plannedVariable(plan, ym);
+// 計画の収支 = 収入 − 支出 + 投資振替(符号のまま)
+export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym) + plannedInvest(plan, ym);
+
+// 旧形式(カード別・口座フロー別に行を持つ計画)かどうか。旧キーは "salary|給与" のように "|" を含む。
+const isLegacyPlan = (plan: any): boolean => !!(plan && plan.lines && Object.keys(plan.lines).some((k) => k.includes("|")));
+
+// 旧計画を新モデル(収入/変動費/投資)へ移行する。総額を保つように:
+//  収入   = 給与系 + 収入側フロー(預入/入金)の合計
+//  変動費 = (カード + 支出側フロー[引出/出金])の合計 − 固定費(subs月換算)。総額=固定費+変動費 が旧支出と一致する
+//  投資   = 投資振替(符号のまま)
+// メモ(交際費など)の計画行は、カテゴリ比較を廃止したため引き継がない。
+export function migratePlan(plan: any, subs: Sub[] | null | undefined): Plan {
+  if (!isLegacyPlan(plan)) return (plan && plan.lines) ? plan : { fyStart: plan && plan.fyStart, lines: {} };
+  const lines = plan.lines as Record<string, PlanLineData>;
+  const keysStarting = (pfx: string) => Object.keys(lines).filter((k) => k.startsWith(pfx));
+  const salaryKeys = keysStarting("salary|");
+  const cardKeys = keysStarting("card|");
+  const incomeFlowKeys = ["flow|預入", "flow|入金"].filter((k) => lines[k]);
+  const outFlowKeys = ["flow|引出", "flow|出金"].filter((k) => lines[k]);
+  const investKeys = ["flow|投資振替"].filter((k) => lines[k]);
+  const fixed = fixedMonthly(subs);
+  const sumStd = (keys: string[]) => keys.reduce((a, k) => a + (Number(lines[k].std) || 0), 0);
+  const sumAt = (keys: string[], m: string) => keys.reduce((a, k) => a + planValue(plan, k, m), 0);
+  const months = new Set<string>();
+  for (const k of Object.keys(lines)) for (const m of Object.keys(lines[k].over || {})) months.add(m);
+  const income: PlanLineData = { std: sumStd(salaryKeys) + sumStd(incomeFlowKeys), over: {} };
+  const variable: PlanLineData = { std: Math.max(0, sumStd(cardKeys) + sumStd(outFlowKeys) - fixed), over: {} };
+  const invest: PlanLineData = { std: sumStd(investKeys), over: {} };
+  for (const m of months) {
+    const iv = sumAt(salaryKeys.concat(incomeFlowKeys), m); if (iv !== income.std) income.over[m] = iv;
+    const vv = Math.max(0, sumAt(cardKeys.concat(outFlowKeys), m) - fixed); if (vv !== variable.std) variable.over[m] = vv;
+    const nv = sumAt(investKeys, m); if (nv !== invest.std) invest.over[m] = nv;
+  }
+  return { fyStart: plan.fyStart, lines: { [PLAN_INCOME]: income, [PLAN_VARIABLE]: variable, [PLAN_INVEST]: invest } };
+}
+
 // 実績額(計画と同じ符号規約で1行・1か月ぶん)。monthEntries はその月の記録。
 export function actualForLine(key: string, monthEntries: Entry[], memos: Memo[], ym: string): number {
   const [type, name] = key.split("|");
@@ -340,20 +393,17 @@ export const toggleMonthClosed = (closedMonths: string[] | null | undefined, ym:
   return [...set].sort();
 };
 
-// 1か月分の 実績合計/計画合計/差 をグループ別・収支合計で算出(サマリの計画対比カード用)
-export function planVsActualForMonth(plans: Plan, config: Config, cards: Card[], memos: Memo[], monthEntries: Entry[], ym: string): PlanVsActual {
-  const lines = planLines(config, cards);
-  const byGroup = (which: "plan" | "actual") => {
-    const sums: Record<string, number> = {};
-    for (const [gid] of PLAN_GROUPS) sums[gid] = 0;
-    for (const l of lines) sums[l.group] += which === "plan" ? planValue(plans, l.key, ym) : actualForLine(l.key, monthEntries, memos, ym);
-    return sums;
-  };
-  const planSums = byGroup("plan"), actualSums = byGroup("actual");
-  // 収支計に含めるグループ(countsTowardNet)だけを合算する。交際費などの「その他」は収支に影響させない。
-  const netOf = (sums: Record<string, number>) => PLAN_GROUPS.reduce((a, [gid, , , countsTowardNet]) => a + (countsTowardNet ? planGroupSign(gid) * sums[gid] : 0), 0);
-  const planNet = netOf(planSums), actualNet = netOf(actualSums);
-  return { planSums, actualSums, planNet, actualNet, diff: actualNet - planNet };
+// 1か月分の 計画/実績(収入・支出・収支)と差を算出(今月タブの使いすぎ判定・計画対比に使う)。
+// 実績はその月の記録から computeSummary で集計、計画は簡素化モデル(収入/固定費+変動費/投資)から。
+export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string): PlanVsActual {
+  const s = computeSummary(monthEntries);
+  const planIncome = plannedIncome(plan, ym);
+  const planSpending = plannedSpending(plan, subs, ym);
+  const planNet = plannedNet(plan, subs, ym);
+  const actualIncome = s.income;
+  const actualSpending = s.expense;   // カード請求＋現金出金(正の額)
+  const actualNet = s.net;
+  return { planIncome, actualIncome, planSpending, actualSpending, planNet, actualNet, diff: actualNet - planNet };
 }
 
 export interface CardBreakdownRow {
@@ -539,26 +589,14 @@ export function rollForwardSubs(subs: Sub[], todayStr?: string): Sub[] {
 }
 
 // 初期計画(スプレッドシートを参考にした標準月＋一部上書き)。年度は当該データに合わせ2026。
+// 簡素化した計画の初期データ。収入見込み・変動費見込み・投資振替見込みの3本のみ。
+// 固定費は定期費(subs)から自動集計するので計画には持たない。賞与や大きな入金は over で月別に上書き。
 export const SEED_PLAN: Plan = {
   fyStart: 2026,
   lines: {
-    "salary|給与": { std: 310000, over: { "2026-06": 286000 } },
-    "salary|手当": { std: 0, over: { "2026-06": 160000, "2026-07": 72000, "2026-10": 90000, "2027-01": 620000 } },
-    "salary|賞与": { std: 0, over: {} },
-    "salary|控除": { std: -62000, over: { "2026-06": -89000, "2026-07": -76000 } },
-    "flow|入金": { std: 0, over: { "2026-11": 1100000 } },
-    "flow|投資振替": { std: -46000, over: {} },
-    "card|SMCC Gold": { std: 40000, over: {} },
-    "card|smcc": { std: 300, over: {} },
-    "card|JAL navi": { std: 20000, over: {} },
-    "card|VIEW": { std: 60000, over: { "2026-06": 50000 } },
-    "card|JCB Gold": { std: 10000, over: {} },
-    "card|SAISON": { std: 15000, over: {} },
-    "card|EPOS": { std: 1000, over: {} },
-    "card|TOBU": { std: 1000, over: {} },
-    "card|PayPay": { std: 4000, over: {} },
-    "card|MDC": { std: 1000, over: {} },
-    "memo|交際費": { std: 25000, over: {} },
+    income: { std: 248000, over: { "2026-06": 357000, "2026-07": 306000, "2026-11": 1348000, "2027-01": 868000 } },
+    variable: { std: 149000, over: { "2026-06": 139000 } },
+    invest: { std: -46000, over: {} },
   },
 };
 
