@@ -13,16 +13,21 @@ if (typeof document !== "undefined" && !document.querySelector('meta[name="forma
 }
 
 // ソフトウェアキーボード表示中の実際の表示領域にボトムシートを収める。
+// iOSでは position:fixed はレイアウトビューポート基準のため、キーボードで縮んだ表示領域(visual viewport)が
+// 上下にずれる(offsetTop)。高さだけでなくオフセットもCSS変数に反映し、シート土台を実際の表示領域に重ねる。
 if (typeof window !== "undefined" && window.visualViewport) {
-  const syncViewportHeight = () => {
-    document.documentElement.style.setProperty("--visual-viewport-height", `${window.visualViewport.height}px`);
+  const syncViewport = () => {
+    const vv = window.visualViewport;
+    document.documentElement.style.setProperty("--visual-viewport-height", `${vv.height}px`);
+    document.documentElement.style.setProperty("--vv-offset-top", `${vv.offsetTop || 0}px`);
   };
-  syncViewportHeight();
-  window.visualViewport.addEventListener("resize", syncViewportHeight);
-  window.visualViewport.addEventListener("scroll", syncViewportHeight);
+  syncViewport();
+  window.visualViewport.addEventListener("resize", syncViewport);
+  window.visualViewport.addEventListener("scroll", syncViewport);
+  // 入力欄がキーボードに隠れないよう最小限だけスクロール(center だとページごと動いてシートがずれるため nearest)。
   document.addEventListener("focusin", (event) => {
     if (event.target && event.target.matches?.("input, textarea, select")) {
-      window.setTimeout(() => event.target.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
+      window.setTimeout(() => { syncViewport(); event.target.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 150);
     }
   });
 }

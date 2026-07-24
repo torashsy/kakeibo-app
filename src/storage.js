@@ -27,7 +27,8 @@ let activity = { status: "idle", lastSyncAt: null, error: "" };
 
 export const getSyncConfig = () => (BUILTIN_CONFIG.url && BUILTIN_CONFIG.anonKey ? BUILTIN_CONFIG : readJSON(CFG_KEY, null));
 export const hasBuiltInSyncConfig = () => !!(BUILTIN_CONFIG.url && BUILTIN_CONFIG.anonKey);
-export const hasPersonalSync = () => hasBuiltInSyncConfig() && !!SYNC_OWNER_EMAIL;
+// 組み込みのSupabase設定があれば、ユーザー名＋PINでの個人同期UIを出す(メール入力は不要)
+export const hasPersonalSync = () => hasBuiltInSyncConfig();
 export const setSyncConfig = (cfg) => { writeJSON(CFG_KEY, cfg); clientPromise = null; initPromise = null; notify(); };
 export const clearSyncConfig = () => { try { localStorage.removeItem(CFG_KEY); } catch {} clientPromise = null; initPromise = null; notify(); };
 
@@ -76,6 +77,19 @@ export async function signInWithMagicLink() {
     options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
   });
   if (error) throw error;
+}
+// 個人用: ユーザー名＋PINで同期(メール不要)。ユーザー名から内部用の擬似メールを合成し、
+// PINをパスワードとして使う。実在メールは不要だが、Supabase側で「Confirm email」はオフにしておくこと。
+// 各端末で同じユーザー名＋PINを入れれば同じアカウント＝同期される。
+const emailForUser = (username) => `${String(username || "").trim().toLowerCase()}@kakeibo.local`;
+export const displayName = (email) => String(email || "").replace(/@kakeibo\.local$/, "");
+export async function signInUser(username, pin) {
+  if (!String(username || "").trim()) throw new Error("ユーザー名を入力してください");
+  return signIn(emailForUser(username), pin);
+}
+export async function signUpUser(username, pin) {
+  if (!String(username || "").trim()) throw new Error("ユーザー名を入力してください");
+  return signUp(emailForUser(username), pin);
 }
 export async function signOut() {
   const c = await getClient(); if (c) { try { await c.auth.signOut(); } catch {} }

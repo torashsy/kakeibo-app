@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid } from '../utils';
+import { uid, periodRange } from '../utils';
 import { styles } from '../styles.js';
-import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInWithMagicLink, signOut, syncNow } from '../storage.js';
+import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
 // クラウド同期(Supabase)の設定・ログイン。URL/anon keyは端末のlocalStorageにのみ保存する。
 function SyncSection() {
@@ -10,6 +10,7 @@ function SyncSection() {
   const [url, setUrl] = useState("");
   const [anonKey, setAnonKey] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -36,11 +37,17 @@ function SyncSection() {
     } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); }
   };
   const doSync = async () => { setBusy(true); setMsg(""); try { await syncNow(); setMsg("同期しました"); setTimeout(() => location.reload(), 600); } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); } };
-  const doMagicLink = async () => {
+  // 個人用: ユーザー名＋PINで同期(メール不要)。fnにsignInUser/signUpUserを渡す。
+  const doUser = async (fn, doneMsg) => {
+    if (!username.trim()) { setMsg("ユーザー名を入力してください"); return; }
+    if (!password || password.length < 6) { setMsg("PINは6桁以上にしてください"); return; }
     setBusy(true); setMsg("");
-    try { await signInWithMagicLink(); setMsg("ログイン用メールを送りました。メールの「Log In」を開いてください。"); }
-    catch (e) { setMsg("エラー: " + (e.message || e)); }
-    finally { setBusy(false); }
+    try {
+      await fn(username, password);
+      setMsg(doneMsg);
+      await syncNow();
+      setTimeout(() => location.reload(), 600);
+    } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); }
   };
   const doSignOut = async () => { await signOut(); refresh(); };
   const unconfigure = () => { if (window.confirm("同期設定を削除します（データは端末に残ります）。よろしいですか？")) { clearSyncConfig(); refresh(); } };
@@ -65,8 +72,15 @@ function SyncSection() {
           <div style={{ padding: "6px 0" }}>
             {state.personal ? (
               <>
-                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.7, marginBottom: 10 }}>この端末を家計簿のクラウド同期につなぎます。パスワードは不要です。</div>
-                <button style={{ ...styles.saveBtn, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={doMagicLink}>{busy ? "送信中…" : "同期を開始"}</button>
+                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.7, marginBottom: 10 }}>各端末で<b>同じユーザー名とPIN</b>を入れると同期します（メール不要・端末ごとに最初の1回だけ）。初めてなら「初回登録」、2台目以降は「ログイン」。</div>
+                <label style={styles.fieldLabel}>ユーザー名</label>
+                <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="例）tora" style={styles.textInput} autoCapitalize="none" autoCorrect="off" />
+                <label style={styles.fieldLabel}>PIN（6桁以上）</label>
+                <input type="password" inputMode="numeric" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="自分で決める" style={styles.textInput} autoCapitalize="none" />
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button style={{ ...styles.saveBtnHalf, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doUser(signInUser, "ログインしました。同期中…")}>ログイン</button>
+                  <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}`, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doUser(signUpUser, "登録しました。同期中…")}>初回登録</button>
+                </div>
               </>
             ) : (
               <>
@@ -86,7 +100,7 @@ function SyncSection() {
         )}
         {state.mode === "on" && (
           <div style={{ padding: "6px 0" }}>
-            <div style={{ fontSize: 13, padding: "4px 2px 8px" }}>ログイン中：<span style={{ color: ACCENT, fontWeight: 600 }}>{state.email}</span></div>
+            <div style={{ fontSize: 13, padding: "4px 2px 8px" }}>ログイン中：<span style={{ color: ACCENT, fontWeight: 600 }}>{displayName(state.email)}</span></div>
             <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: state.status === "error" ? RED : MUTED, padding: "4px 2px 8px" }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: state.status === "error" ? RED : state.status === "syncing" ? "#d49b2b" : "var(--income)" }} />
               <span>{syncLabel}</span>
@@ -210,6 +224,24 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
         </span>
         <span style={{ color: MUTED, fontSize: 20 }}>›</span>
       </button>
+
+      {/* 月の締め日(サイクル) */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={styles.detailHead}><span>月の締め日</span></div>
+        <div style={styles.detailCard}>
+          <div style={{ fontSize: 12, color: MUTED, padding: "8px 2px 4px", lineHeight: 1.6 }}>
+            家計の1ヶ月をこの日から始めます（1＝暦通り）。例）11なら「11日〜翌月10日」を1周期とし、6月度＝6/11〜7/10。給与とそれで払うカードを同じ月にまとめられます。スクショ取込は取引日をこの周期へ自動で振り分けます。
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 2px 8px" }}>
+            <span style={{ fontSize: 14 }}>毎月</span>
+            <input type="number" inputMode="numeric" min={1} max={28} value={c.cycleStartDay ?? 1}
+              onChange={(e) => { const v = Math.max(1, Math.min(28, Number(e.target.value) || 1)); const next = { ...c, cycleStartDay: v }; setC(next); onSave(next); }}
+              style={{ ...styles.textInput, width: 72, textAlign: "center", margin: 0 }} />
+            <span style={{ fontSize: 14 }}>日 始まり</span>
+            {Number(c.cycleStartDay) > 1 && <span style={{ fontSize: 12, color: ACCENT, marginLeft: "auto" }}>例：6月度＝{periodRange("2026-06", c.cycleStartDay)}</span>}
+          </div>
+        </div>
+      </div>
 
       {groups.map((g) => (
         <div key={g.key} style={{ marginBottom: 18 }}>
