@@ -2,10 +2,11 @@ import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, num, buildStructure, computeSummary, flowTypesFor } from '../utils';
 import { styles } from '../styles.js';
+import { MemoList } from './memos.jsx';
 
 // 記録タブ。その月に入力した実績(給与・カード・口座)を、履歴/項目別/表/年間で見返す。
-// 計画は独立した「計画」タブへ分離した。
-export function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
+// 「メモ」は収支に計上しない用途記録(現金の使い道など)。計画は独立した「計画」タブへ分離した。
+export function Detail({ monthEntries, entries, ym, config, cards, memos, onSaveMemos, onEdit }) {
   const [view, setView] = useState("card");
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
@@ -15,11 +16,13 @@ export function Detail({ monthEntries, entries, ym, config, cards, onEdit }) {
         <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>項目別</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "table" ? styles.viewToggleActive : {}) }} onClick={() => setView("table")}>表</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
       </div>
       {view === "list" && <DetailList monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "table" && <DetailTable S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "year" && <YearTable entries={entries} ym={ym} config={config} cards={cards} />}
+      {view === "memo" && <MemoList memos={memos} onSave={onSaveMemos} cards={cards} config={config} ym={ym} />}
     </div>
   );
 }

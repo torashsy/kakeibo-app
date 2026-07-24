@@ -290,7 +290,15 @@ export const subYearly = (s: Sub): number => (s && s.cycle === "yearly" ? (Numbe
 export const fixedMonthly = (subs: Sub[] | null | undefined): number => (subs || []).reduce((a, s) => a + subMonthly(s), 0);
 
 export const plannedIncome = (plan: Plan, ym: string): number => planValue(plan, PLAN_INCOME, ym);
-export const plannedVariable = (plan: Plan, ym: string): number => planValue(plan, PLAN_VARIABLE, ym);
+// 変動費の予算枠(旅費/交際費など)。計画に "var|<名前>" 行があればそれらが枠、無ければ単一の変動費。
+export const variableBuckets = (plan: Plan | null | undefined): string[] =>
+  plan && plan.lines ? Object.keys(plan.lines).filter((k) => k.startsWith("var|")).map((k) => k.slice(4)) : [];
+// 変動費見込み。予算枠があれば各枠の合計、無ければ単一の variable 行。
+export const plannedVariable = (plan: Plan, ym: string): number => {
+  const buckets = variableBuckets(plan);
+  if (buckets.length) return buckets.reduce((a, name) => a + planValue(plan, "var|" + name, ym), 0);
+  return planValue(plan, PLAN_VARIABLE, ym);
+};
 export const plannedInvest = (plan: Plan, ym: string): number => planValue(plan, PLAN_INVEST, ym);
 // 支出見込み総額 = 固定費(subs) + 変動費見込み
 export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string): number => fixedMonthly(subs) + plannedVariable(plan, ym);

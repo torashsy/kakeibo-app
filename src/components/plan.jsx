@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
-  num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary,
-  plannedIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedMonthly,
+  num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue,
+  plannedIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedMonthly, variableBuckets,
   hasBalRecord, balTotalOf, monthHasInput, isMonthClosed,
   PLAN_INCOME, PLAN_VARIABLE, PLAN_INVEST,
 } from '../utils';
@@ -32,12 +32,13 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
     return k === "income" ? s.income : k === "spending" ? s.expense : k === "invest" ? s.invest : k === "net" ? s.net : 0;
   };
   const planOf = (k, mo) => (
-    k === "income" ? plannedIncome(plans, mo)
-      : k === "spending" ? plannedSpending(plans, subs, mo)
-        : k === "variable" ? plannedVariable(plans, mo)
-          : k === "fixed" ? fixed
-            : k === "invest" ? plannedInvest(plans, mo)
-              : k === "net" ? plannedNet(plans, subs, mo) : 0
+    k.startsWith("var|") ? planValue(plans, k, mo)
+      : k === "income" ? plannedIncome(plans, mo)
+        : k === "spending" ? plannedSpending(plans, subs, mo)
+          : k === "variable" ? plannedVariable(plans, mo)
+            : k === "fixed" ? fixed
+              : k === "invest" ? plannedInvest(plans, mo)
+                : k === "net" ? plannedNet(plans, subs, mo) : 0
   );
   const isActualMonth = (mo) => isMonthClosed(closedMonths, mo) || (entriesByMonth[mo] || []).length > 0;
   const forecastOf = (k, mo) => (isActualMonth(mo) ? actualOf(k, mo) : planOf(k, mo));
@@ -60,11 +61,15 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
   const cellText = (v) => (v === 0 ? "" : (mode === "diff" && v > 0 ? "+" + num(v) : num(v)));
   const mlabel = (mo) => parseInt(mo.split("-")[1], 10) + "月";
 
+  const buckets = variableBuckets(plans);
+  const variableRows = buckets.length
+    ? [...buckets.map((name) => ({ k: "var|" + name, label: "・" + name, editable: "var|" + name })), { k: "variable", label: "変動費計", sub: true }]
+    : [{ k: "variable", label: "変動費", editable: PLAN_VARIABLE }];
   const rows = mode === "plan"
     ? [
       { k: "income", label: "収入", editable: PLAN_INCOME },
       { k: "fixed", label: "固定費（定期費より）", muted: true },
-      { k: "variable", label: "変動費", editable: PLAN_VARIABLE },
+      ...variableRows,
       { k: "spending", label: "支出計", sub: true },
       { k: "invest", label: "投資振替", editable: PLAN_INVEST },
       { k: "net", label: "収支", net: true },
@@ -97,6 +102,25 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
     const line = { ...(next.lines[edit.key] || { std: 0, over: {} }) };
     line.std = edit.value === "" ? 0 : Number(edit.value) || 0; line.over = { ...(line.over || {}) }; delete line.over[edit.ym];
     next.lines[edit.key] = line; onSave(next); setEdit(null);
+  };
+
+  // 変動費の予算枠(旅費・交際費など)を追加/削除する。枠を作ると変動費を内訳で管理できる。
+  const addBucket = () => {
+    const name = (window.prompt("変動費の枠の名前（例：旅費／交際費／交通費）") || "").trim();
+    if (!name || name.includes("|")) return;
+    const key = "var|" + name;
+    if (plans.lines && plans.lines[key]) return;
+    const next = { ...plans, lines: { ...(plans.lines || {}) } };
+    // 最初の枠は既存の単一「変動費」の標準額を引き継いで、支出総額が急に変わらないようにする
+    const seedStd = buckets.length === 0 ? (Number(plans.lines && plans.lines.variable && plans.lines.variable.std) || 0) : 0;
+    next.lines[key] = { std: seedStd, over: {} };
+    onSave(next);
+  };
+  const deleteBucket = (name) => {
+    if (!window.confirm(`変動費の枠「${name}」を削除しますか？`)) return;
+    const next = { ...plans, lines: { ...(plans.lines || {}) } };
+    delete next.lines["var|" + name];
+    onSave(next);
   };
 
   const hint = mode === "forecast" ? "入力が始まった月は実績、未入力の月は計画で表示。灰色=計画（見込み）。残高は実績を引き継いで先へ試算。"
@@ -161,6 +185,18 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
           </tbody>
         </table>
       </div>
+
+      {mode === "plan" && (
+        <div style={{ margin: "12px 4px 0" }}>
+          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 6 }}>変動費の枠（旅費・交際費など。任意。枠を作ると変動費を内訳で見積もれます）</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {buckets.map((name) => (
+              <button key={name} style={styles.optionChip} onClick={() => deleteBucket(name)}>{name} ×</button>
+            ))}
+            <button style={{ ...styles.optionChip, ...styles.optionChipActive }} onClick={addBucket}>＋ 枠を追加</button>
+          </div>
+        </div>
+      )}
 
       {edit && (
         <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>

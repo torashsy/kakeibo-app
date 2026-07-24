@@ -5,7 +5,7 @@ import {
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
-  migratePlan, fixedMonthly, plannedSpending, annualOutlook,
+  migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
@@ -218,6 +218,18 @@ describe("計画", () => {
     expect(p.lines.invest.std).toBe(-46000);
     // 既に新形式なら素通し
     expect(migratePlan(p, subs)).toBe(p);
+  });
+
+  it("plannedVariable: 予算枠(var|)があれば合計、無ければ単一variable", () => {
+    const single: Plan = { lines: { variable: { std: 100000, over: {} } } };
+    expect(variableBuckets(single)).toEqual([]);
+    expect(plannedVariable(single, "2026-06")).toBe(100000);
+    const bucketed: Plan = { lines: { "var|旅費": { std: 30000, over: { "2026-06": 50000 } }, "var|交際費": { std: 20000, over: {} } } };
+    expect(variableBuckets(bucketed).sort()).toEqual(["交際費", "旅費"]);
+    expect(plannedVariable(bucketed, "2026-05")).toBe(30000 + 20000);
+    expect(plannedVariable(bucketed, "2026-06")).toBe(50000 + 20000);
+    // 支出見込み総額に枠合計が反映される
+    expect(plannedSpending(bucketed, [], "2026-06")).toBe(70000);
   });
 
   it("annualOutlook: 実績月は実績・未入力月は計画で年度の収支/残高を試算", () => {
