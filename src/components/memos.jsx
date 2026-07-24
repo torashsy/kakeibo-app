@@ -19,7 +19,7 @@ export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards, config, y
   );
 }
 
-function MemoList({ memos, onSave, cards, config, ym }) {
+export function MemoList({ memos, onSave, cards, config, ym }) {
   const [edit, setEdit] = useState(null);
   // 計画タブと連携するカテゴリ(config.memoCategories)を優先し、既に使われている自由入力のカテゴリも合わせて候補にする
   const cats = useMemo(() => {

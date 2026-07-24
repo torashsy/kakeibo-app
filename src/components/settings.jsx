@@ -159,7 +159,7 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
   );
 }
 
-export function Settings({ config, onSave, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onRemoveItem }) {
+export function Settings({ config, onSave, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onOpenMemos, onRemoveItem }) {
   const [c, setC] = useState(config);
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
@@ -191,7 +191,25 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
   const exportCSV = () => { const lines = ["ym,cat,item,account,amount"]; for (const e of entries) lines.push([e.ym, e.cat, `"${e.item || ""}"`, `"${e.account || ""}"`, e.amount].join(",")); const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url); };
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <div style={{ color: MUTED, fontSize: 13, margin: "2px 4px 14px", lineHeight: 1.6 }}>口座や給与項目を追加できます。カードは「カード」タブで管理します。</div>
+      <div style={{ color: MUTED, fontSize: 13, margin: "2px 4px 14px", lineHeight: 1.6 }}>口座・給与項目・カードの登録や、取込ルール・同期・バックアップを管理します。</div>
+
+      {/* カード管理への導線 */}
+      <button style={styles.navRow} onClick={onOpenCards}>
+        <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 600 }}>カード管理</span>
+          <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>所有カードの登録・編集（{(cards || []).length}枚）</span>
+        </span>
+        <span style={{ color: MUTED, fontSize: 20 }}>›</span>
+      </button>
+
+      {/* メモ画面への導線 */}
+      <button style={styles.navRow} onClick={onOpenMemos}>
+        <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 600 }}>メモ</span>
+          <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>収支に計上しない自由メモ（{(memos || []).length}件）</span>
+        </span>
+        <span style={{ color: MUTED, fontSize: 20 }}>›</span>
+      </button>
 
       {/* デザイン設定への導線 */}
       <button style={styles.navRow} onClick={onOpenDesign}>

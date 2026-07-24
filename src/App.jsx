@@ -4,8 +4,10 @@ import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, DEFAULT_CONFIG, ac
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
-import { Cards } from './components/cards.jsx';
-import { MemoTab } from './components/memos.jsx';
+import { CardList } from './components/cards.jsx';
+import { MemoList } from './components/memos.jsx';
+import { Recurring } from './components/recurring.jsx';
+import { PlanView } from './components/plan.jsx';
 import { Settings, ThemeEditor } from './components/settings.jsx';
 import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from './components/forms.jsx';
 import { ImportSheet } from './components/import.jsx';
@@ -23,7 +25,7 @@ export default function App() {
   const [closedMonths, setClosedMonths] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
-  const [tab, setTab] = useState("summary");
+  const [tab, setTab] = useState("today");
   const [ym, setYm] = useState("2026-06");
   const [sheet, setSheet] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -179,7 +181,7 @@ export default function App() {
     <div style={{ ...styles.app, ...themeVars(theme) }}>
       <header style={styles.header}>
         <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><CloudBadge /></div>
-        {tab !== "cards" && tab !== "settings" && tab !== "design" && tab !== "memos" && (
+        {(tab === "today" || tab === "records" || tab === "plan") && (
           <div style={styles.monthPicker}>
             <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i > 0) setYm(months[i - 1]); }}>‹</button>
             <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}</select>
@@ -188,23 +190,25 @@ export default function App() {
         )}
       </header>
 
-      <main style={{ ...styles.main, ...((tab === "summary" || tab === "detail") ? { paddingBottom: 96 } : {}) }}>
-        {tab === "summary" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} ym={ym} />}
-        {tab === "detail" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} plans={plans} onSavePlans={commitPlans} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
-        {tab === "cards" && <Cards cards={cards} debt={debt} ym={ym} entries={entries} onSaveCards={commitCards} onSaveDebt={commitDebt} onRemoveCard={removeCard} />}
-        {tab === "memos" && <MemoTab memos={memos} onSaveMemos={commitMemos} subs={subs} onSaveSubs={commitSubs} cards={cards} config={config} ym={ym} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onRemoveItem={removeConfigItem} />}
+      <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { paddingBottom: 96 } : {}) }}>
+        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} ym={ym} />}
+        {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
+        {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} config={config} cards={cards} entries={entries} memos={memos} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
+        {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onOpenMemos={() => setTab("memos")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
+        {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
+        {tab === "memos" && <SubScreen title="メモ" onBack={() => setTab("settings")}><MemoList memos={memos} onSave={commitMemos} cards={cards} config={config} ym={ym} /></SubScreen>}
       </main>
 
-      {(tab === "summary" || tab === "detail") && <button style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
+      {(tab === "today" || tab === "records") && <button style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
 
       <nav style={styles.tabs}>
-        <TabBtn active={tab === "summary"} onClick={() => setTab("summary")} label="サマリ" icon="summary" />
-        <TabBtn active={tab === "detail"} onClick={() => setTab("detail")} label="詳細" icon="detail" />
-        <TabBtn active={tab === "cards"} onClick={() => setTab("cards")} label="カード" icon="card" />
-        <TabBtn active={tab === "memos"} onClick={() => setTab("memos")} label="メモ" icon="memo" />
-        <TabBtn active={tab === "settings" || tab === "design"} onClick={() => setTab("settings")} label="設定" icon="settings" />
+        <TabBtn active={tab === "today"} onClick={() => setTab("today")} label="今月" icon="summary" />
+        <TabBtn active={tab === "records"} onClick={() => setTab("records")} label="記録" icon="detail" />
+        <TabBtn active={tab === "plan"} onClick={() => setTab("plan")} label="計画" icon="plan" />
+        <TabBtn active={tab === "recurring"} onClick={() => setTab("recurring")} label="定期費" icon="recurring" />
+        <TabBtn active={tab === "settings" || tab === "design" || tab === "cards" || tab === "memos"} onClick={() => setTab("settings")} label="設定" icon="settings" />
       </nav>
 
       {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); setSheet(cat); }} />}
@@ -227,6 +231,17 @@ function CloudBadge() {
   }, []);
   const label = state.mode !== "on" ? "ローカル保存" : state.status === "syncing" ? "☁ 同期中…" : state.status === "error" ? "⚠ 同期エラー" : "☁ 同期済み";
   return <span style={{ ...styles.cloud, color: state.status === "error" ? "var(--expense)" : undefined }}>{label}</span>;
+}
+
+// 設定から開くサブ画面(カード管理・メモ)の共通の器。戻る導線を上に付ける。
+function SubScreen({ title, onBack, children }) {
+  return (
+    <div style={{ padding: "4px 2px 8px" }}>
+      <button style={styles.backLink} onClick={onBack}>‹ 設定にもどる</button>
+      <div style={{ fontSize: 15, fontWeight: 700, margin: "2px 4px 12px" }}>{title}</div>
+      {children}
+    </div>
+  );
 }
 
 function TabBtn({ active, onClick, label, icon }) {
