@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
 import { uid } from '../utils';
 import { styles } from '../styles.js';
-import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInWithMagicLink, signOut, syncNow } from '../storage.js';
+import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInOwner, signUpOwner, signOut, syncNow } from '../storage.js';
 
 // クラウド同期(Supabase)の設定・ログイン。URL/anon keyは端末のlocalStorageにのみ保存する。
 function SyncSection() {
@@ -36,11 +36,16 @@ function SyncSection() {
     } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); }
   };
   const doSync = async () => { setBusy(true); setMsg(""); try { await syncNow(); setMsg("同期しました"); setTimeout(() => location.reload(), 600); } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); } };
-  const doMagicLink = async () => {
+  // 個人用: 所有者メール固定のパスワードで同期(メールのリンク/コード不要)。fnにsignInOwner/signUpOwnerを渡す。
+  const doOwner = async (fn, doneMsg) => {
+    if (!password) { setMsg("同期パスワードを入力してください"); return; }
     setBusy(true); setMsg("");
-    try { await signInWithMagicLink(); setMsg("ログイン用メールを送りました。メールの「Log In」を開いてください。"); }
-    catch (e) { setMsg("エラー: " + (e.message || e)); }
-    finally { setBusy(false); }
+    try {
+      await fn(password);
+      setMsg(doneMsg);
+      await syncNow();
+      setTimeout(() => location.reload(), 600);
+    } catch (e) { setMsg("エラー: " + (e.message || e)); } finally { setBusy(false); }
   };
   const doSignOut = async () => { await signOut(); refresh(); };
   const unconfigure = () => { if (window.confirm("同期設定を削除します（データは端末に残ります）。よろしいですか？")) { clearSyncConfig(); refresh(); } };
@@ -65,8 +70,13 @@ function SyncSection() {
           <div style={{ padding: "6px 0" }}>
             {state.personal ? (
               <>
-                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.7, marginBottom: 10 }}>この端末を家計簿のクラウド同期につなぎます。パスワードは不要です。</div>
-                <button style={{ ...styles.saveBtn, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={doMagicLink}>{busy ? "送信中…" : "同期を開始"}</button>
+                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.7, marginBottom: 10 }}>各端末で<b>同じ同期パスワード</b>を入れると同期します（メール不要・端末ごとに最初の1回だけ）。初めてなら「初回登録」、2台目以降は「ログイン」。</div>
+                <label style={styles.fieldLabel}>同期パスワード</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8文字以上（自分で決める）" style={styles.textInput} autoCapitalize="none" />
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button style={{ ...styles.saveBtnHalf, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doOwner(signInOwner, "ログインしました。同期中…")}>ログイン</button>
+                  <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}`, opacity: busy ? 0.5 : 1 }} disabled={busy} onClick={() => doOwner(signUpOwner, "登録しました。同期中…")}>初回登録</button>
+                </div>
               </>
             ) : (
               <>

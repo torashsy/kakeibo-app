@@ -77,6 +77,17 @@ export async function signInWithMagicLink() {
   });
   if (error) throw error;
 }
+// 個人用(所有者メール固定)のパスワードログイン。メールのリンク/コードを介さず、
+// 同じパスワードを各端末で入力すれば同期できる。Supabase側で「Confirm email」をオフにしておくこと。
+export const getOwnerEmail = () => SYNC_OWNER_EMAIL;
+export async function signInOwner(password) {
+  if (!SYNC_OWNER_EMAIL) throw new Error("個人同期の設定がありません");
+  return signIn(SYNC_OWNER_EMAIL, password);
+}
+export async function signUpOwner(password) {
+  if (!SYNC_OWNER_EMAIL) throw new Error("個人同期の設定がありません");
+  return signUp(SYNC_OWNER_EMAIL, password);
+}
 export async function signOut() {
   const c = await getClient(); if (c) { try { await c.auth.signOut(); } catch {} }
   notify();
