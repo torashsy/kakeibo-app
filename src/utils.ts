@@ -47,6 +47,7 @@ export interface Sub {
   name: string;
   amount: number | string;
   cycle: "monthly" | "yearly";
+  category?: string;    // サブスク/通信/光熱/保険など。定期費の分類・小計・解約検討に使う
   card?: string;
   renewal?: string;     // "YYYY-MM-DD"
   plan?: string;
@@ -254,9 +255,10 @@ export const SEED_MEMOS: Memo[] = [
 // サブスク管理の初期データ。cycle は "monthly"(月額) / "yearly"(年払い)。
 // card は所有カード名、renewal は次回更新日(YYYY-MM-DD)。収支には計上しない。
 export const SEED_SUBS: Sub[] = [
-  { id: uid(), name: "Netflix", amount: 1490, cycle: "monthly", card: "SMCC Gold", renewal: "", plan: "スタンダード", note: "" },
-  { id: uid(), name: "Spotify", amount: 980, cycle: "monthly", card: "", renewal: "", plan: "", note: "" },
-  { id: uid(), name: "Amazon Prime", amount: 5900, cycle: "yearly", card: "JCB Gold", renewal: "2026-11-01", plan: "年間プラン", note: "" },
+  { id: uid(), name: "Netflix", amount: 1490, cycle: "monthly", category: "サブスク", card: "SMCC Gold", renewal: "", plan: "スタンダード", note: "" },
+  { id: uid(), name: "Spotify", amount: 980, cycle: "monthly", category: "サブスク", card: "", renewal: "", plan: "", note: "" },
+  { id: uid(), name: "Amazon Prime", amount: 5900, cycle: "yearly", category: "サブスク", card: "JCB Gold", renewal: "2026-11-01", plan: "年間プラン", note: "" },
+  { id: uid(), name: "通信費", amount: 4500, cycle: "monthly", category: "通信", card: "SMCC Gold", renewal: "", plan: "", note: "スマホ" },
 ];
 
 
