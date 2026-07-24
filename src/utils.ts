@@ -118,15 +118,60 @@ export const uid = () => Date.now().toString(36) + Math.random().toString(36).sl
 
 export const addMonth = (ym: string, d: number) => { const [y, m] = ym.split("-").map(Number); const dt = new Date(y, m - 1 + d, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
 
+// ===== 日本の銀行営業日(祝日判定) =====
+// 祝日は計算で求める(春分/秋分の近似式は1980-2099で有効)。振替休日も反映。
+// 銀行休業日 = 土日 + 祝日 + 年末年始(12/31・1/2・1/3)。引き落とし日がこれらなら翌営業日へ送られる。
+const _holidayCache: Record<number, Set<string>> = {};
+function jpHolidaySet(year: number): Set<string> {
+  if (_holidayCache[year]) return _holidayCache[year];
+  const md = (m: number, d: number) => `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const nthMonday = (m: number, n: number) => { const first = new Date(year, m - 1, 1).getDay(); const firstMon = 1 + ((8 - first) % 7); return firstMon + (n - 1) * 7; };
+  const shunbun = Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+  const shubun = Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+  const base: [number, number][] = [
+    [1, 1], [2, 11], [2, 23], [4, 29], [5, 3], [5, 4], [5, 5], [8, 11], [11, 3], [11, 23],
+    [1, nthMonday(1, 2)], [7, nthMonday(7, 3)], [9, nthMonday(9, 3)], [10, nthMonday(10, 2)],
+    [3, shunbun], [9, shubun],
+  ];
+  const set = new Set(base.map(([m, d]) => md(m, d)));
+  // 振替休日: 日曜が祝日ならその後の非祝日(通常は翌月曜)を休日にする
+  for (const [m, d] of base) {
+    if (new Date(year, m - 1, d).getDay() === 0) {
+      let nx = new Date(year, m - 1, d + 1);
+      while (set.has(md(nx.getMonth() + 1, nx.getDate()))) nx = new Date(nx.getFullYear(), nx.getMonth(), nx.getDate() + 1);
+      set.add(md(nx.getMonth() + 1, nx.getDate()));
+    }
+  }
+  _holidayCache[year] = set;
+  return set;
+}
+export function isBankHoliday(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  if (dow === 0 || dow === 6) return true;
+  const mmdd = `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  if (mmdd === "12-31" || mmdd === "01-02" || mmdd === "01-03") return true;
+  return jpHolidaySet(y).has(mmdd);
+}
+// 締め日(day)を、その月で銀行営業日になるまで後ろへ送った「実際の締め日(日)」を返す
+function businessCutoffDay(year: number, month: number, day: number): number {
+  let dt = new Date(year, month - 1, day);
+  const ds = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  while (isBankHoliday(ds(dt))) dt = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + 1);
+  return dt.getMonth() === month - 1 ? dt.getDate() : 99; // 翌月へ跨いだら実質その月は全て前周期
+}
+
 // ===== 締め日(サイクル) =====
 // 家計の「月」を締め日で区切る。startDay=1(既定)は暦通り。startDay=11なら 11日〜翌月10日 を1周期とし、
 // 周期は「開始月」で呼ぶ(例: 6/11〜7/10 = "2026-06" = 6月度)。給与とそれで払うカードを同じ周期に揃えられる。
-// 日付(YYYY-MM-DD)が属する周期の ym を返す。日<締め日なら前月始まりの周期。
+// 締め日(=開始日の前日)が土日祝なら引き落としは翌営業日にずれるので、その分も同じ周期に含める。
 export const cycleYm = (dateStr: string, startDay: number = 1): string => {
   if (!dateStr) return "";
   const ym = dateStr.slice(0, 7);
-  const day = Number(dateStr.slice(8, 10));
-  return (!startDay || startDay <= 1 || !day || day >= startDay) ? ym : addMonth(ym, -1);
+  if (!startDay || startDay <= 1) return ym;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const cutoff = businessCutoffDay(y, m, startDay - 1); // 締め日を営業日で自動調整
+  return d > cutoff ? ym : addMonth(ym, -1);
 };
 // 今日が属する周期の ym
 export const currentCycleYm = (startDay: number = 1): string => {
