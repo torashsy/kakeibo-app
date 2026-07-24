@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { MUTED, RED } from '../theme.js';
-import { yen, num, ymLabel, uid, addMonth, debtValueTotal } from '../utils';
+import { yen, num, ymLabel, uid, addMonth, debtValueTotal, evalAmount } from '../utils';
 import { styles } from '../styles.js';
+import { AmountField } from './amount.jsx';
 
 export function Cards({ cards, debt, ym, entries, onSaveCards, onSaveDebt, onRemoveCard }) {
   const [view, setView] = useState("debt");
@@ -95,7 +96,7 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
   const [edit, setEdit] = useState(null);
   const commit = () => {
     if (!edit.name.trim()) return;
-    const card = { ...edit, annualFee: Number(edit.annualFee) || 0 };
+    const card = { ...edit, annualFee: Math.round(evalAmount(edit.annualFee) || 0) };
     const next = edit.id ? cards.map((c) => (c.id === edit.id ? card : c)) : [...cards, { ...card, id: uid() }];
     onSaveCards(next); setEdit(null);
   };
@@ -129,7 +130,7 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
             <label style={styles.fieldLabel}>ブランド</label>
             <div style={styles.optionRow}>{["VISA", "Master", "JCB", "AMEX", "Diners"].map((b) => <button key={b} style={{ ...styles.optionChip, ...(edit.brand === b ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, brand: b })}>{b}</button>)}</div>
             <label style={styles.fieldLabel}>年会費（円・任意）</label>
-            <div style={styles.amountWrap}><span style={styles.yenMark}>¥</span><input type="number" inputMode="numeric" value={edit.annualFee ?? ""} onChange={(e) => setEdit({ ...edit, annualFee: e.target.value })} placeholder="0（無料）" style={styles.amountInput} /></div>
+            <AmountField value={edit.annualFee ?? ""} onChange={(v) => setEdit({ ...edit, annualFee: v })} placeholder="0（無料）" />
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="正式名称や用途など" style={styles.textInput} />
             <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新する" : "追加する"}</button>

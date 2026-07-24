@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, addMonth, evalAmount, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -25,7 +25,8 @@ export default function App() {
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("today");
-  const [ym, setYm] = useState("2026-06");
+  // 起動時は当月を表示(その月の入力・使いすぎ判定にすぐ入れるように)。矢印で前後の月へ移動できる。
+  const [ym, setYm] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [sheet, setSheet] = useState(null);
   const [editing, setEditing] = useState(null);
 
@@ -161,8 +162,8 @@ export default function App() {
   const replaceSalary = (targetYm, rows) => {
     setEntries((prev) => {
       const kept = prev.filter((x) => !(x.ym === targetYm && x.cat === "salary"));
-      const added = rows.filter((r) => r.amount !== "" && !isNaN(parseFloat(r.amount)))
-        .map((r) => ({ id: uid(), ym: targetYm, cat: "salary", item: r.item, account: "", amount: r.item === "控除" ? -Math.abs(parseFloat(r.amount)) : parseFloat(r.amount) }));
+      const added = rows.filter((r) => evalAmount(r.amount) != null)
+        .map((r) => { const v = Math.round(evalAmount(r.amount) || 0); return { id: uid(), ym: targetYm, cat: "salary", item: r.item, account: "", amount: r.item === "控除" ? -Math.abs(v) : v }; });
       const n = [...kept, ...added]; save("entries", n); return n;
     });
   };
@@ -186,9 +187,9 @@ export default function App() {
         <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><CloudBadge /></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
           <div style={styles.monthPicker}>
-            <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i > 0) setYm(months[i - 1]); }}>‹</button>
+            <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, -1))}>‹</button>
             <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}</select>
-            <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i < months.length - 1) setYm(months[i + 1]); }}>›</button>
+            <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, 1))}>›</button>
           </div>
         )}
       </header>
