@@ -25,7 +25,8 @@ export default function App() {
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("today");
-  const [ym, setYm] = useState("2026-06");
+  // 起動時は当月を表示(その月の入力・使いすぎ判定にすぐ入れるように)。矢印で前後の月へ移動できる。
+  const [ym, setYm] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [sheet, setSheet] = useState(null);
   const [editing, setEditing] = useState(null);
 
@@ -186,9 +187,9 @@ export default function App() {
         <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><CloudBadge /></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
           <div style={styles.monthPicker}>
-            <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i > 0) setYm(months[i - 1]); }}>‹</button>
+            <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, -1))}>‹</button>
             <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}</select>
-            <button style={styles.monthArrow} onClick={() => { const i = months.indexOf(ym); if (i < months.length - 1) setYm(months[i + 1]); }}>›</button>
+            <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, 1))}>›</button>
           </div>
         )}
       </header>

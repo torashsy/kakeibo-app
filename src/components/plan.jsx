@@ -68,7 +68,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
   const rows = mode === "plan"
     ? [
       { k: "income", label: "収入", editable: PLAN_INCOME },
-      { k: "fixed", label: "固定費（定期費より）", muted: true },
+      { k: "fixed", label: "固定費", muted: true },
       ...variableRows,
       { k: "spending", label: "支出計", sub: true },
       { k: "invest", label: "投資振替", editable: PLAN_INVEST },
@@ -82,7 +82,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
     ];
 
   const rowTotal = (r) => months.reduce((a, mo) => a + cellOf(r.k, mo), 0);
-  const tableWidth = 150 + (months.length + 1) * 92;
+  const tableWidth = 112 + (months.length + 1) * 92;
   const showBal = mode === "forecast";
 
   const openEdit = (r, mo) => {
@@ -152,7 +152,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{hint}横スクロール可。</div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: tableWidth }}>
-          <colgroup><col style={{ width: 150 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 92 }} />)}<col style={{ width: 92 }} /></colgroup>
+          <colgroup><col style={{ width: 112 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 92 }} />)}<col style={{ width: 92 }} /></colgroup>
           <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th key={mo} style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>通期</th></tr></thead>
           <tbody>
             {rows.map((r) => {
