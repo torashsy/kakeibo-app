@@ -3,7 +3,7 @@ import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
 import { styles } from '../styles.js';
 
-export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan }) {
+export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose }) {
   const [cardOpen, setCardOpen] = useState(false);
   const hasBal = Object.keys(summary.balances).length > 0;
   const balChange = (hasBal && prevBalTotal != null) ? summary.balTotal - prevBalTotal : null;
@@ -17,6 +17,12 @@ export function Summary({ summary, prevBalTotal, plans, subs, config, cards, deb
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
       </div>
+      {onOpenClose && (
+        <button style={styles.closeCta} onClick={onOpenClose}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>＋ 今月をまとめて入力</span>
+          <span style={{ fontSize: 11.5, opacity: 0.85, marginTop: 2 }}>給与・カード・残高を1画面で。前月を仮置き済み</span>
+        </button>
+      )}
       <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
       <AnnualOutlookCard plans={plans} subs={subs} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={onOpenPlan} />
       <div style={styles.sumGrid}>
