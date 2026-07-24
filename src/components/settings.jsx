@@ -230,7 +230,7 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
         <div style={styles.detailHead}><span>月の締め日</span></div>
         <div style={styles.detailCard}>
           <div style={{ fontSize: 12, color: MUTED, padding: "8px 2px 4px", lineHeight: 1.6 }}>
-            家計の1ヶ月をこの日から始めます（1＝暦通り）。例）11なら「11日〜翌月10日」を1周期とし、6月度＝6/11〜7/10。給与とそれで払うカードを同じ月にまとめられます。スクショ取込は取引日をこの周期へ自動で振り分けます。
+            家計の1ヶ月をこの日から始めます（1＝暦通り）。例）11なら「11日〜翌月10日」を1周期とし、6月度＝6/11〜7/10。給与とそれで払うカードを同じ月にまとめられます。締め日が土日祝なら引き落としは翌営業日にずれるため、その分も自動で同じ周期に含めます（日本の祝日を判定）。スクショ取込は取引日をこの周期へ自動で振り分けます。
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 2px 8px" }}>
             <span style={{ fontSize: 14 }}>毎月</span>
