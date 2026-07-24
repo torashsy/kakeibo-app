@@ -164,7 +164,7 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
   useEffect(() => setC(config), [config]);
-  const groups = [{ key: "accounts", title: "口座" }, { key: "salaryItems", title: "給与系の項目" }, { key: "memoCategories", title: "メモの分類（計画タブと連携）" }];
+  const groups = [{ key: "accounts", title: "口座" }, { key: "salaryItems", title: "給与系の項目" }, { key: "memoCategories", title: "メモの分類" }];
   const addItem = (key) => { const name = (prompt(`新しい${groups.find((g) => g.key === key).title}の名前`) || "").trim(); if (!name) return; const next = { ...c, [key]: [...(c[key] || []), name] }; setC(next); onSave(next); };
   const removeItem = (key, i) => onRemoveItem(key, c[key][i]);
   const exportJSON = () => { const blob = new Blob([JSON.stringify({ entries, config: c, cards, debt, memos, subs, plans, closedMonths, theme }, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); };

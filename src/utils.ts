@@ -56,7 +56,6 @@ export interface Sub {
 
 export interface PlanLineData { std: number; over: Record<string, number>; }
 export interface Plan { fyStart?: number; lines: Record<string, PlanLineData>; }
-export interface PlanLine { key: string; group: string; label: string; }
 
 export interface Summary {
   gross: number; deduction: number; cardTotal: number; cashIn: number; cashOut: number; invest: number;
@@ -269,31 +268,6 @@ export const planMonths = (fyStart: number): string[] => Array.from({ length: 12
 // ym から年度開始年(4月)を求める
 export const fyStartOf = (ym: string): number => { const [y, m] = ym.split("-").map(Number); return m >= 4 ? y : y - 1; };
 
-// 計画の行を設定・カードから生成。group=income/expense、sub=小見出し、
-// key は実績とマッピングするための識別子("salary|給与" / "card|SMCC Gold" / "flow|投資" / "memo|交際費")
-// 実績と同じグループ構成(給与系/カード/口座/その他)。口座は預入/入金/引出/送金/投資振替を統合。
-// メモのカテゴリは config.memoCategories で登録したものだけを計画/実績の対象にする(交際費以外も追跡可能)。
-export function planLines(config: Config, cards: Card[]): PlanLine[] {
-  const lines: PlanLine[] = [];
-  (config.salaryItems || []).forEach((it) => lines.push({ key: "salary|" + it, group: "salary", label: it }));
-  (cards || []).forEach((c) => lines.push({ key: "card|" + c.name, group: "card", label: c.name }));
-  ALL_FLOW_TYPES.forEach((t) => lines.push({ key: "flow|" + t, group: "account", label: t }));
-  const memoCats = config.memoCategories && config.memoCategories.length ? config.memoCategories : ["交際費"];
-  memoCats.forEach((cat) => lines.push({ key: "memo|" + cat, group: "other", label: cat }));
-  return lines;
-}
-
-// 収支への符号(+収入 / −支出)。口座フローは符号付きなので +。
-export const planGroupSign = (group: string): 1 | -1 => (group === "card" || group === "other" ? -1 : 1);
-// [グループID, グループ見出し, 小計ラベル(nullなら小計行なし), 収支計に含めるか]
-// "その他"(交際費などのメモ)は計画/実績の比較行としては表示するが、収支には一切影響させない
-export const PLAN_GROUPS: [string, string, string | null, boolean][] = [
-  ["salary", "給与系", "給与計", true],
-  ["card", "カード", "カード計", true],
-  ["account", "口座", "口座計", true],
-  ["other", "その他（収支計には含みません）", null, false],
-];
-
 // 計画額(標準月 std ＋ 例外月 over の上書き)
 export const planValue = (plan: Plan | null | undefined, key: string, ym: string): number => {
   const l = plan && plan.lines && plan.lines[key];
@@ -356,31 +330,10 @@ export function migratePlan(plan: any, subs: Sub[] | null | undefined): Plan {
   return { fyStart: plan.fyStart, lines: { [PLAN_INCOME]: income, [PLAN_VARIABLE]: variable, [PLAN_INVEST]: invest } };
 }
 
-// 実績額(計画と同じ符号規約で1行・1か月ぶん)。monthEntries はその月の記録。
-export function actualForLine(key: string, monthEntries: Entry[], memos: Memo[], ym: string): number {
-  const [type, name] = key.split("|");
-  if (type === "salary") return monthEntries.reduce((a, e) => a + (e.cat === "salary" && e.item === name ? e.amount : 0), 0);
-  if (type === "card") return monthEntries.reduce((a, e) => a + (e.cat === "card" && e.item === name ? Math.abs(e.amount) : 0), 0);
-  if (type === "memo") return (memos || []).reduce((a, m) => a + ((m.category || "") === name && m.ym === ym ? (Number(m.amount) || 0) : 0), 0);
-  // 口座フローは実績の記録と同じ符号(預入/入金=+、引出/送金/投資振替=記録どおり)で集計
-  if (type === "flow") return monthEntries.reduce((a, e) => a + (e.cat === "account" && e.item === name ? e.amount : 0), 0);
-  return 0;
-}
-
 // その月に何らかの入力(記録またはその月のメモ)があるか。
 // 見通しでは、入力が始まった月の空欄行に計画値を流し込まず実績(0)扱いにする判定に使う。
 export const monthHasInput = (monthEntries: Entry[], memos: Memo[], ym: string): boolean =>
   monthEntries.length > 0 || (memos || []).some((m) => m.ym === ym);
-
-// その行・その月に実績記録があるか(見通しで実績/計画を切り替える判定)
-export function hasActualForLine(key: string, monthEntries: Entry[], memos: Memo[], ym: string): boolean {
-  const [type, name] = key.split("|");
-  if (type === "salary") return monthEntries.some((e) => e.cat === "salary" && e.item === name);
-  if (type === "card") return monthEntries.some((e) => e.cat === "card" && e.item === name);
-  if (type === "flow") return monthEntries.some((e) => e.cat === "account" && e.item === name);
-  if (type === "memo") return (memos || []).some((m) => (m.category || "") === name && m.ym === ym);
-  return false;
-}
 
 // その月に残高記録があるか / 残高計
 export const hasBalRecord = (monthEntries: Entry[]): boolean => monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");

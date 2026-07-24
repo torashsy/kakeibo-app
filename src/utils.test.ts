@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   yen, num, addMonth, ymLabel,
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
-  planMonths, fyStartOf, planValue, actualForLine, hasActualForLine,
-  hasBalRecord, balTotalOf, planLines, planGroupSign, DEFAULT_CONFIG,
+  planMonths, fyStartOf, planValue,
+  hasBalRecord, balTotalOf, DEFAULT_CONFIG,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, plannedSpending, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
@@ -141,26 +141,6 @@ describe("計画", () => {
     expect(planValue(plan, "salary|給与", "2026-06")).toBe(286000);
     expect(planValue(plan, "無い行", "2026-06")).toBe(0);
   });
-  it("planLines: 実績と同じグループ構成(口座に入金を含む)", () => {
-    const lines = planLines(DEFAULT_CONFIG, [{ id: "c1", name: "VIEW" }]);
-    const acct = lines.filter((l) => l.group === "account").map((l) => l.label);
-    expect(acct).toEqual(["預入", "入金", "引出", "出金", "投資振替"]);
-    expect(lines.some((l) => l.key === "card|VIEW" && l.group === "card")).toBe(true);
-    expect(planGroupSign("card")).toBe(-1);
-    expect(planGroupSign("salary")).toBe(1);
-    expect(planGroupSign("account")).toBe(1);
-  });
-  it("planLines: memoCategoriesを設定すれば交際費以外のカテゴリも計画対象になる", () => {
-    const config: Config = { accounts: [], salaryItems: [], memoCategories: ["交際費", "娯楽費"] };
-    const lines = planLines(config, []);
-    const other = lines.filter((l) => l.group === "other").map((l) => l.key);
-    expect(other).toEqual(["memo|交際費", "memo|娯楽費"]);
-  });
-  it("planLines: memoCategories未設定なら交際費のみ(後方互換)", () => {
-    const config: Config = { accounts: [], salaryItems: [] };
-    const lines = planLines(config, []);
-    expect(lines.filter((l) => l.group === "other").map((l) => l.key)).toEqual(["memo|交際費"]);
-  });
 
   const month: Entry[] = [
     { ym: "2026-06", cat: "salary", item: "給与", amount: 286720 },
@@ -172,17 +152,6 @@ describe("計画", () => {
     { id: "m1", title: "飲み会", category: "交際費", ym: "2026-06", amount: 12000 },
     { id: "m2", title: "誕生日", category: "交際費", ym: "2026-05", amount: 9999 },
   ];
-  it("actualForLine: 給与/カード/口座フロー(符号付き)/交際費メモ(月別)", () => {
-    expect(actualForLine("salary|給与", month, memos, "2026-06")).toBe(286720);
-    expect(actualForLine("card|VIEW", month, memos, "2026-06")).toBe(40000);
-    expect(actualForLine("flow|投資振替", month, memos, "2026-06")).toBe(-94000);
-    expect(actualForLine("memo|交際費", month, memos, "2026-06")).toBe(12000);
-  });
-  it("hasActualForLine: 記録の有無で見通しの実績/計画を判定", () => {
-    expect(hasActualForLine("salary|給与", month, memos, "2026-06")).toBe(true);
-    expect(hasActualForLine("flow|引出", month, memos, "2026-06")).toBe(false);
-    expect(hasActualForLine("memo|交際費", [], memos, "2026-04")).toBe(false);
-  });
   it("monthHasInput: 記録またはその月のメモがあればtrue(入力済み月の空欄に計画値を出さない判定)", () => {
     expect(monthHasInput(month, [], "2026-06")).toBe(true);       // 記録あり
     expect(monthHasInput([], memos, "2026-06")).toBe(true);       // その月のメモあり
