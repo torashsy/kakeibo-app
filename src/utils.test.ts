@@ -1434,3 +1434,14 @@ describe("残高がいつ時点かを持ち、締め日まで届いているか�
     expect(r.covered).toBe(false);
   });
 });
+
+describe("大文字小文字を区別せずルールに当てる", () => {
+  it("全角大文字のＰＡＹＰＡＹカードがルール「Pay」に当たる", () => {
+    expect(classifyTxn("自払　ＰＡＹＰＡＹカード", DEFAULT_CONFIG.importRules, -61533))
+      .toMatchObject({ action: "card", target: "PayPay" });
+  });
+  it("三井住友は金額で分ける判定も効いたまま", () => {
+    expect(classifyTxn("自払　三井住友カード", DEFAULT_CONFIG.importRules, -294)).toMatchObject({ target: "smcc" });
+    expect(classifyTxn("自払　三井住友カード", DEFAULT_CONFIG.importRules, -97724)).toMatchObject({ target: "SMCC Gold" });
+  });
+});
