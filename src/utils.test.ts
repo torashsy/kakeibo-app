@@ -8,6 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch, evalAmount,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -383,11 +384,14 @@ describe("スクショ取込(OCR明細インポート)", () => {
       { id: "1", match: "ミツビシ", action: "card", target: "MDC" },
       { id: "2", match: "JCBカード", action: "card", target: "JAL navi" },
       { id: "3", match: "セゾン", action: "card", target: "SAISON" },
-      { id: "4", match: "ことら", action: "skip" },
+      { id: "4", match: "ことら", action: "account", target: "NEOBANK", negItem: "出金", posItem: "入金" },
     ];
     expect(classifyTxn("自払　ミツビシUFJニコス", rules)).toEqual({ action: "card", target: "MDC" });
     expect(classifyTxn("自払　JCBカード", rules)).toEqual({ action: "card", target: "JAL navi" });
-    expect(classifyTxn("ことら　ハヤシ　シユンヤ", rules)).toEqual({ action: "skip", target: undefined });
+    // ことら送金そのものは他人との実際のやり取りなので口座の出金/入金にする
+    expect(classifyTxn("ことら　タケナカ", rules)).toMatchObject({ action: "account", target: "NEOBANK" });
+    // 自分名義(ownTransferKeywords)への送金だけは口座間移動なので取り込まない
+    expect(classifyTxn("ことら　ハヤシ　シユンヤ", rules, ["ハヤシ シユンヤ"])).toEqual({ action: "skip" });
   });
   it("classifyTxn: マッチしなければnull(要手動判定)", () => {
     expect(classifyTxn("謎の取引", [{ id: "1", match: "ミツビシ", action: "card", target: "MDC" }])).toBeNull();
@@ -415,8 +419,8 @@ describe("スクショ取込(OCR明細インポート)", () => {
 
   it("エンドツーエンド: 実際のスクショ相当のテキストが正しい件数のentryになる", () => {
     const txns = parseBankText(bankText);
-    const entries = txns.map((t) => txnToEntry(t, classifyTxn(t.desc, DEFAULT_CONFIG.importRules))).filter(Boolean);
-    // ミツビシ/JCBカード/セゾンの3件はentry化、ことらの1件はskipで除外
+    // 氏名が読めていれば自分名義として除外されるので、カード3件だけが残る
+    const entries = txns.map((t) => txnToEntry(t, classifyTxn(t.desc, DEFAULT_CONFIG.importRules, ["ハヤシ シユンヤ"]))).filter(Boolean);
     expect(entries).toHaveLength(3);
     expect(entries.map((e) => e!.item)).toEqual(["MDC", "JAL navi", "SAISON"]);
   });
@@ -480,7 +484,11 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(classifyTxn("自 払 ミツ ヒ * シ UF J ニ コス", rules)).toEqual({ action: "card", target: "MDC" });
     expect(classifyTxn("自 払 JCB カー ト *", rules)).toEqual({ action: "card", target: "JAL navi" });
     expect(classifyTxn("自 払 セ ソ ` ン", rules)).toEqual({ action: "card", target: "SAISON" });
-    expect(classifyTxn("こと ら ハヤ シ シュ ユ ュ ン ヤ", rules)).toEqual({ action: "skip", target: undefined });
+    // ことら送金は口座の出金/入金になる(OCRは氏名が崩れやすく自分名義かを判定できないため、
+    // 自分名義の除外はCSV取込のような正確なテキストで効かせる)
+    expect(classifyTxn("こと ら ハヤ シ シュ ユ ュ ン ヤ", rules)).toMatchObject({ action: "account", target: "NEOBANK" });
+    // 氏名が崩れていなければ自分名義として除外できる
+    expect(classifyTxn("ことら送金　ハヤシ　シユンヤ", rules, ["ハヤシ シユンヤ"])).toEqual({ action: "skip" });
   });
 
   it("エンドツーエンド: 実際のOCRノイズを含むテキストでもMDC/JAL navi/SAISON/ことらが正しく自動仕分けされる", () => {
@@ -488,7 +496,8 @@ describe("スクショ取込(OCR明細インポート)", () => {
     const classified = txns.map((t) => classifyTxn(t.desc, DEFAULT_CONFIG.importRules));
     const cardTargets = classified.filter((c) => c && c.action === "card").map((c) => c!.target);
     expect(cardTargets).toEqual(expect.arrayContaining(["MDC", "JAL navi", "SAISON"]));
-    expect(classified.some((c) => c && c.action === "skip")).toBe(true);
+    // ことらは他人との送金かもしれないので、捨てずに口座の出金/入金として残す
+    expect(classified.some((c) => c && c.action === "account")).toBe(true);
   });
 
   // NEOBANK形式: 取引ごとの日付行が無く、"N日"の見出し1つに複数の取引がぶら下がる。
@@ -595,7 +604,7 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(classified.some((c) => c && c.negItem === "引出")).toBe(true); // ATM
     expect(classified.some((c) => c && c.action === "card" && c.target === "EPOS")).toBe(true);
     expect(classified.some((c) => c && c.action === "card" && c.target === "PayPay")).toBe(true);
-    expect(classified.some((c) => c && c.action === "skip")).toBe(true); // ことら
+    expect(classified.some((c) => c && c.negItem === "出金")).toBe(true); // ことら(他人との送金として残す)
   });
 });
 
@@ -660,5 +669,102 @@ describe("evalAmount", () => {
     expect(evalAmount("1000+")).toBe(null);
     expect(evalAmount("×")).toBe(null);
     expect(evalAmount(null)).toBe(null);
+  });
+});
+
+describe("CSV取込", () => {
+  it("parseCsvRows: 引用符内のカンマと改行、\"\"のエスケープ", () => {
+    const rows = parseCsvRows('a,b\n"x,1","y""z"\n');
+    expect(rows).toEqual([["a", "b"], ["x,1", 'y"z']]);
+  });
+  it("normalizeCsvDate: 各種表記", () => {
+    expect(normalizeCsvDate("2026/7/5")).toBe("2026-07-05");
+    expect(normalizeCsvDate("2026-07-05")).toBe("2026-07-05");
+    expect(normalizeCsvDate("20260705")).toBe("2026-07-05");
+    expect(normalizeCsvDate("2026年7月5日")).toBe("2026-07-05");
+    expect(normalizeCsvDate("26/7/5")).toBe("2026-07-05");
+    expect(normalizeCsvDate("あ")).toBe(null);
+  });
+  it("parseCsvAmount: 記号つき・和文マイナス", () => {
+    expect(parseCsvAmount("1,234")).toBe(1234);
+    expect(parseCsvAmount("¥1,234")).toBe(1234);
+    expect(parseCsvAmount("△1,234")).toBe(-1234);
+    expect(parseCsvAmount("▲500")).toBe(-500);
+    expect(parseCsvAmount("(500)")).toBe(-500);
+    expect(parseCsvAmount("-500")).toBe(-500);
+    expect(parseCsvAmount("")).toBe(null);
+    expect(parseCsvAmount("-")).toBe(null);
+  });
+  it("parseBankCsv: 出金/入金が別列＋残高列", () => {
+    const csv = [
+      "日付,摘要,出金金額,入金金額,残高",
+      "2026/06/24,給与 カ)カイシャ,,320000,500000",
+      "2026/06/26,カード引落 SMCC,45000,,455000",
+      "2026/07/02,ATM引出,30000,,425000",
+    ].join("\n");
+    const r = parseBankCsv(csv);
+    expect(r.error).toBeUndefined();
+    expect(r.txns.length).toBe(3);
+    expect(r.txns[0]).toEqual({ date: "2026-06-24", desc: "給与 カ)カイシャ", amount: 320000 });
+    expect(r.txns[1].amount).toBe(-45000);
+    // 残高は最新日のものを採用
+    expect(r.balance).toEqual({ date: "2026-07-02", amount: 425000 });
+  });
+  it("parseBankCsv: 金額1列・前置き行あり・降順でも最新残高を取る", () => {
+    const csv = [
+      "○○銀行 入出金明細",
+      "口座番号,1234567",
+      "",
+      "取引日,取引内容,金額,残高",
+      "2026/07/02,ATM,-30000,425000",
+      "2026/06/24,給与,320000,500000",
+    ].join("\n");
+    const r = parseBankCsv(csv);
+    expect(r.txns.length).toBe(2);
+    expect(r.txns[0].amount).toBe(-30000);
+    expect(r.balance).toEqual({ date: "2026-07-02", amount: 425000 });
+  });
+  it("parseBankCsv: カード明細(残高なし)", () => {
+    const csv = ["ご利用日,ご利用店名,ご利用金額", "2026/06/15,スーパー,3200", "2026/06/18,ガソリン,5000"].join("\n");
+    const r = parseBankCsv(csv);
+    expect(r.txns.length).toBe(2);
+    expect(r.balance).toBe(null);
+    expect(r.txns[0].desc).toBe("スーパー");
+  });
+  it("parseBankCsv: 列が見つからなければエラー", () => {
+    expect(parseBankCsv("あ,い\n1,2").error).toBeTruthy();
+  });
+});
+
+describe("CSV取込: 実データ形式(NEOBANK)", () => {
+  // 新しい順・同日に複数行・全角・列名に(円)・引用符つき
+  const csv = [
+    '"日付","内容","出金金額(円)","入金金額(円)","残高(円)","メモ"',
+    '"2026/07/24","ＳＢＩハイブリッド預金","20,000",,"2,253","-"',
+    '"2026/07/24","ＳＢＩハイブリッド預金","60,000",,"22,253","-"',
+    '"2026/07/24","ことら送金　ハヤシ　シユンヤ （2026...）",,"80,000","82,253","-"',
+    '"2026/07/19","利息",,"3","4,253","-"',
+    '"2026/07/10","ＡＴＭ　ゆうちょ銀行","16,000",,"4,660","-"',
+  ].join("\n");
+  const r = parseBankCsv(csv);
+  it("列名に(円)が付いていても認識する", () => {
+    expect(r.error).toBeUndefined();
+    expect(r.txns.length).toBe(5);
+  });
+  it("出金は負・入金は正", () => {
+    expect(r.txns[0].amount).toBe(-20000);
+    expect(r.txns[2].amount).toBe(80000);
+    expect(r.txns[3].amount).toBe(3);
+  });
+  it("新しい順のCSVでは先頭行の残高が最新(同日に複数行あっても取り違えない)", () => {
+    expect(r.balance).toEqual({ date: "2026-07-24", amount: 2253 });
+  });
+  it("全角の摘要も既存ルールで判定できる(NFKC正規化)", () => {
+    const rules: ImportRule[] = [
+      { id: "1", match: "ハイブリッド", action: "account", target: "NEOBANK", negItem: "投資振替", posItem: "投資振替" },
+      { id: "2", match: "ATM", action: "account", target: "NEOBANK", negItem: "引出", posItem: "預入" },
+    ];
+    expect(classifyTxn(r.txns[0].desc, rules)).toMatchObject({ action: "account", negItem: "投資振替" });
+    expect(classifyTxn(r.txns[4].desc, rules)).toMatchObject({ action: "account", negItem: "引出" });
   });
 });

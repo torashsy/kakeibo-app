@@ -179,7 +179,8 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
   useEffect(() => setC(config), [config]);
-  const groups = [{ key: "accounts", title: "口座" }, { key: "salaryItems", title: "給与系の項目" }, { key: "memoCategories", title: "メモの分類" }];
+  const groups = [{ key: "accounts", title: "口座" }, { key: "salaryItems", title: "給与系の項目" }, { key: "memoCategories", title: "メモの分類" },
+    { key: "ownTransferKeywords", title: "自分名義の送金キーワード", hint: "自分の口座間の移動は収支ではないため、摘要にこの文字を含む取引は取り込みません（例：自分の氏名）。" }];
   const addItem = (key) => { const name = (prompt(`新しい${groups.find((g) => g.key === key).title}の名前`) || "").trim(); if (!name) return; const next = { ...c, [key]: [...(c[key] || []), name] }; setC(next); onSave(next); };
   const removeItem = (key, i) => onRemoveItem(key, c[key][i]);
   const exportJSON = () => { const blob = new Blob([JSON.stringify({ entries, config: c, cards, debt, memos, subs, plans, closedMonths, theme }, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); };
@@ -247,6 +248,7 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
       {groups.map((g) => (
         <div key={g.key} style={{ marginBottom: 18 }}>
           <div style={styles.detailHead}><span>{g.title}</span><button style={styles.addBtn} onClick={() => addItem(g.key)}>＋ 追加</button></div>
+          {g.hint && <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>{g.hint}</div>}
           <div style={styles.detailCard}>{(c[g.key] || []).map((name, i) => <div key={i} style={styles.settingRow}><span>{name}</span><button style={styles.removeBtn} onClick={() => removeItem(g.key, i)}>削除</button></div>)}</div>
         </div>
       ))}

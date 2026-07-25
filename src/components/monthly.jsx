@@ -69,6 +69,9 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
   const [cardRows, setCardRows] = useState(cardInit);
   const [balRows, setBalRows] = useState(balInit);
   const [flowRows, setFlowRows] = useState(flowInit);
+  // 既定は「月末残高だけ」。判定に必要なのは残高の増減だけなので、
+  // 給与・カード・現金/送金は内訳を知りたい時だけ開く(入力の手間を最小にする)。
+  const [detail, setDetail] = useState(false);
 
   const setSal = (i, v) => setSalary((p) => p.map((r, idx) => (idx === i ? { ...r, amount: v, fromPrev: false } : r)));
   const setCard = (i, v) => setCardRows((p) => p.map((r, idx) => (idx === i ? { ...r, amount: v, fromPrev: false } : r)));
@@ -125,10 +128,45 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>今月をまとめて入力（{periodLabel(ym, config.cycleCutoffDay)}）</div>
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.6 }}>
-          前月の値を仮に入れてあります。変わったところだけ直して保存してください。
-          口座は<b>月末残高だけ</b>でOK（引出・入金は任意）。
+          <b>月末の残高を写すだけ</b>でOK。投資口座も入れておけば、
+          何度振り替えても総額では相殺されるので<b>振替の集計は不要</b>です。
         </div>
 
+        {accounts.length > 0 && (
+          <>
+            <div style={styles.mcHead}>月末の口座残高</div>
+            {balRows.map((r, i) => (
+              <div key={r.account} style={styles.mcRow}>
+                <span style={styles.mcName}>{r.account}{r.fromPrev && r.amount !== "" && <span style={styles.mcPrev}>前月</span>}</span>
+                <div style={{ flex: 1 }}>
+                  <AmountField value={r.amount} onChange={(v) => setBal(i, v)} wrapStyle={styles.mcField} inputStyle={{ fontSize: 16 }} />
+                </div>
+              </div>
+            ))}
+            {balHasAny && <div style={styles.mcSub}><span>残高合計</span><span style={{ fontWeight: 600 }}>{yen(balTotal)}</span></div>}
+          </>
+        )}
+
+        {showFlow && (
+          <div style={styles.mcFlow}>
+            <div style={styles.mcFlowHead}>今月の増減</div>
+            <div style={styles.mcFlowRow}><span>先月の残高</span><span>{yen(prevBalTotal)}</span></div>
+            <div style={styles.mcFlowRow}><span>今月の残高</span><span>{yen(balTotal)}</span></div>
+            <div style={{ ...styles.mcFlowRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 8, fontWeight: 600 }}>
+              <span>増減</span><span style={{ color: balChange >= 0 ? GREEN : RED }}>{yen(balChange)}</span>
+            </div>
+          </div>
+        )}
+
+        <button style={styles.mcToggle} onClick={() => setDetail((d) => !d)}>
+          {detail ? "内訳を閉じる" : "内訳も入れる（任意）"}
+          <span style={{ ...styles.chev, transform: detail ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform .15s", verticalAlign: -2, marginLeft: 4 }}>›</span>
+        </button>
+
+        {detail && (<>
+        <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 8px", lineHeight: 1.6 }}>
+          判定には不要ですが、「何に使ったか」を残したい時に入れてください。
+        </div>
         {salaryItems.length > 0 && (
           <>
             <div style={styles.mcHead}>給与系</div>
@@ -159,25 +197,10 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
           </>
         )}
 
-        {accounts.length > 0 && (
-          <>
-            <div style={styles.mcHead}>月末の口座残高</div>
-            {balRows.map((r, i) => (
-              <div key={r.account} style={styles.mcRow}>
-                <span style={styles.mcName}>{r.account}{r.fromPrev && r.amount !== "" && <span style={styles.mcPrev}>前月</span>}</span>
-                <div style={{ flex: 1 }}>
-                  <AmountField value={r.amount} onChange={(v) => setBal(i, v)} wrapStyle={styles.mcField} inputStyle={{ fontSize: 16 }} />
-                </div>
-              </div>
-            ))}
-            {balHasAny && <div style={styles.mcSub}><span>残高合計</span><span style={{ fontWeight: 600 }}>{yen(balTotal)}</span></div>}
-          </>
-        )}
-
-        <div style={styles.mcHead}>現金・投資・送金（今月の合計）</div>
+        <div style={styles.mcHead}>現金・送金（今月の合計）</div>
         <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 8px", lineHeight: 1.6 }}>
-          自分の口座どうしの移動は入れなくてOK（残高で自動的に辻褄が合います）。
-          <b>投資へ入れた分は残高が減りますが「使った」扱いにはしません</b>（貯蓄として集計）。
+          口座どうしの移動（投資への振替を含む）は<b>入れなくてOK</b>。残高で相殺されます。
+          ここは「現金でいくら使ったか」を残したい時だけ。
         </div>
         {flowRows.map((r, i) => (
           <div key={r.key} style={styles.mcRow}>
@@ -193,35 +216,26 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
           </div>
         ))}
 
-        {!showFlow && accounts.length > 0 && (
-          <div style={{ ...styles.mcFlow, textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.6 }}>月末の口座残高を入れると、<br />「今月の動き」を自動で照合します。</div>
-          </div>
-        )}
         {showFlow && (
           <div style={styles.mcFlow}>
-            <div style={styles.mcFlowHead}>今月の動き</div>
+            <div style={styles.mcFlowHead}>内訳の照合</div>
             <div style={styles.mcFlowRow}><span>給与（手取り）</span><span style={{ color: GREEN }}>{yen(takeHome)}</span></div>
             {otherIncome > 0 && <div style={styles.mcFlowRow}><span>受け取った</span><span style={{ color: GREEN }}>{yen(otherIncome)}</span></div>}
             <div style={styles.mcFlowRow}><span>カード引き落とし</span><span style={{ color: RED }}>{yen(-cardTotal)}</span></div>
             {cashSpend > 0 && <div style={styles.mcFlowRow}><span>現金引出・送金</span><span style={{ color: RED }}>{yen(-cashSpend)}</span></div>}
-            {investNet !== 0 && <div style={styles.mcFlowRow}><span>投資へ回した（貯蓄）</span><span style={{ color: MUTED }}>{yen(-investNet)}</span></div>}
             <div style={{ ...styles.mcFlowRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 8 }}>
               <span>残高の増減（実際）</span><span style={{ color: balChange >= 0 ? GREEN : RED }}>{yen(balChange)}</span>
             </div>
             <div style={{ ...styles.mcFlowRow, fontWeight: 600 }}>
-              <span>まだ説明できていない分</span>
-              <span style={{ color: Math.abs(unexplained) < 1 ? GREEN : RED }}>{Math.abs(unexplained) < 1 ? "なし" : yen(-Math.round(unexplained))}</span>
+              <span>差</span>
+              <span style={{ color: Math.abs(unexplained) < 1 ? GREEN : MUTED }}>{Math.abs(unexplained) < 1 ? "なし" : yen(-Math.round(unexplained))}</span>
             </div>
             <div style={{ fontSize: 11, color: MUTED, marginTop: 6, lineHeight: 1.6 }}>
-              {Math.abs(unexplained) < 1
-                ? "残高の増減は入力した内容で説明できています。"
-                : unexplained > 0
-                  ? "この分だけ残高が余計に減っています。現金引出や送金の入れ忘れがないか確認してください。"
-                  : "この分だけ残高が多いです。受け取りや戻しの入れ忘れがないか確認してください。"}
+              入れた内訳と実際の残高増減の差です。入れていない現金や送金がある分だけズレます。
             </div>
           </div>
         )}
+        </>)}
 
         <button style={styles.saveBtn} onClick={submit}>この内容で保存</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>

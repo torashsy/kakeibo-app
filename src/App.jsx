@@ -86,6 +86,25 @@ export default function App() {
     })();
   }, []);
 
+  // iOSショートカットからの取込。共有シート→ショートカットでCSVの中身を
+  // "#import=<encodeURIComponent(csv)>" に載せて開くと、取込画面が解析済みで立ち上がる。
+  // ハッシュはサーバへ送られないので中身が外に出ない。読んだ後は履歴を汚さないよう即座に消す。
+  const [importText, setImportText] = useState("");
+  useEffect(() => {
+    const readHash = () => {
+      const h = window.location.hash || "";
+      const m = h.match(/[#&]import=([^&]*)/);
+      if (!m) return;
+      let text = "";
+      try { text = decodeURIComponent(m[1].replace(/\+/g, " ")); } catch { return; }
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (text.trim()) { setImportText(text); setSheet("import"); }
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+
   // バックグラウンド同期で別端末の更新を取り込んだら、古いReact状態を残さず再読込する。
   // 古い画面のまま編集してクラウドを巻き戻す事故を防ぐ。
   useEffect(() => {
@@ -271,7 +290,7 @@ export default function App() {
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => setSheet(null)} />}
+      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} initialText={importText} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => { setSheet(null); setImportText(""); }} />}
       {sheet === "close" && <MonthlyClose key={ym} ym={ym} config={config} cards={cards} entries={entries} onSave={saveMonthlyClose} onClose={() => setSheet(null)} />}
     </div>
   );

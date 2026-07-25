@@ -1,7 +1,35 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, classifyTxn, txnToEntry, uid } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, uid, yen, cycleYm } from '../utils';
 import { styles } from '../styles.js';
+
+// CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
+async function readCsvText(file) {
+  const buf = await file.arrayBuffer();
+  const utf8 = new TextDecoder("utf-8").decode(buf);
+  if (!utf8.includes("�")) return utf8;
+  try { return new TextDecoder("shift_jis").decode(buf); } catch { return utf8; }
+}
+
+// このCSVがどの口座/カードのものかを推定する。1ファイル=1口座なので、当たれば全行に適用できる。
+// 判定材料はファイル名 →(無ければ)ヘッダー行より前の前書き のみ。
+// 取引明細の本文は見ない: 銀行CSVの摘要に「カード引落 SMCC」等が出るため、カード名に誤爆する。
+// 残高列があるCSVは口座の明細なので、口座を先に照合する。
+const norm = (s) => String(s || "").normalize("NFKC").toLowerCase().replace(/[\s　_\-（）()]/g, "");
+export function guessCsvTarget(fileName, preamble, cards, accounts, preferAccount) {
+  const cardHits = (hay) => (cards || []).map((c) => c.name).filter((n) => norm(n) && hay.includes(norm(n)));
+  const acctHits = (hay) => (accounts || []).filter((a) => norm(a) && hay.includes(norm(a)));
+  const pick = (hay) => {
+    if (!hay) return null;
+    const cs = cardHits(hay), as = acctHits(hay);
+    // 候補が複数なら断定しない(利用者に選ばせる)
+    const card = cs.length === 1 ? { action: "card", target: cs[0] } : null;
+    const acct = as.length === 1 ? { action: "account", target: as[0] } : null;
+    if (preferAccount) return acct || card;
+    return card || acct;
+  };
+  return pick(norm(fileName)) || pick(norm(String(preamble || "")));
+}
 
 // 口座記録の内訳スタイル。既定は出金/入金だが、ATMの現金引出/預入や
 // 投資/ハイブリッド口座への振替など、記録したい項目名に応じて選べるようにする。
@@ -15,13 +43,60 @@ const styleOf = (cls) => ACCOUNT_ITEM_STYLES.find((s) => s.neg === (cls.negItem 
 // スクショ取込。銀行アプリなどの明細スクショをOCR(tesseract.js、取込時のみ動的読込・要通信)で
 // 文字起こしし、登録済みルール(config.importRules)で自動的にentryへ振り分ける。
 // OCRが誤読してもテキスト欄で修正・貼り付け直しができ、最後は必ずレビュー画面で内容を確認してから追加する。
-export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules, onClose }) {
+export function ImportSheet({ cards, config, ym, initialText, onAddEntries, onSaveImportRules, onClose }) {
   const fileRef = useRef(null);
+  const csvRef = useRef(null);
   const [rawText, setRawText] = useState("");
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrError, setOcrError] = useState("");
   const [importYm, setImportYm] = useState(ym);
   const [rows, setRows] = useState(null); // null=未解析。解析後は [{txn, cls, matchDraft}]
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvNotes, setCsvNotes] = useState([]);   // ファイルごとの取込結果(件数・推定先・残高)
+  const [balances, setBalances] = useState([]);   // CSVの残高列から拾った月末残高
+
+  // 1行の振り分けを決める。優先順位は
+  //   1. 摘要のルール(自分名義の送金=skip、ハイブリッド=投資振替、ATM=引出/預入、カード引落=カード…)
+  //   2. ルールに当たらなければ、ファイル単位で推定した口座の出金/入金
+  // ルールが「口座」でも振り分け先が未設定なら、そのファイルの口座で補う。
+  // ファイル推定をルールより優先すると、投資振替や自分名義の送金が全部ただの出金になってしまう。
+  const classifyRow = (txn, guess) => {
+    const byRule = classifyTxn(txn.desc, config.importRules, config.ownTransferKeywords);
+    if (byRule) {
+      if (byRule.action === "account" && !byRule.target && guess && guess.action === "account") return { ...byRule, target: guess.target };
+      return byRule;
+    }
+    return guess || null;
+  };
+
+  // CSVを複数まとめて取り込む。ファイルごとに口座/カードを推定し、
+  // ルールに当たらない行の振り分け先として使う(1ファイル=1口座なので取り違えが起きない)。
+  const runCsv = async (files) => {
+    setCsvBusy(true); setOcrError("");
+    const allRows = [], notes = [], bals = [];
+    for (const file of files) {
+      try {
+        const text = await readCsvText(file);
+        const res = parseBankCsv(text);
+        if (res.error && res.txns.length === 0) { notes.push({ name: file.name, error: res.error }); continue; }
+        const guess = guessCsvTarget(file.name, res.preamble, cards, config.accounts, !!res.balance);
+        for (const txn of res.txns) {
+          const auto = classifyRow(txn, guess);
+          allRows.push({ txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto });
+        }
+        if (res.balance && guess && guess.action === "account") {
+          bals.push({ account: guess.target, ...res.balance });
+        }
+        notes.push({ name: file.name, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance });
+      } catch (e) {
+        notes.push({ name: file.name, error: "読み取りに失敗しました" });
+      }
+    }
+    setCsvNotes(notes); setBalances(bals);
+    if (allRows.length > 0) setRows(allRows);
+    else setOcrError("CSVから取引を読み取れませんでした。別の形式かもしれません。");
+    setCsvBusy(false);
+  };
 
   const runOcr = async (file) => {
     setOcrBusy(true); setOcrError("");
@@ -38,11 +113,54 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
     }
   };
 
+  // 1つのテキスト(CSV)を取り込む。ショートカット経由(URL)・クリップボード・貼り付けで共用する。
+  // CSVとして読めなければ明細テキストとして扱う。
+  const ingestText = (text, label) => {
+    if (!String(text || "").trim()) { setOcrError("中身が空でした。"); return false; }
+    const res = parseBankCsv(text);
+    if (res.txns.length > 0) {
+      const guess = guessCsvTarget("", res.preamble, cards, config.accounts, !!res.balance);
+      setRows(res.txns.map((txn) => {
+        const auto = classifyRow(txn, guess);
+        return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
+      }));
+      setCsvNotes([{ name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance }]);
+      setBalances(res.balance && guess && guess.action === "account" ? [{ account: guess.target, ...res.balance }] : []);
+      setOcrError("");
+      return true;
+    }
+    setRawText(text);
+    setOcrError("CSVとして読み取れなかったので、テキストとして読み込みました。下の「解析する」を押してください。");
+    return false;
+  };
+
+  // ショートカットからURLで渡されたCSVを、開いた直後に自動で解析する
+  const bootRef = useRef(false);
+  React.useEffect(() => {
+    if (bootRef.current || !initialText) return;
+    bootRef.current = true;
+    ingestText(initialText, "ショートカット");
+  }, [initialText]);
+
+  // クリップボードから直接取り込む。iOSはPWAを共有シートに出せない(Web Share Target未対応)ため、
+  // 「CSVをコピー → ここを1タップ」が確実に動く導線になる。
+  const runClipboard = async () => {
+    setOcrError("");
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      setOcrError("クリップボードを読み取れませんでした。下のテキスト欄に貼り付けてください。");
+      return;
+    }
+    ingestText(text, "クリップボード");
+  };
+
   const parse = () => {
     // "N日"だけの見出し形式(年月の表記が無い)は、今表示中の月を起点に判定する
     const txns = parseBankText(rawText, importYm);
     setRows(txns.map((txn) => {
-      const auto = classifyTxn(txn.desc, config.importRules);
+      const auto = classifyTxn(txn.desc, config.importRules, config.ownTransferKeywords);
       return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
     }));
   };
@@ -59,8 +177,10 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
 
   const entries = (rows || []).map((r) => txnToEntry(r.txn, r.cls, config.cycleCutoffDay));
   const includedCount = entries.filter(Boolean).length;
+  // CSVの残高列から拾った月末残高も一緒に登録する(残高の手入力が不要になる)
+  const balEntries = balances.map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) }));
   const commit = () => {
-    const list = entries.filter(Boolean);
+    const list = [...entries.filter(Boolean), ...balEntries];
     if (list.length) onAddEntries(list);
     onClose();
   };
@@ -73,9 +193,31 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
 
         {!rows && (
           <>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.6 }}>
-              銀行アプリなどの明細画面のスクショを選ぶと、文字を読み取って自動で仕分けます(通信が必要)。
-              うまく読み取れない場合は下のテキスト欄に直接貼り付けても構いません。
+            <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.6 }}>
+              <b>CSVがいちばん確実です。</b>銀行・カードのサイトで明細CSVを保存してから選んでください
+              （複数まとめて選べます。iPhoneはファイル選択の「最近使った項目」に出ます）。
+              金額の誤読がなく、残高も自動で取り込みます。
+            </div>
+            <button style={{ ...styles.saveBtn, marginTop: 0 }} onClick={() => csvRef.current && csvRef.current.click()} disabled={csvBusy}>
+              {csvBusy ? "読み取り中…" : "CSVを選ぶ（複数可）"}
+            </button>
+            <input ref={csvRef} type="file" accept=".csv,.txt,text/csv,text/plain" multiple style={{ display: "none" }}
+              onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runCsv(f); e.target.value = ""; }} />
+            <button style={{ ...styles.backupBtn, marginTop: 8 }} onClick={runClipboard}>クリップボードから取り込む</button>
+            <div style={{ fontSize: 11.5, color: MUTED, margin: "6px 2px 0", lineHeight: 1.6 }}>
+              CSVの中身をコピーしてからこれを押せば、ファイル保存なしで取り込めます。
+            </div>
+            {csvNotes.length > 0 && (
+              <div style={{ margin: "10px 2px 0" }}>
+                {csvNotes.map((n, i) => (
+                  <div key={i} style={{ fontSize: 11.5, color: n.error ? RED : MUTED, padding: "2px 0" }}>
+                    {n.name}：{n.error ? n.error : `${n.count}件${n.target ? ` → ${n.target}` : "（振り分け先は下で選んでください）"}${n.balance ? ` / 残高 ${yen(n.balance.amount)}` : ""}`}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: MUTED, margin: "16px 0 8px", lineHeight: 1.6, paddingTop: 12, borderTop: `1px solid var(--line)` }}>
+              CSVが用意できない時は、明細画面のスクショからも読み取れます（誤読が出ることがあります）。
             </div>
             <button style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()} disabled={ocrBusy}>
               {ocrBusy ? "読み取り中…" : "スクショを選ぶ"}
@@ -95,6 +237,16 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
         {rows && (
           <>
             <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 12px" }}>{rows.length}件を検出しました。内容を確認して「追加する」を押してください。</div>
+            {balEntries.length > 0 && (
+              <div style={{ ...styles.detailCard, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, padding: "8px 2px 4px" }}>CSVから読み取った残高（一緒に登録します）</div>
+                {balEntries.map((b, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 2px" }}>
+                    <span style={{ color: MUTED }}>{b.account}</span><span>{yen(b.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {rows.length === 0 && <div style={{ color: MUTED, fontSize: 13, padding: 10 }}>取引を検出できませんでした。テキストを見直してください。</div>}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {rows.map((r, i) => {
@@ -152,7 +304,9 @@ export function ImportSheet({ cards, config, ym, onAddEntries, onSaveImportRules
                 );
               })}
             </div>
-            <button style={{ ...styles.saveBtn, opacity: includedCount ? 1 : 0.4 }} disabled={!includedCount} onClick={commit}>{includedCount}件を追加する</button>
+            <button style={{ ...styles.saveBtn, opacity: (includedCount || balEntries.length) ? 1 : 0.4 }} disabled={!includedCount && !balEntries.length} onClick={commit}>
+              {includedCount}件を追加する{balEntries.length > 0 ? `（残高${balEntries.length}件も）` : ""}
+            </button>
             <button style={styles.cancelBtn} onClick={() => setRows(null)}>やり直す</button>
             <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
           </>
