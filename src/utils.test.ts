@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -931,19 +931,13 @@ describe("CSV取込: ゆうちょ形式(摘要が複数列・古い順・列名�
   });
 });
 
-describe("給与・賞与は取り込まない(給与系は明細から手入力する)", () => {
-  it("既定ルールで給与・賞与はskipになる", () => {
-    expect(classifyTxn("給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules)).toMatchObject({ action: "skip" });
-    expect(classifyTxn("賞与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules)).toMatchObject({ action: "skip" });
-    expect(txnToEntry({ date: "2026-07-24", desc: "給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", amount: 385850 },
-      classifyTxn("給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules), 10)).toBeNull();
-  });
+describe("給与ルールの既定と移行", () => {
   it("既存の設定にも一度だけ追加され、消したら復活しない", () => {
     const before = { accounts: ["A"], salaryItems: [], importRules: [{ id: "x", match: "ATM", action: "account", target: "A" }] };
     const after = migrateConfig(before);
     const rules = after.importRules as ImportRule[];
-    expect(rules.filter((r: ImportRule) => r.action === "skip").map((r: ImportRule) => r.match)).toEqual(["給与", "賞与"]);
-    expect(after.importRulesSeeded).toBe(1);
+    expect(rules.filter((r: ImportRule) => r.action === "salary").map((r: ImportRule) => r.match)).toEqual(["給与", "賞与"]);
+    expect(after.importRulesSeeded).toBe(2);
     // 利用者が消したあとに読み込み直しても復活しない
     const removed = { ...after, importRules: rules.filter((r: ImportRule) => r.match !== "給与") };
     expect((migrateConfig(removed).importRules as ImportRule[]).some((r: ImportRule) => r.match === "給与")).toBe(false);
@@ -1107,5 +1101,51 @@ describe("残高は総額で照合する", () => {
   it("最終残高が読めない・開始残高が無い場合は照合しない", () => {
     expect(verifyBalanceTotal([t("2026-07-01", -1000)], 10000)).toBeNull();
     expect(verifyBalanceTotal([t("2026-07-01", -1000, 9000)], NaN)).toBeNull();
+  });
+});
+
+describe("カード明細CSVの取り込み", () => {
+  const card = (ym: string, item: string, amount: number) => ({ ym, cat: "card" as const, item, account: "", amount });
+  it("残高列が無く全行が同じ向きならカード明細とみなす", () => {
+    const t = (a: number) => ({ date: "2026-06-10", desc: "店", amount: a });
+    expect(isCardStatement([t(-1200), t(-800)], false)).toBe(true);
+    expect(isCardStatement([t(-1200), t(800)], false)).toBe(false);  // 入出金が混ざる=口座
+    expect(isCardStatement([t(-1200)], true)).toBe(false);           // 残高列あり=口座
+    expect(isCardStatement([], false)).toBe(false);
+  });
+  it("請求額の合計からカードと月を特定できる", () => {
+    const es = [card("2026-06", "EPOS", 15322), card("2026-06", "PayPay", 5314), card("2026-05", "EPOS", 9800)];
+    expect(findCardByTotal(15322, es)).toEqual({ card: "EPOS", ym: "2026-06" });
+    expect(findCardByTotal(5314, es)).toEqual({ card: "PayPay", ym: "2026-06" });
+  });
+  it("同じ額が複数あって絞れない場合と、一致が無い場合はnull", () => {
+    const es = [card("2026-06", "EPOS", 10000), card("2026-06", "PayPay", 10000)];
+    expect(findCardByTotal(10000, es)).toBeNull();
+    expect(findCardByTotal(12345, es)).toBeNull();
+  });
+  it("明細が複数行に分かれていても合計で照合する", () => {
+    const es = [card("2026-06", "EPOS", 10000), card("2026-06", "EPOS", 5322)];
+    expect(findCardByTotal(15322, es)).toEqual({ card: "EPOS", ym: "2026-06" });
+    expect(cardMonthTotal(es, "EPOS", "2026-06")).toBe(15322);
+  });
+});
+
+describe("給与の取り込み(未入力なら手取りとして取り込む)", () => {
+  it("既定ルールで給与・賞与は給与として分類される", () => {
+    expect(classifyTxn("給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules)).toMatchObject({ action: "salary", target: "給与" });
+    expect(classifyTxn("賞与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules)).toMatchObject({ action: "salary", target: "賞与" });
+  });
+  it("入金額を手取りとして給与のentryにする", () => {
+    const e = txnToEntry({ date: "2026-07-24", desc: "給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", amount: 385850 },
+      { action: "salary", target: "給与" }, 10)!;
+    expect(e).toMatchObject({ ym: "2026-07", cat: "salary", item: "給与", amount: 385850 });
+  });
+  it("旧「取り込まない」ルールは給与として取り込む設定へ移行する", () => {
+    const before = { accounts: [], salaryItems: [], importRulesSeeded: 1,
+      importRules: [{ id: "a", match: "給与", action: "skip" }, { id: "b", match: "賞与", action: "skip" }] };
+    const after = migrateConfig(before);
+    expect((after.importRules as ImportRule[]).map((r) => [r.match, r.action]))
+      .toEqual([["給与", "salary"], ["賞与", "salary"]]);
+    expect(after.importRulesSeeded).toBe(2);
   });
 });
