@@ -462,6 +462,11 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                     {(config.accounts || []).map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
                 </div>
+                {!n.target && n.balance && (
+                  <div style={{ fontSize: 11, color: RED, marginTop: 4 }}>
+                    口座を選ぶと、この明細の残高 {yen(n.balance.amount)} も登録します（未選択のままだと残高は登録されません）
+                  </div>
+                )}
               </div>
             ))}
             {ocrMode && (
