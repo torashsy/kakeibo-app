@@ -669,6 +669,13 @@ const IMPORT_NUM_RE = /^[-−ー–—+]?\d[\d.,]*$/;
 const toNum = (t: string): number => Number(String(t).replace(/[−ー–—]/g, "-").replace(/[.,]/g, ""));
 // 符号(-/−/ー/_、または明示的な+) + [円マーク相当(¥/\/Y)+数字 または 3桁区切りの数字(+末尾の単位らしき1〜2文字、何でもよい)]
 const MONEY_TOKEN_RE = /(?:([-−ー_])|\+)?\s*(?:[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)|(\d{1,3}(?:[,.]\d{3})+)\s*[^\d\s]{0,2})/;
+// OCRは数字を、形の似た文字として読むことがある(実機で確認: 「-¥7,755」→「-\ フ 755」)。
+// 金額を探すときだけ数字に読み替え、摘要はもとの文字のまま扱う。
+// 1文字を1文字に置き換えるので位置がずれず、同じ位置で元の行を切り出せる。
+// カナは摘要にも出るため、ここに足すのは実際に誤読を確認した文字だけにする
+// (金額として拾われるには直前に¥・\・Yが要るか、3桁区切りの形になっている必要がある)。
+const OCR_DIGIT_LOOKALIKE: Record<string, string> = { "フ": "7", "〇": "0", "○": "0" };
+const digitize = (s: string): string => s.replace(/[フ〇○]/g, (ch) => OCR_DIGIT_LOOKALIKE[ch]);
 const parseMoneyToken = (m: RegExpMatchArray): number => {
   const neg = !!m[1];
   const digits = (m[2] || m[3] || "").replace(/\D/g, "");
@@ -750,7 +757,8 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
     // 摘要に巻き込まずそこで打ち切る(取引額が見つかる前の行数にも上限を設け、暴走を防ぐ)。
     while (i < lines.length && !IMPORT_DATE_RE.test(lines[i]) && !IMPORT_DAY_RE.test(lines[i]) && linesForTxn < 4) {
       const l2 = lines[i];
-      const mm = l2.match(MONEY_TOKEN_RE);
+      const scan = digitize(l2); // 金額を探す用。摘要は元のl2から切り出す(長さが同じなので位置が合う)
+      const mm = scan.match(MONEY_TOKEN_RE);
       if (!mm || mm.index == null) {
         if (amount !== null) break;
         descParts.push(l2);
@@ -762,7 +770,7 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
       if (amount === null) {
         if (before) descParts.push(before);
         amount = parseMoneyToken(mm);
-        const after = l2.slice(mm.index + mm[0].length);
+        const after = scan.slice(mm.index + mm[0].length);
         const second = after.match(MONEY_TOKEN_RE);
         if (second) balance = parseMoneyToken(second);
       } else {
@@ -776,7 +784,27 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
     if (amount === null) continue; // 金額を検出できなかった行は取引として扱わない
     out.push({ date: currentDate, desc: descParts.join(""), amount, ...(balance == null ? {} : { balance }) });
   }
-  return out;
+  return repairAmountsFromBalances(out);
+}
+
+// OCRが金額を読み落とすと、次の行にある残高を金額として拾ってしまう。
+// (実例: 「自払セゾン -¥7,755 / 残高¥154,588」で金額が読めず、+154,588の入金として取り込まれた)
+// 残高が取れなかった行は、この取り違えが起きている疑いがある。
+// 拾った数字を「この行の残高」とみなすと隣の行の残高と辻褄が合う場合に限り、
+// 本当の金額を残高の差から復元する。検算が通ったときだけ直すので、合っている行には触らない。
+export function repairAmountsFromBalances(txns: ParsedTxn[]): ParsedTxn[] {
+  return txns.map((t, i) => {
+    if (t.balance != null) return t;
+    const newer = txns[i - 1], older = txns[i + 1];
+    const asBalance = t.amount;
+    // 新しい順に並ぶ明細: 1つ新しい行の残高 = この行の残高 + その行の金額
+    if (newer?.balance != null && older?.balance != null && newer.balance === asBalance + newer.amount)
+      return { ...t, amount: asBalance - older.balance, balance: asBalance };
+    // 古い順に並ぶ明細: 1つ古い行の残高からこの行の金額を足すと、この行の残高になる
+    if (newer?.balance != null && older?.balance != null && older.balance === asBalance + older.amount)
+      return { ...t, amount: asBalance - newer.balance, balance: asBalance };
+    return t;
+  });
 }
 
 // 濁点・半濁点付きの仮名を清音に戻す変換表。OCRが濁点を落としたり独立記号として誤読するため、

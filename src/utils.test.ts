@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1524,5 +1524,65 @@ describe("OCRの読み違いを許す照合", () => {
     const src = { action: "account" as const, target: "ゆうちょ" };
     expect(classifyTxnForImport("カ ) ヒ ヘユーカート・ (の", R, src, 33000))
       .toMatchObject({ action: "account", target: "ゆうちょ" });
+  });
+});
+
+describe("OCRが金額を数字以外の文字として読んだとき", () => {
+  // 実機のスクショ(ゆうちょ)。「-¥7,755」が「-\ フ 755」と読まれ、
+  // 金額が拾えず次行の残高¥154,588を金額(入金)にしていた
+  const text = [
+    "2026.05.07", "自払　セゾ　ン", "- ¥ 717", "¥ 153,871",
+    "2026.05.07", "自払　セソ　ン -\\ フ 755", "¥ 154,588",
+    "2026.05.07", "自払　セゾ　ン", "- ¥ 10,000", "¥ 162,343",
+  ].join("\n");
+
+  it("形の似た文字を数字として読み直す(フ→7)", () => {
+    const r = parseBankText(text);
+    expect(r).toHaveLength(3);
+    expect(r[1]).toMatchObject({ date: "2026-05-07", amount: -7755, balance: 154588 });
+    expect(r[1].desc).toContain("セソ");   // 摘要は元の文字のまま(数字に化けない)
+  });
+
+  it("正しく読めた行はそのまま", () => {
+    const r = parseBankText(text);
+    expect(r[0]).toMatchObject({ amount: -717, balance: 153871 });
+    expect(r[2]).toMatchObject({ amount: -10000, balance: 162343 });
+  });
+
+  it("摘要の「フ」は数字にしない", () => {
+    const r = parseBankText("2026.05.08\n送金　ニツポ　ンユウセイフ　ドウ\n¥ 2,198\n¥ 156,069");
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ amount: 2198, balance: 156069 });
+    expect(r[0].desc).toContain("ユウセイフ");
+  });
+});
+
+describe("残高の連なりから金額を復元する", () => {
+  const t = (amount: number, balance?: number) => ({ date: "2026-05-07", desc: "x", amount, ...(balance == null ? {} : { balance }) });
+
+  it("新しい順の明細で、残高を金額に取り違えた行を直す", () => {
+    // 162,343 →(-7,755)→ 154,588 →(-717)→ 153,871
+    const rows = [t(-717, 153871), t(154588), t(-10000, 162343)];
+    expect(repairAmountsFromBalances(rows)[1]).toEqual({ date: "2026-05-07", desc: "x", amount: -7755, balance: 154588 });
+  });
+
+  it("古い順の明細でも直す", () => {
+    const rows = [t(-10000, 162343), t(154588), t(-717, 153871)];
+    expect(repairAmountsFromBalances(rows)[1]).toMatchObject({ amount: -7755, balance: 154588 });
+  });
+
+  it("検算が合わない行には触らない", () => {
+    const rows = [t(-717, 153871), t(99999), t(-10000, 162343)];
+    expect(repairAmountsFromBalances(rows)[1]).toEqual(t(99999));
+  });
+
+  it("隣の残高が無ければ触らない", () => {
+    const rows = [t(-717), t(154588), t(-10000, 162343)];
+    expect(repairAmountsFromBalances(rows)[1]).toEqual(t(154588));
+  });
+
+  it("端の行には触らない(隣が片方しか無い)", () => {
+    const rows = [t(154588), t(-10000, 162343)];
+    expect(repairAmountsFromBalances(rows)[0]).toEqual(t(154588));
   });
 });
