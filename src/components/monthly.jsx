@@ -65,6 +65,12 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
     return { ...def, account, amount: cur > 0 ? String(cur) : "", baseSum: cur };
   }), [entries, ym, accounts]);
 
+  // 使っていないカードは畳んでおく。10枚並ぶと、実際に使う数枚が埋もれて入力しづらい。
+  // 「今月か前月に金額があるもの」を使用中とみなす(初期値で判定し、入力中に消えないよう固定する)。
+  const [showAllCards, setShowAllCards] = useState(false);
+  const usedCards = useMemo(() => cardInit.map((r) => r.amount !== ""), [cardInit]);
+  const hiddenCardCount = usedCards.filter((u) => !u).length;
+
   const [salary, setSalary] = useState(salaryInit);
   const [cardRows, setCardRows] = useState(cardInit);
   const [balRows, setBalRows] = useState(balInit);
@@ -186,13 +192,20 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
           <>
             <div style={styles.mcHead}>カード請求（今月の合計）</div>
             {cardRows.map((r, i) => (
-              <div key={r.name} style={styles.mcRow}>
-                <span style={styles.mcName}>{r.name}{r.fromPrev && r.amount !== "" && <span style={styles.mcPrev}>前月</span>}</span>
-                <div style={{ flex: 1 }}>
-                  <AmountField value={r.amount} onChange={(v) => setCard(i, v)} wrapStyle={styles.mcField} inputStyle={{ fontSize: 16 }} />
+              (usedCards[i] || showAllCards) ? (
+                <div key={r.name} style={styles.mcRow}>
+                  <span style={styles.mcName}>{r.name}{r.fromPrev && r.amount !== "" && <span style={styles.mcPrev}>前月</span>}</span>
+                  <div style={{ flex: 1 }}>
+                    <AmountField value={r.amount} onChange={(v) => setCard(i, v)} wrapStyle={styles.mcField} inputStyle={{ fontSize: 16 }} />
+                  </div>
                 </div>
-              </div>
+              ) : null
             ))}
+            {hiddenCardCount > 0 && (
+              <button style={{ ...styles.chipGhost, padding: "6px 2px" }} onClick={() => setShowAllCards((v) => !v)}>
+                {showAllCards ? "使っていないカードを隠す" : `使っていないカード${hiddenCardCount}枚を表示`}
+              </button>
+            )}
             <div style={styles.mcSub}><span>カード合計</span><span style={{ color: RED, fontWeight: 600 }}>{yen(cardTotal)}</span></div>
           </>
         )}
