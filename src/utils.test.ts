@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1455,5 +1455,25 @@ describe("カードのルールは出金にだけ当てる", () => {
   it("入金はカードにしない(返金・チャージの戻しなので口座の入金)", () => {
     expect(classifyTxnForImport("ＰＡＹＰＡＹ", DEFAULT_CONFIG.importRules, src, 5000))
       .toMatchObject({ action: "account", target: "ゆうちょ" });
+  });
+});
+
+describe("同じ日に複数の取引があるときの期末残高", () => {
+  const t = (date: string, amount: number, balance: number) => ({ date, desc: "x", amount, balance });
+  it("残高の連なりから、その日の最後の取引を選ぶ(並び順に依存しない)", () => {
+    // 5/11に2件。JCB(-120,681→38,728) のあとに ミツビシ(-37,804→924)
+    const rows = [t("2026-05-11", -37804, 924), t("2026-05-11", -120681, 38728)];
+    expect(cycleEndBalances(rows, 10).get("2026-04")).toEqual({ date: "2026-05-11", balance: 924 });
+    // 並びを逆にしても同じ答えになる
+    expect(cycleEndBalances([...rows].reverse(), 10).get("2026-04")).toEqual({ date: "2026-05-11", balance: 924 });
+  });
+  it("月度ごとに分けて返す", () => {
+    const rows = [t("2026-05-11", -37804, 924), t("2026-05-12", -1000, 50000)];
+    const m = cycleEndBalances(rows, 10);
+    expect(m.get("2026-04")!.balance).toBe(924);    // 4月度は5/11まで
+    expect(m.get("2026-05")!.balance).toBe(50000);  // 5/12から5月度
+  });
+  it("残高が無い行は無視する", () => {
+    expect(cycleEndBalances([{ date: "2026-05-11", desc: "x", amount: -100 }], 10).size).toBe(0);
   });
 });
