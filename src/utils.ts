@@ -804,7 +804,9 @@ const SMALL_KANA_MAP: Record<string, string> = {
   "ッ": "ツ", "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ヮ": "ワ",
 };
 export function normalizeForMatch(s: string): string {
-  const stripped = (s || "").normalize("NFKC").replace(/\s/g, "").replace(OCR_NOISE_RE, "");
+  // 大文字小文字は区別しない(「ＰＡＹＰＡＹカード」がルール「Pay」に当たるように)。
+  // 照合する両側に同じ処理をかけるので取り違えは起きない。
+  const stripped = (s || "").normalize("NFKC").toLowerCase().replace(/\s/g, "").replace(OCR_NOISE_RE, "");
   return Array.from(stripped).map((ch) => SMALL_KANA_MAP[ch] || DAKUTEN_MAP[ch] || ch).join("");
 }
 
