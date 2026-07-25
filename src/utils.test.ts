@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1405,5 +1405,31 @@ describe("既定ルールを増やしたとき既存の設定にも入る", () =
   });
   it("濁点が落ちた「ヒユーカート」も引き落としと分かる", () => {
     expect(isDebitDesc("カ ) ヒ ユーカート >")).toBe(true);
+  });
+});
+
+describe("残高がいつ時点かを持ち、締め日まで届いているかを見る", () => {
+  const bal = (ym: string, amount: number, asOf?: string) =>
+    ({ ym, cat: "account" as const, item: "残高", account: "A", amount, ...(asOf ? { asOf } : {}) });
+  it("締め日まで届いていれば covered", () => {
+    // 4月度は 4/11〜5/10。残高が5/10時点なら期間を満たす
+    // 締め日が休日なら翌営業日までが同じ周期(2026-05-10は日曜なので5/11まで)
+    const end = cycleEndDate("2026-04", 10);
+    expect(end).toBe("2026-05-11");
+    const r = verifyCycles([bal("2026-03", 100000, "2026-04-10"), bal("2026-04", 100000, end)], 10)
+      .find((x) => x.ym === "2026-04")!;
+    expect(r.endDate).toBe(end);
+    expect(r.covered).toBe(true);
+  });
+  it("締め日より前の残高なら covered でない(合っていても当てにならない)", () => {
+    const r = verifyCycles([bal("2026-03", 100000, "2026-04-10"), bal("2026-04", 100000, "2026-05-05")], 10)
+      .find((x) => x.ym === "2026-04")!;
+    expect(r.covered).toBe(false);
+    expect(r.ok).toBe(true);   // 金額は合うが、5/6〜5/10が抜けている可能性がある
+  });
+  it("日付が無い残高は covered でない", () => {
+    const r = verifyCycles([bal("2026-03", 100000), bal("2026-04", 100000)], 10).find((x) => x.ym === "2026-04")!;
+    expect(r.asOf).toBeUndefined();
+    expect(r.covered).toBe(false);
   });
 });

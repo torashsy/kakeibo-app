@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -350,7 +350,7 @@ function TransferFinder({ entries, ownKeywords, onConvert }) {
 // 月度ごとの残高照合。「期首残高 + その月度の増減 = 期末残高」が合っていれば
 // 取りこぼしが無いと言えるので、その月度を確定(締め)にできる。
 function CycleVerifier({ entries, config, closedMonths, onClose }) {
-  const rows = React.useMemo(() => verifyCycles(entries || []), [entries]);
+  const rows = React.useMemo(() => verifyCycles(entries || [], config.cycleCutoffDay), [entries, config.cycleCutoffDay]);
   const closed = new Set(closedMonths || []);
   const fixable = rows.filter((r) => r.ok && !closed.has(r.ym));
   if (!onClose || rows.length === 0) return null;
@@ -374,6 +374,11 @@ function CycleVerifier({ entries, config, closedMonths, onClose }) {
                   : r.ok
                     ? `✓ ${yen(r.opening)} ＋ 増減${yen(r.net)} ＝ ${yen(r.closing)}`
                     : `⚠ ${yen(Math.abs(r.diff))} 合いません（計算 ${yen(r.expected)} / 実際 ${yen(r.closing)}）`}
+              </span>
+              <span style={{ display: "block", fontSize: 10.5, color: r.covered ? MUTED : RED, marginTop: 2 }}>
+                {r.asOf
+                  ? (r.covered ? `残高は ${r.asOf} 時点` : `残高は ${r.asOf} 時点で、締め日 ${r.endDate} まで届いていません（その後の取引が抜けたまま合ってしまいます）`)
+                  : "残高がいつ時点か分かりません（取り込み直すと記録されます）"}
               </span>
             </span>
             {r.ok && !closed.has(r.ym) && (
