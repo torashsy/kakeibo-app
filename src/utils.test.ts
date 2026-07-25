@@ -1290,3 +1290,25 @@ describe("JRE BANKのスクショ(日付・金額・残高が1行、摘要が次
     expect(matchesOwnName(txns[1].desc, ["ハヤシ シユンヤ"])).toBe(true);
   });
 });
+
+describe("JRE BANK: OCRが列ごとに行を分けても読める", () => {
+  it("日付・金額・残高が別々の行でも1件にまとめる", () => {
+    const text = ["2026年07月", "07/06", "-156,750", "649", "カ）ビューカード",
+                  "07/04", "137,000", "157,399", "ハヤシ シユンヤ"].join("\n");
+    const t = parseBankText(cleanOcrText(text));
+    expect(t).toHaveLength(2);
+    expect(t[0]).toMatchObject({ date: "2026-07-06", amount: -156750, balance: 649 });
+    expect(t[0].desc).toContain("ビューカード");
+    expect(t[1]).toMatchObject({ date: "2026-07-04", amount: 137000, balance: 157399 });
+  });
+  it("全角のマイナスでも読める", () => {
+    const t = parseBankText(cleanOcrText(["2026年07月", "07/06 −156,750 649", "カ）ビューカード"].join("\n")));
+    expect(t[0].amount).toBe(-156750);
+  });
+  it("月見出しをまたいでも年月が正しく付く", () => {
+    const text = ["2026年07月", "07/06", "-156,750", "649", "カ）ビューカード",
+                  "2026年06月", "06/22", "19,760", "20,399", "カ）ビユーカード"].join("\n");
+    const t = parseBankText(cleanOcrText(text));
+    expect(t.map((x) => x.date)).toEqual(["2026-07-06", "2026-06-22"]);
+  });
+});
