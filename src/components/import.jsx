@@ -362,9 +362,15 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const ocrVerified = !ocrMode || !!(ocrCheck && ocrCheck.ok);
   const ocrAccount = ocrMode && csvNotes[0] ? csvNotes[0].target : "";
   const ocrBalEntries = [];
-  if (ocrMode && ocrVerified && ocrAccount && ocrCheck) {
-    // 開始残高は直前月度の終残高として保存。以後は各月度の最後のOCR残高を保存する。
-    ocrBalEntries.push({ ym: addMonth(ym, -1), cat: "account", item: "残高", account: ocrAccount, amount: Math.round(openingNumber) });
+  if (ocrMode && ocrAccount) {
+    // 明細から読めた残高は事実なので、照合の可否に関わらず保存する。
+    // 以前は照合が通ったときだけ保存していたが、照合には開始残高が要り、その開始残高は
+    // 前月度の残高記録から入る。残高が無い→照合できない→残高が保存されない、と堂々巡りになり
+    // 取引だけが入って残高がいつまでも記録されなかった。
+    // 開始残高(利用者の入力)は、照合が通ったときだけ前月度末として保存する。
+    if (ocrVerified && ocrCheck && Number.isFinite(openingNumber)) {
+      ocrBalEntries.push({ ym: addMonth(ym, -1), cat: "account", item: "残高", account: ocrAccount, amount: Math.round(openingNumber) });
+    }
     const endings = new Map();
     for (const r of (rows || [])) { const t = r.txn; if (Number.isFinite(t.balance)) endings.set(cycleYm(t.date, config.cycleCutoffDay), { date: t.date, balance: t.balance }); }
     for (const [entryYm, v] of endings) ocrBalEntries.push({ ym: entryYm, cat: "account", item: "残高", account: ocrAccount, amount: Math.round(v.balance), asOf: v.date });
