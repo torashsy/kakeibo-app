@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -139,6 +139,13 @@ export default function App() {
     }
     setCards(n); save("cards", n);
   };
+  // 後から見つかった口座間の振替を「口座振替」に直す(収支から外れる)
+  const convertTransfers = (pairs) => setEntries((prev) => {
+    const ids = new Set((pairs || []).flatMap((p) => [p.outId, p.inId]));
+    const n = prev.map((e) => (ids.has(e.id) ? { ...e, item: INTERNAL_TRANSFER_ITEM } : e));
+    save("entries", n); return n;
+  });
+
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
   const commitSubs = (n) => { setSubs(n); save("subs", n); };
@@ -288,7 +295,7 @@ export default function App() {
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
         {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, addMonth, verifyOcrBalanceChain, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -57,6 +57,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const [shortcutCopyStatus, setShortcutCopyStatus] = useState("");
   const [ocrMode, setOcrMode] = useState(false);
   const [openingBalance, setOpeningBalance] = useState("");
+  const [openingYm, setOpeningYm] = useState("");   // 開始残高がどの月度末のものか
   const ocrStartDate = cycleStartDate(ym, config.cycleCutoffDay);
   const initialPickerOpened = useRef(false);
 
@@ -142,9 +143,10 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         allTxns.push(...parseBankText(text, ym));
       }
       const combined = texts.join("\n\n");
-      const unique = dedupeTxns(allTxns);
-      // 取込を開始した月度より前だけを除外する。以後は日付から各月度へ自動で振り分ける。
-      const periodTxns = unique.filter((txn) => txn.date >= ocrStartDate);
+      // 月をまたぐスクショもそのまま扱う。各取引は自分の日付から月度へ振り分けられるので、
+      // 表示中の月度で切り捨てない(以前は開始日より前を捨てていて、前月分が取り込めなかった)。
+      const periodTxns = dedupeTxns(allTxns);
+      const unique = periodTxns;
       const target = guessYuchoScreenshotAccount(combined, config.accounts);
       const guess = target ? { action: "account", target } : null;
       if (periodTxns.length > 0) {
@@ -153,12 +155,19 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
           const auto = classifyRow(txn, guess);
           return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx: 0 };
         }));
-        setCsvNotes([{ name: `スクショ ${files.length}枚`, count: periodTxns.length, target, duplicateCount: allTxns.length - unique.length, outsideCount: unique.length - periodTxns.length }]);
-        const previousYm = addMonth(ym, -1);
+        // どの月度に何件入るかを見せる(月をまたいだ取込でも行き先が分かるように)
+        const byPeriod = {};
+        for (const t of periodTxns) { const k = cycleYm(t.date, config.cycleCutoffDay); byPeriod[k] = (byPeriod[k] || 0) + 1; }
+        setCsvNotes([{ name: `スクショ ${files.length}枚`, count: periodTxns.length, target, duplicateCount: allTxns.length - periodTxns.length, periods: Object.entries(byPeriod).sort() }]);
+        // 開始残高は「取り込む最初の月度の、ひとつ前の月度末の残高」。
+        // 月をまたぐ取込では表示中の月ではなく、実際に取り込む最初の月度を基準にする。
+        const firstYm = cycleYm([...periodTxns].sort((a, b) => a.date.localeCompare(b.date))[0].date, config.cycleCutoffDay);
+        const previousYm = addMonth(firstYm, -1);
         const savedOpening = (existing || []).find((e) => e.ym === previousYm && e.cat === "account" && e.item === "残高" && e.account === target);
         setOpeningBalance(savedOpening ? String(savedOpening.amount) : "");
+        setOpeningYm(previousYm);
       } else {
-        setOcrError(unique.length > 0 ? `${ocrStartDate}以降の取引がありません。` : "取引を読み取れませんでした。");
+        setOcrError("取引を読み取れませんでした。");
       }
     } catch {
       setOcrError("画像の読み取りに失敗しました。");
@@ -335,17 +344,19 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // CSVの残高列から拾った月末残高も一緒に登録する(残高の手入力が不要になる)。
   // 残高は同じ月・口座で1件だけ持つべきなので、追加ではなく置き換える(App側で差し替え)。
   const openingNumber = openingBalance === "" ? null : Number(openingBalance);
+  // 1件ずつではなく総額で照合する(開始残高 + 取引の合計 = 最終残高)。
+  // OCRが途中の残高を読み落としても、全体が合っていれば取りこぼしは無い。
   const ocrCheck = React.useMemo(() => (ocrMode && rows && Number.isFinite(openingNumber)
-    ? verifyOcrBalanceChain(rows.map((r) => r.txn), openingNumber) : null), [ocrMode, rows, openingNumber]);
-  const ocrVerified = !ocrMode || !!(ocrCheck && ocrCheck.total > 0 && ocrCheck.missing === 0 && ocrCheck.mismatched === 0 && ocrCheck.checked === ocrCheck.total);
+    ? verifyBalanceTotal(rows.map((r) => r.txn), openingNumber) : null), [ocrMode, rows, openingNumber]);
+  const ocrVerified = !ocrMode || !!(ocrCheck && ocrCheck.ok);
   const ocrAccount = ocrMode && csvNotes[0] ? csvNotes[0].target : "";
   const ocrBalEntries = [];
   if (ocrMode && ocrVerified && ocrAccount && ocrCheck) {
     // 開始残高は直前月度の終残高として保存。以後は各月度の最後のOCR残高を保存する。
     ocrBalEntries.push({ ym: addMonth(ym, -1), cat: "account", item: "残高", account: ocrAccount, amount: Math.round(openingNumber) });
     const endings = new Map();
-    for (const txn of ocrCheck.ordered) endings.set(cycleYm(txn.date, config.cycleCutoffDay), txn.balance);
-    for (const [entryYm, amount] of endings) ocrBalEntries.push({ ym: entryYm, cat: "account", item: "残高", account: ocrAccount, amount: Math.round(amount) });
+    for (const r of (rows || [])) { const t = r.txn; if (Number.isFinite(t.balance)) endings.set(cycleYm(t.date, config.cycleCutoffDay), { date: t.date, balance: t.balance }); }
+    for (const [entryYm, v] of endings) ocrBalEntries.push({ ym: entryYm, cat: "account", item: "残高", account: ocrAccount, amount: Math.round(v.balance) });
   }
   const balEntries = [
     ...balances.filter((b) => b.account).map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) })),
@@ -384,16 +395,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             </button>
             <input ref={csvRef} type="file" accept=".csv,.txt,text/csv,text/plain" multiple style={{ display: "none" }}
               onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runCsv(f); e.target.value = ""; }} />
-            {(config.importLinks || []).length > 0 && (
-              <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid var(--line)` }}>
-                <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>明細を取りに行く</div>
-                <div style={styles.optionRow}>
-                  {(config.importLinks || []).map((l) => (
-                    <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" style={{ ...styles.optionChip, textDecoration: "none", display: "inline-block" }}>{l.name} ›</a>
-                  ))}
-                </div>
-              </div>
-            )}
             {csvNotes.length > 0 && (
               <div style={{ margin: "10px 2px 0" }}>
                 {csvNotes.map((n, i) => (
@@ -448,25 +449,38 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             ))}
             {ocrMode && (
               <div style={{ ...styles.detailCard, marginBottom: 8, padding: "10px 12px" }}>
-                <label style={{ ...styles.fieldLabel, marginTop: 0 }}>{ocrStartDate.slice(5).replace("-", "/")} 残高</label>
+                <label style={{ ...styles.fieldLabel, marginTop: 0 }}>
+                  {openingYm ? `${periodLabel(openingYm, config.cycleCutoffDay)}末の残高` : "開始残高"}
+                  <span style={{ fontWeight: 400, marginLeft: 6 }}>（記録があれば自動で入ります）</span>
+                </label>
                 <input type="number" inputMode="numeric" value={openingBalance}
                   onChange={(e) => setOpeningBalance(e.target.value)} style={{ ...styles.textInput, marginBottom: 0 }} />
               </div>
             )}
             {ocrMode && openingBalance === "" && (
-              <div style={{ ...styles.flash, background: "var(--expense-soft)", color: RED }}>開始残高を入力</div>
+              <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>開始残高を入れると残高で検算できます（未入力でも追加はできます）</div>
             )}
             {ocrMode && ocrCheck && (
               <div style={{ ...styles.flash, background: ocrVerified ? "var(--group-bg)" : "var(--expense-soft)", color: ocrVerified ? MUTED : RED }}>
-                {ocrVerified
-                  ? `✓ 検算 ${ocrCheck.checked}件`
-                  : ocrCheck.missing
-                    ? `⚠ 残高を読めない明細 ${ocrCheck.missing}件`
-                    : `⚠ 不一致 ${ocrCheck.mismatched}件${ocrCheck.firstMismatch ? ` / ${ocrCheck.firstMismatch.date}` : ""}`}
+                {ocrCheck.ok
+                  ? `✓ 残高が合っています（${yen(ocrCheck.opening)} ＋ 取引${yen(ocrCheck.sum)} ＝ ${yen(ocrCheck.closing)}／${ocrCheck.count}件）`
+                  : `⚠ 残高が ${yen(Math.abs(ocrCheck.diff))} 合いません（${yen(ocrCheck.opening)} ＋ 取引${yen(ocrCheck.sum)} ＝ ${yen(ocrCheck.opening + ocrCheck.sum)} だが最終残高は ${yen(ocrCheck.closing)}）。読み落としがあるかもしれません。金額を直すか、そのまま追加もできます`}
               </div>
             )}
             {/* 残高での検算。CSVの残高列が「手前の残高＋取引＝その行の残高」で繋がるかを見て、
                 読み取り違いや取りこぼしが無いことを取り込む前に確かめられるようにする。 */}
+            {(() => {
+              // 月をまたぐ取込でも、各取引が日付からどの月度へ入るかを見せる
+              const by = {};
+              for (const r of (rows || [])) { const k = cycleYm(r.txn.date, config.cycleCutoffDay); by[k] = (by[k] || 0) + 1; }
+              const ks = Object.keys(by).sort();
+              if (ks.length < 2) return null;
+              return (
+                <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>
+                  月をまたいでいます：{ks.map((k) => `${periodLabel(k, config.cycleCutoffDay)} ${by[k]}件`).join(" / ")}（日付でそれぞれの月度へ振り分けます）
+                </div>
+              );
+            })()}
             {csvNotes.filter((n) => n.check).map((n, i) => (
               <div key={i} style={{ ...styles.flash, background: n.check.mismatched ? "var(--expense-soft)" : "var(--group-bg)", color: n.check.mismatched ? RED : MUTED }}>
                 {n.check.mismatched === 0
@@ -504,7 +518,10 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                       </div>
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0 2px", gap: 8 }}>
-                      <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>{r.txn.date}</span>
+                      <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>
+                        {r.txn.date}
+                        <span style={{ fontSize: 10.5, marginLeft: 6, opacity: 0.8 }}>{periodLabel(cycleYm(r.txn.date, config.cycleCutoffDay), config.cycleCutoffDay)}</span>
+                      </span>
                       <input type="number" inputMode="numeric" value={r.txn.amount}
                         onChange={(e) => setRow(i, { txn: { ...r.txn, amount: e.target.value === "" ? 0 : Number(e.target.value) } })}
                         style={{ ...styles.textInput, width: 120, textAlign: "right", padding: "5px 8px", fontSize: 14.5, fontWeight: 600, color: r.txn.amount < 0 ? RED : GREEN }} />
@@ -552,7 +569,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 );
               })}
             </div>
-            <button style={{ ...styles.saveBtn, opacity: ((includedCount || balEntries.length) && ocrVerified) ? 1 : 0.4 }} disabled={(!includedCount && !balEntries.length) || !ocrVerified} onClick={commit}>
+            <button style={{ ...styles.saveBtn, opacity: (includedCount || balEntries.length) ? 1 : 0.4 }} disabled={!includedCount && !balEntries.length} onClick={commit}>
               {includedCount}件を追加{balEntries.length > 0 ? `＋残高${balEntries.length}件` : ""}
             </button>
             <button style={styles.cancelBtn} onClick={() => { setRows(null); setOcrMode(false); setOpeningBalance(""); }}>やり直す</button>

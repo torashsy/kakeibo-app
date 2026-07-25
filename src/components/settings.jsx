@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -168,7 +168,7 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
   );
 }
 
-export function Settings({ config, onSave, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
+export function Settings({ config, onSave, onConvertTransfers, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
   const [c, setC] = useState(config);
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
@@ -239,32 +239,9 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
           <div style={styles.detailCard}>{(c[g.key] || []).map((name, i) => <div key={i} style={styles.settingRow}><span>{name}</span><button style={styles.removeBtn} onClick={() => removeItem(g.key, i)}>削除</button></div>)}</div>
         </div>
       ))}
-      {/* 明細CSVを落とす画面へのリンク。セッション依存で直接飛べない銀行もあるため、
-          実際に使えるURLを利用者にコピーして登録してもらう。 */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={styles.detailHead}>
-          <span>明細リンク</span>
-          <button style={styles.addBtn} onClick={() => {
-            const name = (prompt("表示名（例：ゆうちょ）") || "").trim(); if (!name) return;
-            const url = (prompt("URL（Safariでその画面を開いてURLをコピーして貼り付け）") || "").trim();
-            if (!/^https?:\/\//.test(url)) { if (url) alert("http(s) で始まるURLを入れてください"); return; }
-            const next = { ...c, importLinks: [...(c.importLinks || []), { id: uid(), name, url }] };
-            setC(next); onSave(next);
-          }}>＋ 追加</button>
-        </div>
-        <div style={styles.detailCard}>
-          {(c.importLinks || []).length === 0 && <div style={{ color: MUTED, fontSize: 12.5, padding: "6px 2px" }}>まだありません</div>}
-          {(c.importLinks || []).map((l, i) => (
-            <div key={l.id} style={styles.settingRow}>
-              <span style={{ overflow: "hidden" }}>
-                <span style={{ display: "block" }}>{l.name}</span>
-                <span style={{ display: "block", fontSize: 11, color: MUTED, wordBreak: "break-all" }}>{l.url}</span>
-              </span>
-              <button style={styles.removeBtn} onClick={() => { const next = { ...c, importLinks: (c.importLinks || []).filter((_, j) => j !== i) }; setC(next); onSave(next); }}>削除</button>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* 口座間の振替を後から探す。振替の判定は取込時にしか走らないので、
+          機能を入れる前に取り込んだ記録や手入力の記録は入金/出金のまま残る。 */}
+      <TransferFinder entries={entries} ownKeywords={c.ownTransferKeywords} onConvert={onConvertTransfers} />
 
       <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
       <SyncSection />
@@ -320,6 +297,44 @@ export function ThemeEditor({ theme, onSave, onBack }) {
       </div>
 
       <button style={{ ...styles.backupBtn, marginTop: 16, color: RED, border: "1px solid #E7C9C0" }} onClick={() => onSave({ ...DEFAULT_THEME })}>初期設定に戻す</button>
+    </div>
+  );
+}
+
+
+// 既存の記録から自分の口座間の振替を探して「口座振替」に直す。
+// 同じ額で逆向き・別の口座・同じ日(指紋があるとき)または同じ月、が条件。
+function TransferFinder({ entries, ownKeywords, onConvert }) {
+  const [found, setFound] = useState(null);
+  const scan = () => setFound(findInternalTransfers(entries || [], ownKeywords));
+  if (!onConvert) return null;
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={styles.detailHead}><span>口座間の振替を探す</span></div>
+      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>
+        同じ額の入金と出金が別の口座に同じ日（日付が無い記録は同じ月）であれば、自分の口座間の移動とみなして「口座振替」に直します。収支から外れます。
+      </div>
+      <div style={styles.detailCard}>
+        <button style={{ ...styles.backupBtn, marginTop: 6 }} onClick={scan}>記録を調べる</button>
+        {found && found.length === 0 && <div style={{ color: MUTED, fontSize: 12.5, padding: "8px 2px" }}>振替らしい組は見つかりませんでした</div>}
+        {found && found.length > 0 && (
+          <>
+            {found.map((f) => (
+              <div key={f.outId} style={{ ...styles.settingRow, alignItems: "flex-start" }}>
+                <span style={{ overflow: "hidden" }}>
+                  <span style={{ display: "block", fontSize: 13 }}>{f.date || f.ym}　{yen(f.amount)}</span>
+                  <span style={{ display: "block", fontSize: 11, color: MUTED }}>
+                    {f.account_out} → {f.account_in}{f.certain ? "" : "（日付か名義が確認できないので要確認）"}
+                  </span>
+                </span>
+              </div>
+            ))}
+            <button style={{ ...styles.saveBtn, marginTop: 10 }} onClick={() => { onConvert(found); setFound([]); }}>
+              {found.length}組を口座振替にする
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

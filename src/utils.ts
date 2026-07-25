@@ -21,7 +21,6 @@ export interface Config {
   cycleCutoffDay?: number;    // 家計の月の締め日。0/未設定は暦通り。10なら「10日締め」=11日〜翌月10日を1周期(土日祝は翌営業日)
   ownTransferKeywords?: string[]; // 自分名義の口座間送金とみなす摘要のキーワード(例: 自分の氏名)。該当は収支に計上しない
   csvAccountMap?: Record<string, string>; // CSVの目印→口座。一度選べば次回から自動で振り分ける
-  importLinks?: { id: string; name: string; url: string }[]; // 明細CSVを落とす画面へのリンク。取込画面から開く
   importRulesSeeded?: number;     // 既定ルールを追加した版。増やすと一度だけ追加が走る(利用者が消したルールは復活しない)
   ownTransferKeywordsSeeded?: number; // 自分名義キーワードを追加した版
 }
@@ -305,7 +304,6 @@ export function migrateConfig(cfg: any): any {
   if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
   if (!Array.isArray(out.ownTransferKeywords)) out = { ...out, ownTransferKeywords: [] };
   if (!out.csvAccountMap || typeof out.csvAccountMap !== "object") out = { ...out, csvAccountMap: {} };
-  if (!Array.isArray(out.importLinks)) out = { ...out, importLinks: [] };
   // 給与・賞与の除外ルールを一度だけ追加する。版で管理するので、利用者が消したら復活しない。
   if (!(Number(out.importRulesSeeded) >= 1)) {
     const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);
@@ -977,6 +975,42 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
   return partner;
 }
 
+// 既存の記録から「自分の口座間の振替」を後から探す。
+// 振替の判定は取込時にしか走らないため、機能を入れる前に取り込んだ記録や手入力の記録は
+// 入金/出金のまま残る。それを後から見つけて「口座振替」に直せるようにする。
+// 条件: 同じ額で逆向き・別の口座・同じ日(指紋があるとき)または同じ月。
+export interface FoundTransferPair {
+  outId: string; inId: string; account_out: string; account_in: string;
+  amount: number; ym: string; date?: string; certain: boolean;
+}
+export function findInternalTransfers(entries: Entry[], ownKeywords?: string[]): FoundTransferPair[] {
+  const dayDiff = (a: string, b: string) => Math.abs((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 86400000);
+  const cand = (entries || [])
+    .filter((e) => e.cat === "account" && (acctRole(e.item) === "in" || acctRole(e.item) === "out") && e.id)
+    .map((e) => { const k = parseTxnKey(e.src); return { e, date: k ? k.date : null, own: k ? matchesOwnName(k.desc, ownKeywords) : null }; });
+  const used = new Set<string>();
+  const out: FoundTransferPair[] = [];
+  for (const a of cand) {
+    if (used.has(a.e.id!) || a.e.amount >= 0) continue;             // 出た側から探す
+    for (const b of cand) {
+      if (b === a || used.has(b.e.id!) || b.e.amount !== -a.e.amount) continue;
+      if ((b.e.account || "") === (a.e.account || "")) continue;    // 同じ口座の中の動きは振替ではない
+      // 日付が分かる同士は同日(±1日)、分からなければ同じ月で照合する
+      if (a.date && b.date) { if (dayDiff(a.date, b.date) > 1) continue; }
+      else if (a.e.ym !== b.e.ym) continue;
+      used.add(a.e.id!); used.add(b.e.id!);
+      out.push({
+        outId: a.e.id!, inId: b.e.id!, account_out: a.e.account || "", account_in: b.e.account || "",
+        amount: Math.abs(a.e.amount), ym: a.e.ym, date: a.date || b.date || undefined,
+        // 名義まで一致し、同じ日と分かっているものは確度が高い
+        certain: !!(a.date && b.date && a.date === b.date && a.own && b.own),
+      });
+      break;
+    }
+  }
+  return out;
+}
+
 // 取込元の明細を一意に表す指紋。CSVの期間が重なっても同じ取引を二重登録しないために使う。
 // 摘要は表記ゆれ・OCRの揺れを吸収した正規化後の先頭部分だけを使う。
 export const txnKey = (txn: ParsedTxn): string => `${txn.date}|${Math.round(txn.amount)}|${normalizeForMatch(txn.desc).slice(0, 24)}`;
@@ -1007,6 +1041,22 @@ export interface OcrBalanceCheck extends BalanceCheck {
 
 // 開始残高を起点に「直前残高 + 取引額 = OCR残高」が全件つながる順番を復元する。
 // 画像の選択順や、同じ日の明細順に依存しない。1件でも残高欠落・不一致があれば失敗。
+// 取込全体の残高照合。1件ずつ突き合わせる必要はなく、
+// 「開始残高 + 取引の合計 = 最終残高」が合っていれば取りこぼしも読み違いも無いと言える。
+// 最終残高は明細から読めた最後の残高を使う(読めなければ照合しない)。
+export interface BalanceTotalCheck { ok: boolean; opening: number; closing: number; sum: number; diff: number; count: number; }
+export function verifyBalanceTotal(txns: ParsedTxn[], openingBalance: number, closingBalance?: number): BalanceTotalCheck | null {
+  const unique = dedupeTxns(txns || []);
+  if (!unique.length || !Number.isFinite(openingBalance)) return null;
+  const byDate = [...unique].sort((a, b) => a.date.localeCompare(b.date));
+  const lastWithBal = [...byDate].reverse().find((t) => Number.isFinite(t.balance));
+  const closing = Number.isFinite(closingBalance as number) ? Number(closingBalance) : (lastWithBal ? Number(lastWithBal.balance) : NaN);
+  if (!Number.isFinite(closing)) return null;
+  const sum = unique.reduce((a, t) => a + t.amount, 0);
+  const diff = Math.round(openingBalance + sum - closing);
+  return { ok: diff === 0, opening: Math.round(openingBalance), closing: Math.round(closing), sum: Math.round(sum), diff, count: unique.length };
+}
+
 export function verifyOcrBalanceChain(txns: ParsedTxn[], openingBalance: number): OcrBalanceCheck {
   const unique = dedupeTxns(txns || []);
   const missing = unique.filter((t) => !Number.isFinite(t.balance)).length;
