@@ -39,8 +39,23 @@ createRoot(document.getElementById("root")).render(
 );
 
 // PWA: 本番(https配信)でのみService Workerを登録。無い環境(プレビュー等)では黙って何もしない。
+// ホーム画面のアプリは一度開くと開きっぱなしになり、新しい版を取りに行くきっかけが無い。
+// そのため前面に戻るたびに更新を確認し、新しいSWに入れ替わったら読み込み直す。
+// (入れ替えは skipWaiting + clients.claim で即座に起きるので controllerchange を合図にする)
 if (import.meta.env.PROD && typeof navigator !== "undefined" && "serviceWorker" in navigator && location.protocol === "https:") {
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker.register("./sw.js").then((reg) => {
+      if (!reg) return;
+      const check = () => { try { reg.update(); } catch {} };
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+      window.addEventListener("focus", check);
+      setInterval(check, 30 * 60 * 1000);
+    }).catch(() => {});
   });
 }
