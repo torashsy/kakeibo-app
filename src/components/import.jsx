@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cycleEndBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -127,16 +127,9 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         // 月度ごとの期末残高を保存する(最新1件だけだと、期間をまたぐCSVで
         // 前の月度の残高が記録されない)。各月度で日付が最も新しい行の残高を採る。
         const acct = guess && guess.action === "account" ? guess.target : "";
-        const withBal = res.txns.filter((t) => Number.isFinite(t.balance));
-        if (withBal.length) {
-          const desc = withBal.length > 1 && withBal[0].date > withBal[withBal.length - 1].date;
-          const m = new Map();
-          for (const t of withBal) {
-            const k = cycleYm(t.date, config.cycleCutoffDay);
-            const cur = m.get(k);
-            if (!cur || t.date > cur.date || (t.date === cur.date && !desc)) m.set(k, { date: t.date, amount: t.balance });
-          }
-          for (const v of m.values()) bals.push({ account: acct, fileIdx, ...v });
+        const perCycle = cycleEndBalances(res.txns, config.cycleCutoffDay);
+        if (perCycle.size) {
+          for (const v of perCycle.values()) bals.push({ account: acct, fileIdx, date: v.date, amount: v.balance });
         } else if (res.balance) bals.push({ account: acct, fileIdx, ...res.balance });
         notes.push({ name: file.name, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck, signature: res.signature });
       } catch (e) {
@@ -386,19 +379,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     if (ocrVerified && ocrCheck && Number.isFinite(openingNumber)) {
       ocrBalEntries.push({ ym: addMonth(ym, -1), cat: "account", item: "残高", account: ocrAccount, amount: Math.round(openingNumber) });
     }
-    // その月度の残高は「日付が最も新しい行」の残高。明細の並び順で最後に来た行を
-    // 採ると、新しい順に並ぶ明細(JRE BANK等)ではその月度で最も古い行を拾ってしまう。
-    const endings = new Map();
-    const withBal = (rows || []).map((r) => r.txn).filter((t) => Number.isFinite(t.balance));
-    const descending = withBal.length > 1 && withBal[0].date > withBal[withBal.length - 1].date;
-    for (const t of withBal) {
-      const k = cycleYm(t.date, config.cycleCutoffDay);
-      const cur = endings.get(k);
-      // 同じ日が複数あるときは、新しい順なら先に出てきた方が後の取引
-      if (!cur || t.date > cur.date || (t.date === cur.date && !descending)) {
-        endings.set(k, { date: t.date, balance: t.balance });
-      }
-    }
+    const endings = cycleEndBalances((rows || []).map((r) => r.txn), config.cycleCutoffDay);
     for (const [entryYm, v] of endings) ocrBalEntries.push({ ym: entryYm, cat: "account", item: "残高", account: ocrAccount, amount: Math.round(v.balance), asOf: v.date });
   }
   const balEntries = [

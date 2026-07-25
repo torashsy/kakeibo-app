@@ -1074,6 +1074,31 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
 
 // カードの明細CSVかどうか。カードの明細は残高列が無く、全行が利用(同じ向き)になる。
 // 口座の明細は残高列があるか、入金と出金が混ざる。
+// 月度ごとの期末残高。同じ日に複数の取引があるとき、どれが最後かは並び順では
+// 決められない(明細の並びは銀行ごとに違う)。残高の連なりで判定する:
+// 「自分の残高から自分の金額を引いた額」が他の行の残高と一致するなら、その行は相手より後。
+// どの行の前でもない行が、その日の最後の取引。
+export function cycleEndBalances(txns: ParsedTxn[], cutoffDay: number = 0): Map<string, { date: string; balance: number }> {
+  const withBal = (txns || []).filter((t) => Number.isFinite(t.balance));
+  const out = new Map<string, { date: string; balance: number }>();
+  const byCycle = new Map<string, ParsedTxn[]>();
+  for (const t of withBal) {
+    const k = cycleYm(t.date, cutoffDay);
+    if (!byCycle.has(k)) byCycle.set(k, []);
+    byCycle.get(k)!.push(t);
+  }
+  for (const [k, list] of byCycle) {
+    const lastDate = list.reduce((a, t) => (t.date > a ? t.date : a), list[0].date);
+    const sameDay = list.filter((t) => t.date === lastDate);
+    // その日の中で、他のどの行の「ひとつ前」にもなっていない行が最後
+    const isPredecessorOfOther = (t: ParsedTxn) =>
+      sameDay.some((o) => o !== t && Math.round((o.balance as number) - o.amount) === Math.round(t.balance as number));
+    const last = sameDay.find((t) => !isPredecessorOfOther(t)) || sameDay[sameDay.length - 1];
+    out.set(k, { date: lastDate, balance: Math.round(last.balance as number) });
+  }
+  return out;
+}
+
 // OCRはマイナス記号を読み落とすことがある。残高の増減から符号を決め直す。
 // 金額の大きさが増減と一致するときだけ直すので、読み違いを増やさない。
 export function fixSignsFromBalances(txns: ParsedTxn[]): ParsedTxn[] {
