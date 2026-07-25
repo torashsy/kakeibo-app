@@ -513,6 +513,24 @@ export function migratePlan(plan: any, subs: Sub[] | null | undefined): Plan {
 export const monthHasInput = (monthEntries: Entry[], memos: Memo[], ym: string): boolean =>
   monthEntries.length > 0 || (memos || []).some((m) => m.ym === ym);
 
+// 指定月度時点の各口座の残高。その月に記録が無ければ、記録のある直近の月から引き継ぐ。
+// (残高は「その月に動きがなければ前月末のまま」なので、記録の無い月を空欄にすると実態と合わない)
+export function balancesAsOf(entries: Entry[], ym: string): Record<string, { amount: number; ym: string }> {
+  const out: Record<string, { amount: number; ym: string }> = {};
+  for (const e of entries || []) {
+    if (e.cat !== "account" || acctRole(e.item) !== "bal" || e.ym > ym) continue;
+    const key = e.account || "";
+    const cur = out[key];
+    if (!cur || e.ym > cur.ym) out[key] = { amount: e.amount, ym: e.ym };
+  }
+  return out;
+}
+export const balTotalAsOf = (entries: Entry[], ym: string): number | null => {
+  const b = balancesAsOf(entries, ym);
+  const ks = Object.keys(b);
+  return ks.length ? ks.reduce((a, k) => a + b[k].amount, 0) : null;
+};
+
 // その月に残高記録があるか / 残高計
 export const hasBalRecord = (monthEntries: Entry[]): boolean => monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");
 export const balTotalOf = (monthEntries: Entry[]): number => monthEntries.reduce((a, e) => a + (e.cat === "account" && acctRole(e.item) === "bal" ? e.amount : 0), 0);
@@ -1008,6 +1026,23 @@ export function findCardByTotal(total: number, entries: Entry[], tolerance = 0):
 // そのカード・その月に既に記録されている請求額の合計
 export const cardMonthTotal = (entries: Entry[], card: string, ym: string): number =>
   (entries || []).reduce((a, e) => a + (e.cat === "card" && e.item === card && e.ym === ym ? Math.abs(e.amount) : 0), 0);
+
+// 口座からの引き落としらしい摘要(自払=自動払込、口座振替など)。ほとんどがカードの請求。
+export const DEBIT_HINT_RE = /自払|自動払込|口座振替|カード/;
+
+// 引き落とし行がどのカードかを推測する。当たらなくても利用者が振り分け直せるので、
+// 「分からないから口座の出金にする」より「カードとして出して選んでもらう」方が実態に合う。
+//   1. 摘要にカード名が含まれる
+//   2. 引き落とし額が、その月度に入力済みの請求額と一致する
+export function guessCardForDebit(
+  desc: string, amount: number, ym: string, cardNames: string[], entries: Entry[]
+): string | null {
+  const nd = normalizeForMatch(desc);
+  const byName = (cardNames || []).filter((n) => { const k = normalizeForMatch(n); return !!k && nd.includes(k); });
+  if (byName.length === 1) return byName[0];
+  const hit = findCardByTotal(Math.abs(amount), entries || []);
+  return hit && hit.ym === ym ? hit.card : null;
+}
 
 // 既存の記録から「自分の口座間の振替」を後から探す。
 // 振替の判定は取込時にしか走らないため、機能を入れる前に取り込んだ記録や手入力の記録は

@@ -3,10 +3,13 @@ import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
 import { styles } from '../styles.js';
 
-export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose, onOpenImport }) {
+export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose, onOpenImport }) {
   const [cardOpen, setCardOpen] = useState(false);
-  const hasBal = Object.keys(summary.balances).length > 0;
-  const balChange = (hasBal && prevBalTotal != null) ? summary.balTotal - prevBalTotal : null;
+  // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
+  const shown = balancesNow || {};
+  const hasBal = Object.keys(shown).length > 0;
+  const balTotalNow = Object.values(shown).reduce((a, b) => a + b.amount, 0);
+  const balChange = (hasBal && prevBalTotal != null) ? balTotalNow - prevBalTotal : null;
   const breakdown = useMemo(() => cardBreakdown(cards, debt || {}, memos, monthEntries, ym), [cards, debt, memos, monthEntries, ym]);
   const hasBreakdown = breakdown.length > 0;
   return (
@@ -53,8 +56,13 @@ export function Summary({ summary, prevBalTotal, plans, subs, config, cards, deb
       <div style={styles.sectionTitle}>口座残高</div>
       <div style={styles.balCard}>
         {!hasBal && <div style={{ color: MUTED, fontSize: 13, padding: "6px 2px" }}>この月の残高記録はまだありません</div>}
-        {Object.entries(summary.balances).map(([acc, v]) => <div style={styles.balRow} key={acc}><span style={styles.balAcc}>{acc}</span><span style={styles.balVal}>{yen(v)}</span></div>)}
-        {hasBal && <div style={{ ...styles.balRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 10 }}><span style={{ ...styles.balAcc, fontWeight: 600 }}>合計</span><span style={{ ...styles.balVal, fontWeight: 600 }}>{yen(summary.balTotal)}</span></div>}
+        {Object.entries(shown).map(([acc, b]) => (
+          <div style={styles.balRow} key={acc}>
+            <span style={styles.balAcc}>{acc}{b.ym !== ym && <span style={{ fontSize: 10.5, color: MUTED, marginLeft: 6 }}>{ymLabel(b.ym)}から</span>}</span>
+            <span style={styles.balVal}>{yen(b.amount)}</span>
+          </div>
+        ))}
+        {hasBal && <div style={{ ...styles.balRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 10 }}><span style={{ ...styles.balAcc, fontWeight: 600 }}>合計</span><span style={{ ...styles.balVal, fontWeight: 600 }}>{yen(balTotalNow)}</span></div>}
         {balChange != null && <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED, fontSize: 13 }}>前月からの増減</span><span style={{ ...styles.balVal, color: balChange >= 0 ? GREEN : RED }}>{yen(balChange)}</span></div>}
       </div>
       {balChange != null && (() => {
