@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1232,5 +1232,32 @@ describe("OCRの読み取り結果を整える", () => {
   });
   it("行の構造は保つ", () => {
     expect(cleanOcrText("自 払 セソ ン\n-68,000")).toBe("自払セソン\n-68,000");
+  });
+});
+
+describe("同じ支払先を金額で分ける / 符号を残高から直す", () => {
+  it("三井住友は294のときsmcc、それ以外はSMCC Gold", () => {
+    const r = DEFAULT_CONFIG.importRules;
+    expect(classifyTxn("自払 三井住友カード", r, -294)).toMatchObject({ action: "card", target: "smcc" });
+    expect(classifyTxn("自払 三井住友カード", r, -12345)).toMatchObject({ action: "card", target: "SMCC Gold" });
+    expect(classifyTxn("自払ミツイスミトモ", r, 294)).toMatchObject({ action: "card", target: "smcc" });
+  });
+  it("金額が分からないときは金額つきルールを当てない", () => {
+    expect(classifyTxn("自払 三井住友カード", DEFAULT_CONFIG.importRules)).toMatchObject({ target: "SMCC Gold" });
+  });
+  it("マイナスを読み落としても残高の増減から符号を直す", () => {
+    // 新しい順。残高が減っているので出金
+    const fixed = fixSignsFromBalances([
+      { date: "2026-04-11", desc: "自払 三井住友", amount: 294, balance: 9706 },
+      { date: "2026-04-10", desc: "前の取引", amount: -1000, balance: 10000 },
+    ]);
+    expect(fixed[0].amount).toBe(-294);
+  });
+  it("増減と金額の大きさが合わないときは触らない", () => {
+    const fixed = fixSignsFromBalances([
+      { date: "2026-04-11", desc: "x", amount: 500, balance: 9706 },
+      { date: "2026-04-10", desc: "y", amount: -1000, balance: 10000 },
+    ]);
+    expect(fixed[0].amount).toBe(500);
   });
 });
