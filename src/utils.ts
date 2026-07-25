@@ -19,6 +19,7 @@ export interface Config {
   importRules?: ImportRule[]; // スクショ取込で摘要から自動振り分けするルール(先勝ち)
   cycleCutoffDay?: number;    // 家計の月の締め日。0/未設定は暦通り。10なら「10日締め」=11日〜翌月10日を1周期(土日祝は翌営業日)
   ownTransferKeywords?: string[]; // 自分名義の口座間送金とみなす摘要のキーワード(例: 自分の氏名)。該当は収支に計上しない
+  importRulesSeeded?: number;     // 既定ルールを追加した版。増やすと一度だけ追加が走る(利用者が消したルールは復活しない)
 }
 
 // スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
@@ -234,6 +235,10 @@ export const DEFAULT_CONFIG: Config = {
   ownTransferKeywords: [],
   // スクショ取込の初期ルール例(自払=カード引き落とし、ことら=自分名義の口座間送金なので未計上)
   importRules: [
+    // 給与・賞与は給与明細から手入力する(控除などの内訳を残すため)。
+    // 口座への入金としても取り込むと収入が二重になるので除外する。
+    { id: uid(), match: "給与", action: "skip" },
+    { id: uid(), match: "賞与", action: "skip" },
     { id: uid(), match: "ミツビシ", action: "card", target: "MDC" },
     { id: uid(), match: "JCBカード", action: "card", target: "JAL navi" },
     { id: uid(), match: "セゾン", action: "card", target: "SAISON" },
@@ -277,6 +282,12 @@ export function migrateConfig(cfg: any): any {
   if (!Array.isArray(out.memoCategories)) out = { ...out, memoCategories: ["交際費"] };
   if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
   if (!Array.isArray(out.ownTransferKeywords)) out = { ...out, ownTransferKeywords: [] };
+  // 給与・賞与の除外ルールを一度だけ追加する。版で管理するので、利用者が消したら復活しない。
+  if (!(Number(out.importRulesSeeded) >= 1)) {
+    const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);
+    const add = ["給与", "賞与"].filter((m) => !has(m)).map((m) => ({ id: uid(), match: m, action: "skip" as const }));
+    out = { ...out, importRules: [...add, ...(out.importRules || [])], importRulesSeeded: 1 };
+  }
   // 旧「ことら→取り込まない」は他人との送金・受取まで落としてしまうので、口座の出金/入金へ直す。
   // 自分名義ぶんは ownTransferKeywords で除外する。
   if ((out.importRules || []).some((r: any) => r && r.match === "ことら" && r.action === "skip")) {
