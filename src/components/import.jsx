@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers, parseTxnKey } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -158,7 +158,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       setOcrError("クリップボードを読み取れませんでした。下のテキスト欄に貼り付けてください。");
       return;
     }
-    ingestText(text, "クリップボード");
+    // ショートカットがBase64でコピーしている場合もあるので復元してから解析する
+    ingestText(decodeImportPayload(text), "クリップボード");
   };
 
   const parse = () => {
@@ -251,7 +252,13 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     <div style={styles.sheetBackdrop} onClick={onClose}>
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={styles.sheetHandle} />
-        <div style={styles.sheetTitle}>スクショ取込</div>
+        <div style={styles.sheetTitle}>取り込み</div>
+        {/* ホーム画面のアプリとSafariでは保存先が別。Safariで取り込むとアプリ側に出てこないので気付けるようにする */}
+        {typeof window !== "undefined" && !(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) && !window.navigator.standalone && (
+          <div style={{ ...styles.flash, background: "var(--expense-soft)", color: RED }}>
+            いまブラウザで開いています。ここで取り込むと、ホーム画面のアプリには出てきません（保存先が別のため）。同じユーザー名でクラウド同期していれば共有されます。
+          </div>
+        )}
 
         {!rows && (
           <>

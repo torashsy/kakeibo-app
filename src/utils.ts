@@ -849,6 +849,25 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
   return null;
 }
 
+// 取込で受け取った文字列を実際のCSVへ復元する。ショートカット経由では
+// Base64(バイト列のまま)で渡ってくることがあり、銀行CSVはShift_JISが多いので
+// 文字コードの判定もここで行う。Base64でなければそのまま返す。
+export function decodeImportPayload(raw: string): string {
+  const s = String(raw || "");
+  const compact = s.replace(/\s/g, "");
+  // Base64以外の文字が混ざっていれば、そのままのCSVとみなす(CSVには必ずカンマや改行が入る)
+  if (compact.length < 16 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return s;
+  try {
+    const bin = typeof atob === "function" ? atob(compact) : "";
+    if (!bin) return s;
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    let text = new TextDecoder("utf-8").decode(bytes);
+    if (text.includes("\uFFFD")) { try { text = new TextDecoder("shift_jis").decode(bytes); } catch {} }
+    // 復号結果がCSVらしくなければ、元の文字列の方が正しい
+    return text.includes(",") ? text : s;
+  } catch { return s; }
+}
+
 // 摘要が自分名義(設定のキーワード)かどうか。表記ゆれ・半角カナはNFKCで吸収する。
 export const matchesOwnName = (desc: string, keywords: string[] | undefined): boolean => {
   const nd = normalizeForMatch(desc);

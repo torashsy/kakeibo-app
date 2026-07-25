@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, matchesOwnName, pairOwnTransfers,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, matchesOwnName, pairOwnTransfers, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -907,5 +907,25 @@ describe("口座間の振替は同日・同額・逆符号・別口座の組で�
     const p = pairOwnTransfers(items);
     expect(p.filter((x) => x >= 0)).toHaveLength(2); // 1組だけ成立、余った1件は残る
     expect(p[2]).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("取込データの復元(ショートカット経由)", () => {
+  const csv = "日付,内容,出金金額,入金金額,残高\n2026/07/10,ATM,17000,,4660\n";
+  const b64of = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+  it("Base64で渡ってきたUTF-8のCSVを復元する", () => {
+    const b64 = b64of(csv);
+    expect(decodeImportPayload(b64)).toBe(csv);
+  });
+  it("そのままのCSVはそのまま返す", () => {
+    expect(decodeImportPayload(csv)).toBe(csv);
+  });
+  it("Base64に見えてもCSVでなければ元の文字列を返す", () => {
+    const b64 = b64of("これはCSVではない文章です");
+    expect(decodeImportPayload(b64)).toBe(b64);
+  });
+  it("空や短い文字列で壊れない", () => {
+    expect(decodeImportPayload("")).toBe("");
+    expect(decodeImportPayload("abc")).toBe("abc");
   });
 });

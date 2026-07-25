@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, addMonth, evalAmount, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -100,16 +100,7 @@ export default function App() {
       const m = h.match(/[#&]import=([^&]*)/);
       if (m64) {
         const raw = (() => { try { return decodeURIComponent(m64[1]); } catch { return m64[1]; } })();
-        try {
-          const bin = atob(raw.replace(/\s/g, ""));
-          const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-          text = new TextDecoder("utf-8").decode(bytes);
-          if (text.includes("\uFFFD")) { try { text = new TextDecoder("shift_jis").decode(bytes); } catch {} }
-        } catch {
-          // Base64として読めない場合(ショートカットでBase64エンコードを挟み忘れた等)は、
-          // そのままの文字列として扱う。黙って何も起きないより、取込画面で結果を見せる。
-          text = raw;
-        }
+        text = decodeImportPayload(raw);
       } else if (m) {
         try { text = decodeURIComponent(m[1].replace(/\+/g, " ")); } catch { return; }
       } else return;
