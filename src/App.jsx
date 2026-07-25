@@ -146,6 +146,13 @@ export default function App() {
     save("entries", n); return n;
   });
 
+  // 取引の記録だけをすべて消す(設定・カード・取込ルール・計画・定期費は残す)。
+  // 取り込み直したいときのために用意。消す前にバックアップを促す。
+  const clearAllEntries = () => {
+    setEntries(() => { save("entries", []); return []; });
+    setClosedMonths(() => { save("closedMonths", []); return []; });
+  };
+
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
   const commitSubs = (n) => { setSubs(n); save("subs", n); };
@@ -290,9 +297,9 @@ export default function App() {
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
         {tab === "today" && <Summary summary={summary} balancesNow={balancesAsOf(entries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
-        {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
+        {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onToggleClosedMonth={toggleClosedMonth} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
         {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>

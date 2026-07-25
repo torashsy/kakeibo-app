@@ -168,7 +168,7 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
   );
 }
 
-export function Settings({ config, onSave, onConvertTransfers, onToggleClosedMonth, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
+export function Settings({ config, onSave, onConvertTransfers, onToggleClosedMonth, onClearEntries, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
   const [c, setC] = useState(config);
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
@@ -252,6 +252,24 @@ export function Settings({ config, onSave, onConvertTransfers, onToggleClosedMon
       <div style={{ fontSize: 11, color: MUTED, textAlign: "center", padding: "4px 0 14px" }}>
         版 {typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}
       </div>
+
+      {onClearEntries && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={styles.detailHead}><span>記録の削除</span></div>
+          <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>
+            取引の記録だけを消します。設定・カード・取込ルール・計画・定期費は残ります。
+            取り込み直したいときに使ってください。<b>消す前に上の「保存」でバックアップを取ってください。</b>
+          </div>
+          <div style={styles.detailCard}>
+            <button style={{ ...styles.backupBtn, color: RED, border: "1px solid #E7C9C0" }}
+              onClick={() => {
+                if (!window.confirm("取引の記録をすべて削除します。設定やカードは残ります。バックアップは取りましたか？")) return;
+                if (!window.confirm("本当に削除します。元に戻せません。よろしいですか？")) return;
+                onClearEntries();
+              }}>記録をすべて削除</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ marginBottom: 8 }}>
         <div style={styles.detailHead}><span>バックアップ</span></div>
