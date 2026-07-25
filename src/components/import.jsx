@@ -90,7 +90,9 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     const byRule = classifyTxn(txn.desc, config.importRules, txn.amount);
     // カード会社のルールに当たる引き落としはカード請求として取り込む。
     // (入力済みなら後段で照合して取り込まないので、二重計上にはならない)
-    if (byRule && byRule.action === "card") return byRule;
+    // カード請求は必ず出金。入金にカード会社名が出るのは返金やチャージの戻しなので、
+    // カードの支出として数えない(口座の入金として扱う)。
+    if (byRule && byRule.action === "card" && txn.amount < 0) return byRule;
     // 自払(自動払込)などの引き落としはほとんどがカードの請求。口座の出金にすると
     // 現金の支出として数えてしまうので、カードとして取り込む。
     // カードが特定できなくても摘要の名前で取り込む(選択待ちで止めない)。名前は後から直せる。

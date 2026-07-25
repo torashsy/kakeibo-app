@@ -998,7 +998,10 @@ export function classifyTxnForImport(desc: string, rules: ImportRule[] | undefin
   const byRule = classifyTxn(desc, rules, amount);
   // カード請求は口座の明細から取り込む(以前はここで一律に除外していたが、
   // 二重計上は「その月に入力済みなら取り込まない」の判定で防ぐ)。
-  if (byRule?.action === "card") return byRule;
+  // ただしカード請求は必ず出金。入金にカード会社名が出るのは返金や
+  // チャージの戻しなので、カードの支出として数えない。
+  if (byRule?.action === "card" && (amount == null || amount < 0)) return byRule;
+  if (byRule?.action === "card" && amount != null && amount > 0) return source;
   if (!byRule) return source;
   if (source?.action === "account" && byRule.action === "account") return { ...byRule, target: source.target };
   return byRule;
