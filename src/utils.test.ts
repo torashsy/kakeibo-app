@@ -929,3 +929,20 @@ describe("取込データの復元(ショートカット経由)", () => {
     expect(decodeImportPayload("abc")).toBe("abc");
   });
 });
+
+describe("取込データの復元: 異常系", () => {
+  const csv = "日付,内容,出金金額,入金金額,残高\n2026/07/10,ATM,17000,,4660\n";
+  const b64of = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+  it("URL安全なBase64(-と_)も復元できる", () => {
+    const b64 = b64of(csv).replace(/\+/g, "-").replace(/\//g, "_");
+    expect(decodeImportPayload(b64)).toBe(csv);
+  });
+  it("改行の入ったBase64も復元できる", () => {
+    const b64 = b64of(csv).replace(/(.{20})/g, "$1\n");
+    expect(decodeImportPayload(b64)).toBe(csv);
+  });
+  it("URLが渡された場合はそのまま返す(CSVとして扱わない)", () => {
+    const url = "https://direct2.jp-bank.japanpost.jp/tp1web/U010101SCR.do";
+    expect(decodeImportPayload(url)).toBe(url);
+  });
+});
