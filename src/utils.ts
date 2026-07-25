@@ -921,13 +921,10 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
 // 口座ルールは取込元の口座へ付け替え、CSV・スクショで同じ挙動に揃える。
 export function classifyTxnForImport(desc: string, rules: ImportRule[] | undefined, source: TxnClassification | null): TxnClassification | null {
   const byRule = classifyTxn(desc, rules);
-  const nd = normalizeForMatch(desc);
-  // 「自払 セブン」はATM引出なので収支へ残す。一方、カード名が明記された自払と
-  // 登録済みカード会社ルールに当たる自払は、カード請求の手入力と二重になるため除外する。
-  if (source?.action === "account" && nd.startsWith(normalizeForMatch("自払"))
-    && (byRule?.action === "card" || nd.includes(normalizeForMatch("カード")))) return { action: "skip" };
+  // カード請求は口座の明細から取り込む(以前はここで一律に除外していたが、
+  // 二重計上は「その月に入力済みなら取り込まない」の判定で防ぐ)。
+  if (byRule?.action === "card") return byRule;
   if (!byRule) return source;
-  if (source?.action === "account" && byRule.action === "card") return { action: "skip" };
   if (source?.action === "account" && byRule.action === "account") return { ...byRule, target: source.target };
   return byRule;
 }

@@ -875,9 +875,11 @@ describe("口座スクショの自動判別と振り分け", () => {
     expect(guessYuchoScreenshotAccount("明細\n自払 JCBカード\nことら ハヤシ シュンヤ\n受取利子", ["ゆうちょ", "NEOBANK"])).toBe("ゆうちょ");
     expect(guessYuchoScreenshotAccount("明細\nことら", ["ゆうちょ", "NEOBANK"])).toBeNull();
   });
-  it("口座明細のカード引落は二重計上を避けて除外する", () => {
-    expect(classifyTxnForImport("自払 JCBカード", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" })).toEqual({ action: "skip" });
-    expect(classifyTxnForImport("自 払 三井 住友 カー ド", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" })).toEqual({ action: "skip" });
+  it("口座明細のカード引落はカード請求として取り込む(二重計上は入力済み判定で防ぐ)", () => {
+    expect(classifyTxnForImport("自払 JCBカード", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" }))
+      .toMatchObject({ action: "card", target: "JAL navi" });
+    expect(classifyTxnForImport("自 払 ミツビシ", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" }))
+      .toMatchObject({ action: "card", target: "MDC" });
   });
   it("自払でもセブンATMの引出は除外せず口座支出にする", () => {
     expect(classifyTxnForImport("自払 セブン", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" }))
