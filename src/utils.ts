@@ -29,7 +29,11 @@ export interface Config {
 // action="card"はtargetをカード名としてカード請求に、"account"はtargetを口座名として口座記録に、
 // "skip"は記録しない(例: 自分名義の口座間送金)。account用のnegItem/posItemを省略すると出金/入金になる
 // (ATMの引出/預入、投資振替のように項目名を変えたい場合に指定する。投資振替は符号のまま反映するので両方同じ値でよい)。
-export interface ImportRule { id: string; match: string; action: "card" | "account" | "salary" | "skip"; target?: string; negItem?: string; posItem?: string; }
+export interface ImportRule {
+  id: string; match: string; action: "card" | "account" | "salary" | "skip"; target?: string;
+  negItem?: string; posItem?: string;
+  amount?: number;   // 指定すると、その額(絶対値)のときだけ当たる。同じ支払先を額で分けるのに使う
+}
 
 export interface Card {
   id: string;
@@ -255,6 +259,11 @@ export const DEFAULT_CONFIG: Config = {
     // 既に入力済みなら取り込まず、金額が合っているかの照合だけ行う(取込側で判定)。
     { id: uid(), match: "給与", action: "salary", target: "給与" },
     { id: uid(), match: "賞与", action: "salary", target: "賞与" },
+    // 同じ支払先でもカードが違うことがある。額で見分ける方を先に置く(先に当たった方が使われる)
+    { id: uid(), match: "三井住友", action: "card", target: "smcc", amount: 294 },
+    { id: uid(), match: "ミツイスミトモ", action: "card", target: "smcc", amount: 294 },
+    { id: uid(), match: "三井住友", action: "card", target: "SMCC Gold" },
+    { id: uid(), match: "ミツイスミトモ", action: "card", target: "SMCC Gold" },
     { id: uid(), match: "ミツビシ", action: "card", target: "MDC" },
     { id: uid(), match: "JCBカード", action: "card", target: "JAL navi" },
     { id: uid(), match: "セゾン", action: "card", target: "SAISON" },
@@ -909,9 +918,11 @@ export function parseBankCsv(text: string): CsvImportResult {
 export interface TxnClassification { action: "card" | "account" | "salary" | "skip"; target?: string; negItem?: string; posItem?: string; }
 
 // 摘要をルールに照らして分類する(登録順で先勝ち)。マッチ無しはnull(要手動判定)。
-export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnClassification | null {
+export function classifyTxn(desc: string, rules: ImportRule[] | undefined, amount?: number): TxnClassification | null {
   const nd = normalizeForMatch(desc);
   for (const r of rules || []) {
+    // 金額つきのルールは、その額のときだけ当てる
+    if (r.amount != null && (amount == null || Math.abs(Math.round(amount)) !== Math.abs(Math.round(r.amount)))) continue;
     if (r.match && nd.includes(normalizeForMatch(r.match))) return { action: r.action, target: r.target, negItem: r.negItem, posItem: r.posItem };
   }
   return null;
@@ -919,8 +930,8 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
 
 // 取込元も考慮した最終分類。口座明細内のカード引落は、カード請求を手入力する運用では二重計上になるため除外する。
 // 口座ルールは取込元の口座へ付け替え、CSV・スクショで同じ挙動に揃える。
-export function classifyTxnForImport(desc: string, rules: ImportRule[] | undefined, source: TxnClassification | null): TxnClassification | null {
-  const byRule = classifyTxn(desc, rules);
+export function classifyTxnForImport(desc: string, rules: ImportRule[] | undefined, source: TxnClassification | null, amount?: number): TxnClassification | null {
+  const byRule = classifyTxn(desc, rules, amount);
   // カード請求は口座の明細から取り込む(以前はここで一律に除外していたが、
   // 二重計上は「その月に入力済みなら取り込まない」の判定で防ぐ)。
   if (byRule?.action === "card") return byRule;
@@ -996,6 +1007,21 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
 
 // カードの明細CSVかどうか。カードの明細は残高列が無く、全行が利用(同じ向き)になる。
 // 口座の明細は残高列があるか、入金と出金が混ざる。
+// OCRはマイナス記号を読み落とすことがある。残高の増減から符号を決め直す。
+// 金額の大きさが増減と一致するときだけ直すので、読み違いを増やさない。
+export function fixSignsFromBalances(txns: ParsedTxn[]): ParsedTxn[] {
+  const list = txns || [];
+  if (list.length < 2) return list;
+  const descending = list[0].date > list[list.length - 1].date;
+  return list.map((t, i) => {
+    const prev = descending ? list[i + 1] : list[i - 1];
+    if (!prev || !Number.isFinite(t.balance) || !Number.isFinite(prev.balance)) return t;
+    const delta = Math.round((t.balance as number) - (prev.balance as number));
+    if (delta === 0 || Math.abs(delta) !== Math.abs(Math.round(t.amount))) return t;
+    return delta === Math.round(t.amount) ? t : { ...t, amount: delta };
+  });
+}
+
 export function isCardStatement(txns: ParsedTxn[], hasBalance: boolean): boolean {
   if (hasBalance || !txns || txns.length === 0) return false;
   const signs = new Set(txns.filter((t) => t.amount !== 0).map((t) => (t.amount < 0 ? -1 : 1)));

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -83,7 +83,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const classifyRow = (txn, guess) => {
     // ルールだけで判定する(ファイル/スクショから推定した口座は含めない)。
     // 口座が分かっていると「その口座の出金」に落ちてしまい、自払の判定に入れないため。
-    const byRule = classifyTxn(txn.desc, config.importRules);
+    const byRule = classifyTxn(txn.desc, config.importRules, txn.amount);
     // カード会社のルールに当たる引き落としはカード請求として取り込む。
     // (入力済みなら後段で照合して取り込まないので、二重計上にはならない)
     if (byRule && byRule.action === "card") return byRule;
@@ -94,7 +94,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       const name = guessCardForDebit(txn.desc, txn.amount, cycleYm(txn.date, config.cycleCutoffDay), (cards || []).map((c) => c.name), existing || []);
       return { action: "card", target: name || payeeFromDebit(txn.desc) };
     }
-    return classifyTxnForImport(txn.desc, config.importRules, guess || null);
+    return classifyTxnForImport(txn.desc, config.importRules, guess || null, txn.amount);
   };
 
   // CSVを複数まとめて取り込む。ファイルごとに口座/カードを推定し、
@@ -144,7 +144,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         // OCRは1文字ずつ離して読むことがあるので、解析の前に整える
         const text = cleanOcrText(data.text || "");
         texts.push(text);
-        allTxns.push(...parseBankText(text, ym));
+        allTxns.push(...fixSignsFromBalances(parseBankText(text, ym)));
       }
       const combined = texts.join("\n\n");
       // 月をまたぐスクショもそのまま扱う。各取引は自分の日付から月度へ振り分けられるので、
