@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1039,5 +1039,73 @@ describe("取込データの復元: 異常系", () => {
   it("URLが渡された場合はそのまま返す(CSVとして扱わない)", () => {
     const url = "https://direct2.jp-bank.japanpost.jp/tp1web/U010101SCR.do";
     expect(decodeImportPayload(url)).toBe(url);
+  });
+});
+
+describe("既存の記録から口座間の振替を探す", () => {
+  const own = ["ハヤシ シユンヤ"];
+  const mk = (id: string, ym: string, item: string, account: string, amount: number, src?: string) =>
+    ({ id, ym, cat: "account" as const, item, account, amount, src });
+  it("同じ日・同額・逆向き・別口座なら組にする(取込済みの記録)", () => {
+    const es = [
+      mk("a", "2026-04", "出金", "ゆうちょ", -80000, "2026-04-20|-80000|ことらハヤシシユンヤ"),
+      mk("b", "2026-04", "入金", "NEOBANK", 80000, "2026-04-20|80000|ことらハヤシシユンヤ"),
+    ];
+    const r = findInternalTransfers(es, own);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ outId: "a", inId: "b", amount: 80000, certain: true });
+  });
+  it("日付が無い記録(手入力・旧取込)は同じ月なら組にする", () => {
+    const es = [mk("a", "2026-04", "出金", "ゆうちょ", -80000), mk("b", "2026-04", "入金", "NEOBANK", 80000)];
+    const r = findInternalTransfers(es, own);
+    expect(r).toHaveLength(1);
+    expect(r[0].certain).toBe(false);   // 名義も日付も確認できないので要確認
+  });
+  it("着金が翌日でも組にする(振込は1日ずれることがある)", () => {
+    const es = [
+      mk("a", "2026-04", "出金", "ゆうちょ", -80000, "2026-04-20|-80000|フリコミハヤシシユンヤ"),
+      mk("b", "2026-04", "入金", "NEOBANK", 80000, "2026-04-21|80000|フリコミハヤシシユンヤ"),
+    ];
+    expect(findInternalTransfers(es, own)).toHaveLength(1);
+  });
+  it("同じ口座の中の動き・違う額・違う月は組にしない", () => {
+    expect(findInternalTransfers([mk("a", "2026-04", "出金", "ゆうちょ", -80000), mk("b", "2026-04", "入金", "ゆうちょ", 80000)], own)).toHaveLength(0);
+    expect(findInternalTransfers([mk("a", "2026-04", "出金", "ゆうちょ", -80000), mk("b", "2026-04", "入金", "NEOBANK", 70000)], own)).toHaveLength(0);
+    expect(findInternalTransfers([mk("a", "2026-04", "出金", "ゆうちょ", -80000), mk("b", "2026-05", "入金", "NEOBANK", 80000)], own)).toHaveLength(0);
+  });
+  it("残高や既に口座振替のものは対象にしない", () => {
+    const es = [
+      mk("a", "2026-04", "残高", "ゆうちょ", -80000), mk("b", "2026-04", "残高", "NEOBANK", 80000),
+      mk("c", "2026-04", "口座振替", "ゆうちょ", -50000), mk("d", "2026-04", "口座振替", "NEOBANK", 50000),
+    ];
+    expect(findInternalTransfers(es, own)).toHaveLength(0);
+  });
+  it("1対1で消化する(同額が3件あっても2件だけ組になる)", () => {
+    const es = [
+      mk("a", "2026-04", "出金", "ゆうちょ", -80000), mk("b", "2026-04", "出金", "ゆうちょ", -80000),
+      mk("c", "2026-04", "入金", "NEOBANK", 80000),
+    ];
+    expect(findInternalTransfers(es, own)).toHaveLength(1);
+  });
+});
+
+describe("残高は総額で照合する", () => {
+  const t = (date: string, amount: number, balance?: number) => ({ date, desc: "x", amount, ...(balance != null ? { balance } : {}) });
+  it("開始残高＋取引の合計＝最終残高 なら合格", () => {
+    const r = verifyBalanceTotal([t("2026-07-01", -1000, 9000), t("2026-07-05", 500, 9500)], 10000)!;
+    expect(r).toMatchObject({ ok: true, opening: 10000, sum: -500, closing: 9500, diff: 0, count: 2 });
+  });
+  it("途中の残高が読めなくても、最終残高が合えば合格", () => {
+    const r = verifyBalanceTotal([t("2026-07-01", -1000), t("2026-07-05", 500, 9500)], 10000)!;
+    expect(r.ok).toBe(true);
+  });
+  it("取りこぼしがあればズレとして出る", () => {
+    const r = verifyBalanceTotal([t("2026-07-05", 500, 9500)], 10000)!;
+    expect(r.ok).toBe(false);
+    expect(r.diff).toBe(1000); // −1000の明細を読み落としている
+  });
+  it("最終残高が読めない・開始残高が無い場合は照合しない", () => {
+    expect(verifyBalanceTotal([t("2026-07-01", -1000)], 10000)).toBeNull();
+    expect(verifyBalanceTotal([t("2026-07-01", -1000, 9000)], NaN)).toBeNull();
   });
 });
