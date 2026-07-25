@@ -19,7 +19,9 @@ if (typeof window !== "undefined" && window.visualViewport) {
   const syncViewport = () => {
     const vv = window.visualViewport;
     document.documentElement.style.setProperty("--visual-viewport-height", `${vv.height}px`);
+    document.documentElement.style.setProperty("--visual-viewport-width", `${vv.width}px`);
     document.documentElement.style.setProperty("--vv-offset-top", `${vv.offsetTop || 0}px`);
+    document.documentElement.style.setProperty("--vv-offset-left", `${vv.offsetLeft || 0}px`);
   };
   syncViewport();
   window.visualViewport.addEventListener("resize", syncViewport);
@@ -27,7 +29,7 @@ if (typeof window !== "undefined" && window.visualViewport) {
   // 入力欄がキーボードに隠れないよう最小限だけスクロール(center だとページごと動いてシートがずれるため nearest)。
   document.addEventListener("focusin", (event) => {
     if (event.target && event.target.matches?.("input, textarea, select")) {
-      window.setTimeout(() => { syncViewport(); event.target.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 150);
+      window.setTimeout(() => { syncViewport(); event.target.scrollIntoView({ block: "nearest", behavior: "auto" }); }, 150);
     }
   });
 }

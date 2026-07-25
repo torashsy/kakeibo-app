@@ -3,7 +3,7 @@ import {
   yen, num, addMonth, ymLabel, cycleYm, periodLabel, periodRange, isBankHoliday,
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue,
-  hasBalRecord, balTotalOf, DEFAULT_CONFIG,
+  hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
@@ -46,12 +46,13 @@ describe("acctRole / flowTypesFor", () => {
     expect(acctRole("引出")).toBe("out");
     expect(acctRole("出金")).toBe("out");
     expect(acctRole("投資振替")).toBe("transfer");
+    expect(acctRole(INTERNAL_TRANSFER_ITEM)).toBe("neutral");
   });
   it("旧称「受取」も収入として後方互換", () => expect(acctRole("受取")).toBe("in"));
   it("旧称「送金」も支出として後方互換", () => expect(acctRole("送金")).toBe("out"));
   it("flowTypesFor: 設定があればそれ、無ければ全種類", () => {
-    expect(flowTypesFor("ゆうちょ", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "出金"]);
-    expect(flowTypesFor("未知の口座", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "出金", "投資振替"]);
+    expect(flowTypesFor("ゆうちょ", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "出金", INTERNAL_TRANSFER_ITEM]);
+    expect(flowTypesFor("未知の口座", DEFAULT_CONFIG)).toEqual(["預入", "入金", "引出", "出金", "投資振替", INTERNAL_TRANSFER_ITEM]);
   });
 });
 
@@ -105,6 +106,12 @@ describe("migrateConfig", () => {
   it("memoCategoriesが既にあればそのまま", () => {
     expect(migrateConfig({ accounts: ["A"], memoCategories: ["娯楽費"] }).memoCategories).toEqual(["娯楽費"]);
   });
+  it("自分名義キーワードを一度だけ補い、削除後は復活させない", () => {
+    const added = migrateConfig({ accounts: ["A"], ownTransferKeywords: [] });
+    expect(added.ownTransferKeywords).toContain("ハヤシシュンヤ");
+    expect(added.ownTransferKeywordsSeeded).toBe(1);
+    expect(migrateConfig({ ...added, ownTransferKeywords: [] }).ownTransferKeywords).toEqual([]);
+  });
 });
 
 describe("computeSummary", () => {
@@ -115,6 +122,8 @@ describe("computeSummary", () => {
     { ym: "2026-06", cat: "account", item: "入金", account: "A", amount: 10000 },
     { ym: "2026-06", cat: "account", item: "引出", account: "A", amount: -20000 },
     { ym: "2026-06", cat: "account", item: "投資振替", account: "B", amount: -30000 },
+    { ym: "2026-06", cat: "account", item: INTERNAL_TRANSFER_ITEM, account: "A", amount: -7500 },
+    { ym: "2026-06", cat: "account", item: INTERNAL_TRANSFER_ITEM, account: "B", amount: 7500 },
     { ym: "2026-06", cat: "account", item: "残高", account: "A", amount: 111111 },
     { ym: "2026-06", cat: "account", item: "残高", account: "B", amount: 222222 },
   ];
@@ -123,6 +132,11 @@ describe("computeSummary", () => {
   it("支出=カード+出金系", () => expect(s.expense).toBe(40000 + 20000));
   it("収支=収入-支出+投資振替(符号のまま)", () => expect(s.net).toBe(s.income - s.expense - 30000));
   it("残高計", () => expect(s.balTotal).toBe(333333));
+  it("口座振替は収入・支出・収支に含めない", () => {
+    expect(s.cashIn).toBe(10000);
+    expect(s.cashOut).toBe(20000);
+    expect(s.net).toBe(s.income - s.expense - 30000);
+  });
 });
 
 describe("計画", () => {
@@ -862,6 +876,9 @@ describe("口座間の振替は同日・同額・逆符号・別口座の組で�
   const own = ["ハヤシ シユンヤ"];
   const mk = (date: string, amount: number, group: number, desc: string) =>
     ({ date, amount, group, own: matchesOwnName(desc, own) });
+  it("氏名の小書きカナと銀行CSVの大きいカナを同一視する", () => {
+    expect(matchesOwnName("ことら ﾊﾔｼ ｼﾕﾝﾔ", ["ハヤシシュンヤ"])).toBe(true);
+  });
   it("組が揃えば両方とも振替になる", () => {
     // NEOBANKから出た7,500がゆうちょに入っている
     const items = [

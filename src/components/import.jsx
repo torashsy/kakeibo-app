@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, txnKey, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -237,26 +237,34 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     const items = list.map((r) => ({
       date: r.txn.date, amount: r.txn.amount,
       group: r.cls.action === "account" && r.cls.target ? `acct:${r.cls.target}` : `file:${r.fileIdx}`,
-      own: matchesOwnName(r.txn.desc, own),
+      own: r.cls.action === "account" && !existingKeys.has(txnKey(r.txn)) && matchesOwnName(r.txn.desc, own),
     }));
     // 過去の記録(自分名義で収支に載っているもの)も候補に加える
     const past = (existing || [])
       .map((e) => ({ e, k: parseTxnKey(e.src) }))
-      .filter((x) => x.k && x.e.cat === "account" && matchesOwnName(x.k.desc, own))
-      .map((x) => ({ id: x.e.id, date: x.k.date, amount: x.e.amount, group: `acct:${x.e.account || ""}`, own: true }));
+      .filter((x) => x.k && x.e.cat === "account" && x.e.item !== INTERNAL_TRANSFER_ITEM && matchesOwnName(x.k.desc, own))
+      .map((x) => ({ entry: x.e, id: x.e.id, date: x.k.date, amount: x.e.amount, group: `acct:${x.e.account || ""}`, own: true }));
     const partner = pairOwnTransfers([...items, ...past.map(({ date, amount, group, own }) => ({ date, amount, group, own }))]);
     const pairedRows = {};      // 行番号 -> 相手の説明
-    const removeIds = [];       // 振替と分かった過去の記録(収支から外すため削除する)
+    const removeIds = [];       // 振替と分かった過去の記録を口座振替へ置き換えるため削除する
+    const replacementEntries = [];
     for (let i = 0; i < list.length; i++) {
       const j = partner[i];
       if (j < 0) continue;
       if (j < list.length) pairedRows[i] = list[j].cls?.target || `別の口座`;
-      else { const p = past[j - list.length]; pairedRows[i] = `${p.group.slice(5)}（取込済み）`; removeIds.push(p.id); }
+      else {
+        const p = past[j - list.length];
+        pairedRows[i] = `${p.group.slice(5)}（取込済み）`;
+        removeIds.push(p.id);
+        replacementEntries.push({ ...p.entry, item: INTERNAL_TRANSFER_ITEM });
+      }
     }
     const lonely = list.reduce((a, r, i) => a + (items[i].own && pairedRows[i] == null ? 1 : 0), 0);
-    return { pairedRows, removeIds, lonely, ownFlags: items.map((x) => x.own) };
-  }, [rows, existing, config.ownTransferKeywords]);
-  const entries = (rows || []).map((r, i) => (pairing.pairedRows[i] != null ? null : txnToEntry(r.txn, r.cls, config.cycleCutoffDay)));
+    return { pairedRows, removeIds, replacementEntries, lonely, ownFlags: items.map((x) => x.own) };
+  }, [rows, existing, existingKeys, config.ownTransferKeywords]);
+  const entries = (rows || []).map((r, i) => txnToEntry(r.txn, pairing.pairedRows[i] != null
+    ? { ...r.cls, action: "account", negItem: INTERNAL_TRANSFER_ITEM, posItem: INTERNAL_TRANSFER_ITEM }
+    : r.cls, config.cycleCutoffDay));
   const dupFlags = entries.map((e) => !!(e && e.src && existingKeys.has(e.src)));
   const dupCount = dupFlags.filter(Boolean).length;
   const newEntries = entries.filter((e, i) => e && !dupFlags[i]);
@@ -265,8 +273,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // 残高は同じ月・口座で1件だけ持つべきなので、追加ではなく置き換える(App側で差し替え)。
   const balEntries = balances.filter((b) => b.account).map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) }));
   const commit = () => {
-    const list = [...newEntries, ...balEntries];
-    // 過去に「入金/出金」として取り込んだ記録が、今回の相手方によって振替と判明したら収支から外す
+    const list = [...newEntries, ...pairing.replacementEntries, ...balEntries];
+    // 過去の片側も「口座振替」に置き換え、両口座の移動記録を残したまま収支から外す
     if (list.length || pairing.removeIds.length) onAddEntries(list, pairing.removeIds);
     onClose();
   };
