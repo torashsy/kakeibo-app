@@ -604,9 +604,18 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                         {r.txn.date}
                         <span style={{ fontSize: 10.5, marginLeft: 6, opacity: 0.8 }}>{periodLabel(cycleYm(r.txn.date, config.cycleCutoffDay), config.cycleCutoffDay)}</span>
                       </span>
-                      <input type="number" inputMode="numeric" value={r.txn.amount}
-                        onChange={(e) => setRow(i, { txn: { ...r.txn, amount: e.target.value === "" ? 0 : Number(e.target.value) } })}
-                        style={{ ...styles.textInput, width: 120, textAlign: "right", padding: "5px 8px", fontSize: 14.5, fontWeight: 600, color: r.txn.amount < 0 ? RED : GREEN }} />
+                      {/* スマホのテンキーにはマイナスが無いので、符号はボタンで反転する */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button
+                          onClick={() => setRow(i, { txn: { ...r.txn, amount: -Number(r.txn.amount || 0) } })}
+                          title="出金と入金を入れ替える"
+                          style={{ ...styles.optionChip, padding: "5px 10px", fontSize: 14.5, fontWeight: 700, color: r.txn.amount < 0 ? RED : GREEN, flexShrink: 0 }}>
+                          {r.txn.amount < 0 ? "−" : "＋"}
+                        </button>
+                        <input type="number" inputMode="numeric" value={r.txn.amount}
+                          onChange={(e) => setRow(i, { txn: { ...r.txn, amount: e.target.value === "" ? 0 : Number(e.target.value) } })}
+                          style={{ ...styles.textInput, width: 110, textAlign: "right", padding: "5px 8px", fontSize: 14.5, fontWeight: 600, color: r.txn.amount < 0 ? RED : GREEN }} />
+                      </div>
                     </div>
                     <div style={{ fontSize: 13, marginBottom: 8, wordBreak: "break-all" }}>{r.txn.desc || "(摘要なし)"}</div>
                     <div style={styles.optionRow}>
