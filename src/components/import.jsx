@@ -275,51 +275,25 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     <div style={styles.sheetBackdrop} onClick={onClose}>
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={styles.sheetHandle} />
-        <div style={styles.sheetTitle}>取り込み</div>
-        {/* ホーム画面のアプリとSafariでは保存先が別。Safariで取り込むとアプリ側に出てこないので気付けるようにする */}
-        {typeof window !== "undefined" && !(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) && !window.navigator.standalone && (
-          <div style={{ ...styles.flash, background: "var(--expense-soft)", color: RED }}>
-            いまブラウザで開いています。ここで取り込むと、ホーム画面のアプリには出てきません（保存先が別のため）。同じユーザー名でクラウド同期していれば共有されます。
-          </div>
-        )}
-
+        <div style={styles.sheetTitle}>取込</div>
         {!rows && (
           <>
-            <div style={{ ...styles.detailCard, padding: "12px 14px", marginBottom: 12, background: "var(--group-bg)" }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 5 }}>iPhoneなら、CSVを共有するだけ</div>
-              <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.65 }}>
-                銀行サイトでCSVをダウンロード → ファイルを表示して共有 →「家計簿CSV取込」。
-                取込画面が解析済みで開きます。最初にショートカットを1回作れば、次回からこの流れです。
-              </div>
-              <button data-testid="ios-shortcut-guide-toggle" style={{ ...styles.backupBtn, marginTop: 9 }} onClick={() => setShowIosGuide((v) => !v)}>
-                {showIosGuide ? "設定手順を閉じる" : "共有から1タップ取込を設定する"}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button data-testid="ios-shortcut-guide-toggle" style={{ ...styles.backupBtn, marginTop: 0, flex: 1 }} onClick={() => setShowIosGuide((v) => !v)}>
+                iPhone設定
               </button>
-              {showIosGuide && (
-                <div data-testid="ios-shortcut-guide" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", fontSize: 12, lineHeight: 1.7 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>初回だけ（ショートカットを作成）</div>
-                  <ol style={{ margin: "0 0 8px", paddingLeft: 22, color: MUTED }}>
-                    <li>下の「ショートカットを開く」で新規作成し、名前を「家計簿CSV取込」にする</li>
-                    <li>詳細で「共有シートに表示」をオン、受け入れる種類を「ファイル」にする</li>
-                    <li>「Base64エンコード」アクションを追加し、入力を「ショートカットの入力」にする</li>
-                    <li>「テキスト」アクションへ、下のURL部分と「Base64エンコード済み」の変数を続けて入れる</li>
-                    <li>最後に「URLを開く」アクションを追加して保存する</li>
-                  </ol>
-                  <button data-testid="copy-shortcut-prefix" style={{ ...styles.saveBtn, marginTop: 0 }} onClick={copyShortcutPrefix}>ショートカット用URL部分をコピー</button>
-                  <div style={{ fontSize: 10.5, color: MUTED, margin: "5px 2px 0", wordBreak: "break-all" }}>{shortcutPrefix}</div>
+              <button style={{ ...styles.backupBtn, marginTop: 0, flex: 1 }} onClick={runClipboard}>貼り付け</button>
+            </div>
+            {showIosGuide && (
+              <div data-testid="ios-shortcut-guide" style={{ ...styles.detailCard, padding: "10px 12px", marginBottom: 10, fontSize: 12 }}>
+                  <div style={{ color: MUTED, marginBottom: 8 }}>共有シート → Base64 → URLを開く</div>
+                  <button data-testid="copy-shortcut-prefix" style={{ ...styles.saveBtn, marginTop: 0 }} onClick={copyShortcutPrefix}>URLをコピー</button>
                   {shortcutCopyStatus && <div style={{ fontSize: 11.5, color: shortcutCopyStatus === "コピーしました" ? GREEN : RED, marginTop: 4 }}>{shortcutCopyStatus}</div>}
-                  <a href="shortcuts://create-shortcut" style={{ ...styles.backupBtn, display: "block", textAlign: "center", textDecoration: "none", marginTop: 8 }}>ショートカットを開く</a>
-                  <div style={{ fontSize: 11, color: MUTED, marginTop: 7 }}>
-                    以後は、ダウンロードしたCSVの共有メニューから「家計簿CSV取込」を押すだけです。
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.6 }}>
-              ショートカットを使わない場合は、ダウンロード後に下を押してください。iPhoneの「最近使った項目」から選べます。
-            </div>
+                  <a href="shortcuts://create-shortcut" style={{ ...styles.backupBtn, display: "block", textAlign: "center", textDecoration: "none", marginTop: 8 }}>ショートカット</a>
+              </div>
+            )}
             <button style={{ ...styles.saveBtn, marginTop: 0 }} onClick={() => csvRef.current && csvRef.current.click()} disabled={csvBusy}>
-              {csvBusy ? "読み取り中…" : "ダウンロードしたCSVを選ぶ（複数可）"}
+              {csvBusy ? "読込中…" : "CSVを選ぶ"}
             </button>
             <input ref={csvRef} type="file" accept=".csv,.txt,text/csv,text/plain" multiple style={{ display: "none" }}
               onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runCsv(f); e.target.value = ""; }} />
@@ -331,59 +305,50 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                     <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" style={{ ...styles.optionChip, textDecoration: "none", display: "inline-block" }}>{l.name} ›</a>
                   ))}
                 </div>
-                <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
-                  開いてCSVをダウンロード→「表示」→共有→ショートカット、または保存して上の「CSVを選ぶ」から。
-                </div>
               </div>
             )}
-            <button style={{ ...styles.backupBtn, marginTop: 8 }} onClick={runClipboard}>クリップボードから取り込む</button>
-            <div style={{ fontSize: 11.5, color: MUTED, margin: "6px 2px 0", lineHeight: 1.6 }}>
-              CSVの中身をコピーしてからこれを押せば、ファイル保存なしで取り込めます。
-            </div>
             {csvNotes.length > 0 && (
               <div style={{ margin: "10px 2px 0" }}>
                 {csvNotes.map((n, i) => (
                   <div key={i} style={{ fontSize: 11.5, color: n.error ? RED : MUTED, padding: "2px 0" }}>
-                    {n.name}：{n.error ? n.error : `${n.count}件${n.target ? ` → ${n.target}` : "（振り分け先は下で選んでください）"}${n.balance ? ` / 残高 ${yen(n.balance.amount)}` : ""}`}
+                    {n.name}：{n.error ? n.error : `${n.count}件${n.target ? ` → ${n.target}` : " / 口座未選択"}${n.balance ? ` / 残高 ${yen(n.balance.amount)}` : ""}`}
                   </div>
                 ))}
               </div>
             )}
-            <div style={{ fontSize: 12, color: MUTED, margin: "16px 0 8px", lineHeight: 1.6, paddingTop: 12, borderTop: `1px solid var(--line)` }}>
-              CSVが用意できない時は、明細画面のスクショからも読み取れます（誤読が出ることがあります）。
-            </div>
+            <div style={{ height: 12 }} />
             <button style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()} disabled={ocrBusy}>
-              {ocrBusy ? "読み取り中…" : "スクショを選ぶ"}
+              {ocrBusy ? "読込中…" : "スクショ"}
             </button>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
               onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) runOcr(f); e.target.value = ""; }} />
             {ocrError && <div style={{ fontSize: 12.5, color: RED, margin: "8px 2px 0" }}>{ocrError}</div>}
-            <label style={styles.fieldLabel}>取り込む月</label>
+            <label style={styles.fieldLabel}>月</label>
             <input type="month" value={importYm} onChange={(e) => setImportYm(e.target.value)} style={styles.textInput} />
-            <label style={styles.fieldLabel}>読み取ったテキスト(編集・貼り付け可)</label>
-            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="ここにテキストを直接貼り付けてもOK" style={{ ...styles.memoTextarea, minHeight: 160 }} />
-            <button style={{ ...styles.saveBtn, opacity: rawText.trim() ? 1 : 0.4 }} disabled={!rawText.trim()} onClick={parse}>解析する</button>
+            <label style={styles.fieldLabel}>テキスト</label>
+            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} style={{ ...styles.memoTextarea, minHeight: 160 }} />
+            <button style={{ ...styles.saveBtn, opacity: rawText.trim() ? 1 : 0.4 }} disabled={!rawText.trim()} onClick={parse}>解析</button>
             <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
           </>
         )}
 
         {rows && (
           <>
-            <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 12px" }}>{rows.length}件を検出しました。内容を確認して「追加する」を押してください。</div>
+            <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 12px" }}>{rows.length}件</div>
             {(() => {
               const pairs = Object.keys(pairing.pairedRows).length;
               const lonely = pairing.lonely;
               if (!pairs && !lonely) return null;
               return (
                 <>
-                  {pairs > 0 && <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>口座間の振替として{pairs}件を除きます（同日・同額・逆向きの組が揃ったもの）</div>}
-                  {lonely > 0 && <div style={{ ...styles.flash, background: "var(--expense-soft)", color: RED }}>自分名義だが相手が見つからない記録が{lonely}件あります。両方の口座のCSVを一緒に取り込むと自動で振替になります</div>}
+                  {pairs > 0 && <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>振替 {pairs}件</div>}
+                  {lonely > 0 && <div style={{ ...styles.flash, background: "var(--expense-soft)", color: RED }}>未照合 {lonely}件</div>}
                 </>
               );
             })()}
             {dupCount > 0 && (
               <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>
-                取込済みの{dupCount}件は除きます（同じ明細を二重に登録しません）
+                {dupCount}件は取込済み
               </div>
             )}
             {/* ファイルごとの口座。1ファイル=1口座なので、ここで選べば全行に反映される。 */}
@@ -391,7 +356,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
               <div key={i} style={{ ...styles.detailCard, marginBottom: 8, padding: "10px 12px" }}>
                 <div style={{ fontSize: 11.5, color: MUTED, wordBreak: "break-all", marginBottom: 6 }}>{n.name}（{n.count}件）</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12, color: n.target ? MUTED : RED }}>{n.target ? "この明細の口座" : "口座を選んでください"}</span>
+                  <span style={{ fontSize: 12, color: n.target ? MUTED : RED }}>{n.target ? "口座" : "口座未選択"}</span>
                   <select value={n.target || ""} onChange={(e) => setFileAccount(i, e.target.value)} style={{ ...styles.textInput, width: "auto", margin: 0, padding: "6px 8px", fontSize: 13 }}>
                     <option value="">（未選択）</option>
                     {(config.accounts || []).map((a) => <option key={a} value={a}>{a}</option>)}
@@ -404,13 +369,13 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             {csvNotes.filter((n) => n.check).map((n, i) => (
               <div key={i} style={{ ...styles.flash, background: n.check.mismatched ? "var(--expense-soft)" : "var(--group-bg)", color: n.check.mismatched ? RED : MUTED }}>
                 {n.check.mismatched === 0
-                  ? `✓ 残高で検算：${n.check.checked}件すべて計算が合いました${n.balance ? `（最終残高 ${yen(n.balance.amount)}）` : ""}`
-                  : `⚠ 残高が合わない箇所が${n.check.mismatched}件あります（読み取り違い・取りこぼしの可能性）${n.check.firstMismatch ? `／最初の不一致：${n.check.firstMismatch.date} ${n.check.firstMismatch.desc.slice(0, 16)} 期待 ${yen(n.check.firstMismatch.expected)} → 実際 ${yen(n.check.firstMismatch.actual)}` : ""}`}
+                  ? `✓ 検算 ${n.check.checked}件${n.balance ? ` / ${yen(n.balance.amount)}` : ""}`
+                  : `⚠ 不一致 ${n.check.mismatched}件${n.check.firstMismatch ? ` / ${n.check.firstMismatch.date} ${yen(n.check.firstMismatch.expected)} → ${yen(n.check.firstMismatch.actual)}` : ""}`}
               </div>
             ))}
             {balEntries.length > 0 && (
               <div style={{ ...styles.detailCard, marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, padding: "8px 2px 4px" }}>CSVから読み取った残高（一緒に登録します）</div>
+                <div style={{ fontSize: 12, fontWeight: 600, padding: "8px 2px 4px" }}>残高</div>
                 {balEntries.map((b, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 2px" }}>
                     <span style={{ color: MUTED }}>{b.account}</span><span>{yen(b.amount)}</span>
@@ -418,7 +383,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 ))}
               </div>
             )}
-            {rows.length === 0 && <div style={{ color: MUTED, fontSize: 13, padding: 10 }}>取引を検出できませんでした。テキストを見直してください。</div>}
+            {rows.length === 0 && <div style={{ color: MUTED, fontSize: 13, padding: 10 }}>0件</div>}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {rows.map((r, i) => {
                 const entry = entries[i];
@@ -429,12 +394,12 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                     {isDup && <div style={{ fontSize: 11, color: MUTED, padding: "6px 2px 0" }}>取込済み（重複のため登録しません）</div>}
                     {pairing.pairedRows[i] != null && (
                       <div style={{ fontSize: 11, color: ACCENT, padding: "6px 2px 0" }}>
-                        口座間の振替（{pairing.pairedRows[i]}に同日・同額の反対の記録あり）。収支には入れません
+                        振替（{pairing.pairedRows[i]}）
                       </div>
                     )}
                     {pairing.ownFlags[i] && pairing.pairedRows[i] == null && (
                       <div style={{ fontSize: 11, color: RED, padding: "6px 2px 0" }}>
-                        自分名義ですが反対側の記録が見つかりません。口座間の振替なら「取り込まない」にしてください
+                        未照合
                       </div>
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0 2px", gap: 8 }}>
@@ -443,7 +408,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                         onChange={(e) => setRow(i, { txn: { ...r.txn, amount: e.target.value === "" ? 0 : Number(e.target.value) } })}
                         style={{ ...styles.textInput, width: 120, textAlign: "right", padding: "5px 8px", fontSize: 14.5, fontWeight: 600, color: r.txn.amount < 0 ? RED : GREEN }} />
                     </div>
-                    <div style={{ fontSize: 11, color: MUTED, textAlign: "right", marginBottom: 4 }}>OCRの誤読があれば金額を直接修正できます</div>
                     <div style={{ fontSize: 13, marginBottom: 8, wordBreak: "break-all" }}>{r.txn.desc || "(摘要なし)"}</div>
                     <div style={styles.optionRow}>
                       {[["skip", "取り込まない"], ["card", "カード"], ["account", "口座"]].map(([v, l]) => (
@@ -488,7 +452,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
               })}
             </div>
             <button style={{ ...styles.saveBtn, opacity: (includedCount || balEntries.length) ? 1 : 0.4 }} disabled={!includedCount && !balEntries.length} onClick={commit}>
-              {includedCount}件を追加する{balEntries.length > 0 ? `（残高${balEntries.length}件も）` : ""}
+              {includedCount}件を追加{balEntries.length > 0 ? `＋残高${balEntries.length}件` : ""}
             </button>
             <button style={styles.cancelBtn} onClick={() => setRows(null)}>やり直す</button>
             <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>

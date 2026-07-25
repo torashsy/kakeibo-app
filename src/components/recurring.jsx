@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { MUTED } from '../theme.js';
 import { styles } from '../styles.js';
 import { Subs } from './subs.jsx';
 import { DebtTable } from './cards.jsx';
@@ -15,11 +14,6 @@ export function Recurring({ subs, onSaveSubs, cards, debt, ym, onSaveDebt }) {
       <div style={styles.viewToggle}>
         <button style={{ ...styles.viewToggleBtn, ...(view === "subs" ? styles.viewToggleActive : {}) }} onClick={() => setView("subs")}>定期支払い</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "debt" ? styles.viewToggleActive : {}) }} onClick={() => setView("debt")}>分割払い</button>
-      </div>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px", lineHeight: 1.6 }}>
-        {view === "subs"
-          ? "毎月・毎年決まって出ていく支払い。解約の検討や、計画の固定費の目安に使えます。"
-          : "カードの分割払い(残債)の残り。決まった将来の出費としてここで管理します。"}
       </div>
       {view === "subs" ? <Subs subs={subs} onSave={onSaveSubs} cards={cards} /> : <DebtTable cards={cards} debt={debt} ym={ym} onSaveDebt={onSaveDebt} />}
     </div>

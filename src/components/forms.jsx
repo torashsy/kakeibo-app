@@ -7,21 +7,21 @@ import { AmountField } from './amount.jsx';
 
 export function PickCategory({ onClose, onPick }) {
   const cats = [
-    { id: "close", label: "今月をまとめて入力", desc: "給与・カード・残高を1画面でまとめて", color: ACCENT, icon: "check" },
-    { id: "salary", label: "給与系", desc: "給与・手当・賞与・控除をまとめて", color: GREEN, icon: "yen" },
-    { id: "card", label: "カード", desc: "カードの請求額を記録", color: RED, icon: "card" },
-    { id: "account", label: "口座", desc: "入金・出金・残高を記録", color: ACCENT, icon: "bank" },
-    { id: "import", label: "スクショ取込", desc: "明細のスクショから自動で仕分け（任意）", color: MUTED, icon: "camera" },
+    { id: "close", label: "まとめ入力", color: ACCENT, icon: "check" },
+    { id: "salary", label: "給与", color: GREEN, icon: "yen" },
+    { id: "card", label: "カード", color: RED, icon: "card" },
+    { id: "account", label: "口座", color: ACCENT, icon: "bank" },
+    { id: "import", label: "取込", color: MUTED, icon: "camera" },
   ];
   return (
     <div style={styles.sheetBackdrop} onClick={onClose}>
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={styles.sheetHandle} />
-        <div style={styles.sheetTitle}>何を記録しますか？</div>
+        <div style={styles.sheetTitle}>追加</div>
         {cats.map((c) => (
           <button key={c.id} style={styles.pickRow} onClick={() => onPick(c.id)}>
             <span style={{ ...styles.pickIcon, background: c.color }}><Icon name={c.icon} size={22} /></span>
-            <span style={{ textAlign: "left", flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 600 }}>{c.label}</span><span style={{ display: "block", fontSize: 12, color: MUTED, marginTop: 2 }}>{c.desc}</span></span>
+            <span style={{ textAlign: "left", flex: 1, fontSize: 15, fontWeight: 600 }}>{c.label}</span>
             <span style={{ color: MUTED, fontSize: 20 }}>›</span>
           </button>
         ))}
@@ -46,11 +46,10 @@ export function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>{editing.item}を編集（{ymLabel(editing.ym)}）</div>
-        <div style={styles.signHint}>{isDeduction ? "控除は手取りから差し引かれます（マイナス不要）" : "金額をプラスで入力"}</div>
         <label style={styles.fieldLabel}>金額</label>
         <AmountField value={amount} onChange={setAmount} autoFocus />
-        <button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={submit} disabled={!canSave}>更新する</button>
-        <button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>この記録を削除</button>
+        <button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={submit} disabled={!canSave}>更新</button>
+        <button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
       </div>
     </div>
@@ -71,7 +70,6 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>給与系（{ymLabel(ym)}）</div>
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <span>金額はプラスで入力。控除は自動で差し引きます。</span>
           {prevEntries.length > 0 && <button style={styles.chipGhost} onClick={copyPrev}>前月をコピー</button>}
         </div>
         {rows.map((r, i) => (
@@ -83,7 +81,7 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
           </div>
         ))}
         <div style={styles.takeHomeRow}><span>手取り見込み</span><span style={{ fontWeight: 600, color: GREEN }}>{yen(takeHome)}</span></div>
-        <button style={styles.saveBtn} onClick={() => onSave(rows)}>保存する</button>
+        <button style={styles.saveBtn} onClick={() => onSave(rows)}>保存</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
       </div>
     </div>
@@ -125,11 +123,11 @@ export function CardForm({ ym, cards, entries, editing, onClose, onAdd, onUpdate
         <label style={styles.fieldLabel}>月</label>
         <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />
         {editing ? (
-          <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新する</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除する</button></>
+          <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button></>
         ) : (
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "#fff", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>保存して続ける</button>
-            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>保存して閉じる</button>
+            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "#fff", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>続ける</button>
+            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>保存</button>
           </div>
         )}
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
@@ -165,7 +163,6 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
     onAdd(build());
     if (cont) { setFlash(`${account} ${type} ${yen(signed())}`); setAmount(""); setTimeout(() => setFlash(""), 1600); } else onClose();
   };
-  const hint = ACCOUNT_TYPES.find((t) => t.id === type)?.hint || "";
   return (
     <div style={styles.sheetBackdrop} onClick={onClose}>
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
@@ -174,7 +171,6 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
         {flash && <div style={styles.flash}>✓ {flash}</div>}
         <label style={styles.fieldLabel}>種類</label>
         <div style={styles.typeRow}>{ACCOUNT_TYPES.map((t) => <button key={t.id} style={{ ...styles.typeChip, ...(type === t.id ? styles.optionChipActive : {}) }} onClick={() => setType(t.id)}>{t.id}</button>)}</div>
-        <div style={styles.signHint}>{hint}{!isTransfer && "（マイナス不要）"}</div>
         {isTransfer && (
           <>
             <label style={styles.fieldLabel}>方向</label>
@@ -194,11 +190,11 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
         <label style={styles.fieldLabel}>月</label>
         <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />
         {editing ? (
-          <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新する</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除する</button></>
+          <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button></>
         ) : (
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "#fff", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>保存して続ける</button>
-            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>保存して閉じる</button>
+            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "#fff", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>続ける</button>
+            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>保存</button>
           </div>
         )}
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>

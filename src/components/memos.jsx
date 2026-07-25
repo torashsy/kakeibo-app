@@ -43,9 +43,8 @@ export function MemoList({ memos, onSave, cards, config, ym }) {
   return (
     <div>
       <div style={styles.detailHead}><span>メモ（{memos.length}）</span><button style={styles.addBtn} onClick={() => setEdit({ title: "", amount: "", body: "", category: "", ym: ym || "", linkedCard: "" })}>＋ 追加</button></div>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>収支には計上されない自由メモ。カテゴリごとに合計を表示します。</div>
       {memos.length === 0 ? (
-        <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだメモがありません。「＋ 追加」から作成できます。</div></div>
+        <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>メモなし</div></div>
       ) : (
         groups.map(([cat, items]) => {
           const sum = items.reduce((a, m) => a + (Number(m.amount) || 0), 0);
@@ -74,7 +73,7 @@ export function MemoList({ memos, onSave, cards, config, ym }) {
             <div style={styles.sheetTitle}>{edit.id ? "メモを編集" : "メモを追加"}</div>
             <label style={styles.fieldLabel}>タイトル</label>
             <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} placeholder="例）飲み会 / プレゼント" style={styles.textInput} autoFocus />
-            <label style={styles.fieldLabel}>カテゴリ（既存を選択、または自由に入力して新規追加）</label>
+            <label style={styles.fieldLabel}>カテゴリ</label>
             {cats.length > 0 && <div style={styles.optionRow}>{cats.map((c) => <button key={c} style={{ ...styles.optionChip, ...(edit.category === c ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, category: c })}>{c}</button>)}</div>}
             <input value={edit.category ?? ""} onChange={(e) => setEdit({ ...edit, category: e.target.value })} placeholder="新しいカテゴリ名を入力（例：交際費）" style={styles.textInput} />
             <label style={styles.fieldLabel}>金額（円・任意）</label>
@@ -94,8 +93,8 @@ export function MemoList({ memos, onSave, cards, config, ym }) {
             )}
             <label style={styles.fieldLabel}>内容（任意）</label>
             <textarea value={edit.body ?? ""} onChange={(e) => setEdit({ ...edit, body: e.target.value })} placeholder="自由記述" style={styles.memoTextarea} />
-            <button style={{ ...styles.saveBtn, opacity: edit.title.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.title.trim()}>{edit.id ? "更新する" : "追加する"}</button>
-            {edit.id && <button style={styles.deleteBtn} onClick={remove}>このメモを削除</button>}
+            <button style={{ ...styles.saveBtn, opacity: edit.title.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.title.trim()}>{edit.id ? "更新" : "追加"}</button>
+            {edit.id && <button style={styles.deleteBtn} onClick={remove}>削除</button>}
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
           </div>
         </div>

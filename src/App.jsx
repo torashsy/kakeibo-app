@@ -291,7 +291,7 @@ export default function App() {
         )}
       </header>
 
-      <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { paddingBottom: 96 } : {}) }}>
+      <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px 96px" } : {}) }}>
         {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onImportClipboard={importFromClipboard} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
@@ -338,7 +338,7 @@ function CloudBadge() {
 function SubScreen({ title, onBack, children }) {
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <button style={styles.backLink} onClick={onBack}>‹ 設定にもどる</button>
+      <button style={styles.backLink} onClick={onBack}>‹ 設定</button>
       <div style={{ fontSize: 15, fontWeight: 700, margin: "2px 4px 12px" }}>{title}</div>
       {children}
     </div>

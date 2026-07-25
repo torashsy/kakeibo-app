@@ -19,14 +19,12 @@ export function Summary({ summary, prevBalTotal, plans, subs, config, cards, deb
       </div>
       {onImportClipboard && (
         <button style={{ ...styles.closeCta, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}`, marginBottom: 10 }} onClick={onImportClipboard}>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>ショートカットから取り込む</span>
-          <span style={{ fontSize: 11.5, opacity: 0.85, marginTop: 2 }}>コピーした明細CSVをそのまま読み込みます</span>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>CSV取込</span>
         </button>
       )}
       {onOpenClose && (
         <button style={styles.closeCta} onClick={onOpenClose}>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>＋ 今月をまとめて入力</span>
-          <span style={{ fontSize: 11.5, opacity: 0.85, marginTop: 2 }}>給与・カード・残高を1画面で。前月を仮置き済み</span>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>＋ まとめ入力</span>
         </button>
       )}
       <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
@@ -59,8 +57,8 @@ export function Summary({ summary, prevBalTotal, plans, subs, config, cards, deb
         const ok = Math.abs(diff) < 1;
         return (
           <div style={{ ...styles.checkCard, background: ok ? ACCENT_SOFT : "var(--expense-soft)" }}>
-            {ok ? <span style={{ color: ACCENT, fontSize: 12.5 }}>✓ 残高の増減と収支が一致しています</span>
-              : <span style={{ color: RED, fontSize: 12.5 }}>⚠ 残高増減と収支に {yen(Math.abs(diff))} のズレがあります（入力もれの可能性）</span>}
+          {ok ? <span style={{ color: ACCENT, fontSize: 12.5 }}>✓ 一致</span>
+            : <span style={{ color: RED, fontSize: 12.5 }}>⚠ 差 {yen(Math.abs(diff))}</span>}
           </div>
         );
       })()}
@@ -76,7 +74,6 @@ function CardBreakdownPanel({ rows }) {
   const otherAll = rows.reduce((a, r) => a + r.otherPortion, 0);
   return (
     <div style={{ ...styles.detailCard, marginBottom: 14 }}>
-      <div style={{ fontSize: 11.5, color: MUTED, padding: "8px 2px 2px" }}>残債（分割払い）とそれ以外の内訳です。</div>
       {rows.map((r) => (
         <div key={r.name} style={{ padding: "8px 2px" }}>
           <div style={styles.subGroupHead}><span>{r.name}</span><span style={styles.subGroupTotal}>{yen(r.total)}</span></div>
@@ -137,7 +134,6 @@ function SpendingMeter({ plans, subs, monthEntries, ym, startDay }) {
         <div style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: over > 0 ? RED : GREEN }}>
           {over > 0 ? `${yen(over)} 使いすぎ` : over < 0 ? `計画まで あと ${yen(-over)}` : "計画どおり"}
         </div>
-        <div style={{ marginTop: 4, fontSize: 11.5, color: MUTED }}>収支の実績 {yen(r.actualNet)}（計画 {yen(r.planNet)}）。計画支出＝固定費（定期費）＋変動費。</div>
         {hasBd && (
           <>
             <button style={{ ...styles.chipGhost, marginTop: 10 }} onClick={() => setOpen((o) => !o)}>

@@ -54,7 +54,6 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   return (
     <div>
       <div style={styles.debtSummary}><span style={{ fontSize: 13, color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={{ fontSize: 22, fontWeight: 600, color: RED }}>{yen(totalRemaining)}</span></div>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>今年は月単位、次年度以降は年単位です。セルをタップすると内訳を入力できます。</div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (columns.length + 1) * 96 }}>
           <colgroup><col style={{ width: 132 }} />{columns.map((p) => <col key={"col-" + p} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
@@ -81,7 +80,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
                 <button style={styles.removeBtn} aria-label="内訳を削除" onClick={() => setEdit((prev) => ({ ...prev, items: prev.items.filter((x) => x.id !== item.id) }))}>×</button>
               </div>
             ))}
-            <button style={styles.backupBtn} onClick={() => setEdit((prev) => ({ ...prev, items: [...prev.items, { id: uid(), label: "", amount: "" }] }))}>＋ 内訳を追加</button>
+            <button style={styles.backupBtn} onClick={() => setEdit((prev) => ({ ...prev, items: [...prev.items, { id: uid(), label: "", amount: "" }] }))}>＋ 内訳</button>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13 }}><span>合計</span><strong>{yen(edit.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0))}</strong></div>
             <button style={styles.saveBtn} onClick={commitEdit}>保存</button>
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
@@ -133,8 +132,8 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
             <AmountField value={edit.annualFee ?? ""} onChange={(v) => setEdit({ ...edit, annualFee: v })} placeholder="0（無料）" />
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="正式名称や用途など" style={styles.textInput} />
-            <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新する" : "追加する"}</button>
-            {edit.id && <button style={styles.deleteBtn} onClick={() => { onRemoveCard({ id: edit.id, name: edit.name }); setEdit(null); }}>このカードを削除</button>}
+            <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新" : "追加"}</button>
+            {edit.id && <button style={styles.deleteBtn} onClick={() => { onRemoveCard({ id: edit.id, name: edit.name }); setEdit(null); }}>削除</button>}
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
           </div>
         </div>

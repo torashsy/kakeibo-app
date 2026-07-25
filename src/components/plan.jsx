@@ -125,10 +125,6 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
     onSave(next);
   };
 
-  const hint = mode === "forecast" ? "入力が始まった月は実績、未入力の月は計画で表示。灰色=計画（見込み）。残高は実績を引き継いで先へ試算。"
-    : mode === "plan" ? "セルをタップで計画を編集（この月／毎月の標準）。固定費は定期費から自動集計。支出計＝固定費＋変動費。"
-      : "実績−計画。支出は赤=使いすぎ、収支は緑=良い方向。";
-
   return (
     <div style={{ marginTop: 4 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 10 }}>
@@ -146,12 +142,11 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
       {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 4px 6px" }}>
           <span style={{ fontSize: 11.5, color: isMonthClosed(closedMonths, ym) ? ACCENT : MUTED }}>
-            {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)}は記録なしで確定済み` : `${ymLabel(ym)}は記録がありません。記録なしで確定しますか？`}
+            {isMonthClosed(closedMonths, ym) ? `✓ ${ymLabel(ym)} 確定済み` : `${ymLabel(ym)} 記録なし`}
           </span>
-          <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定する"}</button>
+          <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定"}</button>
         </div>
       )}
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{hint}横スクロール可。</div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: tableWidth }}>
           <colgroup><col style={{ width: 112 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 92 }} />)}<col style={{ width: 92 }} /></colgroup>
@@ -190,7 +185,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
 
       {mode === "plan" && (
         <div style={{ margin: "12px 4px 0" }}>
-          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 6 }}>変動費の枠（旅費・交際費など。任意。枠を作ると変動費を内訳で見積もれます）</div>
+          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 6 }}>変動費内訳</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {buckets.map((name) => (
               <button key={name} style={styles.optionChip} onClick={() => deleteBucket(name)}>{name} ×</button>
@@ -204,7 +199,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
         <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetTitle}>{edit.label}・{edit.mlabel}の計画</div>
-            <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 8px" }}>毎月の標準：{num(edit.std)}（空欄で標準を使用）</div>
+            <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 8px" }}>標準 {num(edit.std)}</div>
             <AmountField value={edit.value} onChange={(v) => setEdit({ ...edit, value: v })} placeholder={String(edit.std)} autoFocus />
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
               <button style={styles.saveBtnHalf} onClick={commitOver}>この月に設定</button>

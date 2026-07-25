@@ -42,11 +42,11 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
   // 投資振替は銀行残高が減るが「使った」わけではないため、支出(使いすぎ)ではなく貯蓄として扱う。
   // key は ACCOUNT_TYPES の項目名、dir は残高に対する符号。
   const FLOW_DEFS = [
-    { key: "引出", label: "現金引出", dir: -1, kind: "spend", hint: "現金として引き出した額" },
-    { key: "出金", label: "送金した", dir: -1, kind: "spend", hint: "他の人への送金・支払い" },
-    { key: "入金", label: "受け取った", dir: +1, kind: "income", hint: "他の人からの受け取り" },
-    { key: "投資振替", label: "投資へ入れた", dir: -1, kind: "invest", hint: "投資口座へ振り替えた額（残高は減るが貯蓄）" },
-    { key: "投資戻し", label: "投資から戻した", dir: +1, kind: "invest", hint: "投資口座から戻した額" },
+    { key: "引出", label: "現金引出", dir: -1, kind: "spend" },
+    { key: "出金", label: "送金", dir: -1, kind: "spend" },
+    { key: "入金", label: "受取", dir: +1, kind: "income" },
+    { key: "投資振替", label: "投資へ", dir: -1, kind: "invest" },
+    { key: "投資戻し", label: "投資から", dir: +1, kind: "invest" },
   ];
   // 投資振替は1つの項目名に符号で方向を持たせている(入=−/戻し=＋)ので、入力欄は2つに分けて集計する。
   // 記録タブは口座ごとに入出金を並べるため、どの口座からの動きかも持たせる(既定は主口座＝先頭)。
@@ -132,11 +132,7 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
     <div style={styles.sheetBackdrop} onClick={onClose}>
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={styles.sheetHandle} />
-        <div style={styles.sheetTitle}>今月をまとめて入力（{periodLabel(ym, config.cycleCutoffDay)}）</div>
-        <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.6 }}>
-          <b>月末の残高を写すだけ</b>でOK。投資口座も入れておけば、
-          何度振り替えても総額では相殺されるので<b>振替の集計は不要</b>です。
-        </div>
+        <div style={styles.sheetTitle}>まとめ入力（{periodLabel(ym, config.cycleCutoffDay)}）</div>
 
         {accounts.length > 0 && (
           <>
@@ -165,14 +161,11 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
         )}
 
         <button style={styles.mcToggle} onClick={() => setDetail((d) => !d)}>
-          {detail ? "内訳を閉じる" : "内訳も入れる（任意）"}
+          {detail ? "内訳を閉じる" : "内訳"}
           <span style={{ ...styles.chev, transform: detail ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform .15s", verticalAlign: -2, marginLeft: 4 }}>›</span>
         </button>
 
         {detail && (<>
-        <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 8px", lineHeight: 1.6 }}>
-          判定には不要ですが、「何に使ったか」を残したい時に入れてください。
-        </div>
         {salaryItems.length > 0 && (
           <>
             <div style={styles.mcHead}>給与系</div>
@@ -210,11 +203,7 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
           </>
         )}
 
-        <div style={styles.mcHead}>現金・送金（今月の合計）</div>
-        <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 8px", lineHeight: 1.6 }}>
-          口座どうしの移動（投資への振替を含む）は<b>入れなくてOK</b>。残高で相殺されます。
-          ここは「現金でいくら使ったか」を残したい時だけ。
-        </div>
+        <div style={styles.mcHead}>現金・送金</div>
         {flowRows.map((r, i) => (
           <div key={r.key} style={styles.mcRow}>
             <span style={styles.mcName}>{r.label}</span>
@@ -243,14 +232,11 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
               <span>差</span>
               <span style={{ color: Math.abs(unexplained) < 1 ? GREEN : MUTED }}>{Math.abs(unexplained) < 1 ? "なし" : yen(-Math.round(unexplained))}</span>
             </div>
-            <div style={{ fontSize: 11, color: MUTED, marginTop: 6, lineHeight: 1.6 }}>
-              入れた内訳と実際の残高増減の差です。入れていない現金や送金がある分だけズレます。
-            </div>
           </div>
         )}
         </>)}
 
-        <button style={styles.saveBtn} onClick={submit}>この内容で保存</button>
+        <button style={styles.saveBtn} onClick={submit}>保存</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
       </div>
     </div>
