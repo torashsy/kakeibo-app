@@ -367,10 +367,10 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     ocrBalEntries.push({ ym: addMonth(ym, -1), cat: "account", item: "残高", account: ocrAccount, amount: Math.round(openingNumber) });
     const endings = new Map();
     for (const r of (rows || [])) { const t = r.txn; if (Number.isFinite(t.balance)) endings.set(cycleYm(t.date, config.cycleCutoffDay), { date: t.date, balance: t.balance }); }
-    for (const [entryYm, v] of endings) ocrBalEntries.push({ ym: entryYm, cat: "account", item: "残高", account: ocrAccount, amount: Math.round(v.balance) });
+    for (const [entryYm, v] of endings) ocrBalEntries.push({ ym: entryYm, cat: "account", item: "残高", account: ocrAccount, amount: Math.round(v.balance), asOf: v.date });
   }
   const balEntries = [
-    ...balances.filter((b) => b.account).map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) })),
+    ...balances.filter((b) => b.account).map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount), asOf: b.date })),
     ...ocrBalEntries,
   ];
   const commit = () => {

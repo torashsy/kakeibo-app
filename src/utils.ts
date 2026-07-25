@@ -9,6 +9,7 @@ export interface Entry {
   account?: string;
   amount: number;
   src?: string;        // 取込元の指紋(日付|金額|摘要)。同じ明細を二重に取り込まないための目印
+  asOf?: string;       // 残高がいつ時点のものか。周期末まで届いているかの確認に使う
   srcBalance?: number; // OCR明細に表示された取引後残高。摘要が揺れても同じ取引を判別する
 }
 
@@ -192,6 +193,13 @@ export const cycleStartDate = (ym: string, cutoffDay: number = 0): string => {
     if (cycleYm(date, cutoffDay) === ym) return date;
   }
   return `${ym}-${String(cutoffDay + 1).padStart(2, "0")}`;
+};
+// 指定月度の終了日(締め日。休日でずれる分も含む)。次の周期の開始日の前日。
+export const cycleEndDate = (ym: string, cutoffDay: number = 0): string => {
+  const nextStart = cycleStartDate(addMonth(ym, 1), cutoffDay);
+  const [ny, nm, nd] = nextStart.split("-").map(Number);
+  const d = new Date(ny, nm - 1, nd - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 // 今日が属する周期の ym
 export const currentCycleYm = (cutoffDay: number = 0): string => {
@@ -1163,8 +1171,11 @@ export function payeeFromDebit(desc: string): string {
 export interface CycleCheck {
   ym: string; opening: number | null; net: number; expected: number | null;
   closing: number | null; diff: number | null; ok: boolean;
+  asOf?: string;        // 期末残高がいつ時点か
+  endDate?: string;     // その周期の締め日
+  covered: boolean;     // 残高が締め日まで届いているか(届いていなければ照合は当てにならない)
 }
-export function verifyCycles(entries: Entry[], closedMonths?: string[]): CycleCheck[] {
+export function verifyCycles(entries: Entry[], cutoffDay: number = 0): CycleCheck[] {
   const yms = Array.from(new Set((entries || []).map((e) => e.ym))).sort();
   return yms.map((ym) => {
     const opening = balTotalAsOf(entries, addMonth(ym, -1));
@@ -1175,7 +1186,13 @@ export function verifyCycles(entries: Entry[], closedMonths?: string[]): CycleCh
     const closing = hasOwnBalance ? balTotalAsOf(entries, ym) : null;
     const expected = opening == null ? null : Math.round(opening + net);
     const diff = expected == null || closing == null ? null : Math.round(closing - expected);
-    return { ym, opening, net: Math.round(net), expected, closing, diff, ok: diff === 0 };
+    // 期末残高がいつ時点か。締め日まで届いていないと、その後の取引が抜けたまま
+    // 辻褄が合ってしまうので、照合の結果を鵜呑みにできない。
+    const asOfs = monthEntries.filter((e) => e.cat === "account" && acctRole(e.item) === "bal" && e.asOf).map((e) => e.asOf as string).sort();
+    const asOf = asOfs.length ? asOfs[asOfs.length - 1] : undefined;
+    const endDate = cutoffDay >= 1 ? cycleEndDate(ym, cutoffDay) : undefined;
+    const covered = !endDate || !asOf ? !endDate : asOf >= endDate;
+    return { ym, opening, net: Math.round(net), expected, closing, diff, ok: diff === 0, asOf, endDate, covered };
   });
 }
 
