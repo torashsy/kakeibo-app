@@ -318,11 +318,21 @@ export function migrateConfig(cfg: any): any {
   if (!(Number(out.importRulesSeeded) >= 1)) {
     const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);
     const add = ["給与", "賞与"].filter((m) => !has(m)).map((m) => ({ id: uid(), match: m, action: "salary" as const, target: m }));
-    out = { ...out, importRules: [...add, ...(out.importRules || [])], importRulesSeeded: 2 };
-  } else if (Number(out.importRulesSeeded) < 2) {
-    // 給与・賞与は「取り込まない」から「未入力なら手取りとして取り込む」に変更した
-    out = { ...out, importRulesSeeded: 2, importRules: (out.importRules || []).map((r: any) =>
-      (r && r.action === "skip" && (r.match === "給与" || r.match === "賞与") ? { ...r, action: "salary", target: r.match } : r)) };
+    out = { ...out, importRules: [...add, ...(out.importRules || [])], importRulesSeeded: 3 };
+  } else if (Number(out.importRulesSeeded) < 3) {
+    // 既定ルールを増やしたときは、まだ無いものだけ足す(利用者が消したものは戻さないよう
+    // 版で管理する)。金額つきのルールは先に置く必要があるので先頭へ入れる。
+    const cur = (out.importRules || []) as any[];
+    const has = (m: string, amt?: number) => cur.some((r) => r && r.match === m && (amt == null ? r.amount == null : r.amount === amt));
+    const add: any[] = [];
+    for (const r of DEFAULT_CONFIG.importRules || []) {
+      if (r.action === "salary") continue;                 // 給与系は版2で扱い済み
+      if (!has(r.match, r.amount)) add.push({ ...r, id: uid() });
+    }
+    if (Number(out.importRulesSeeded) < 2) {
+      out = { ...out, importRules: (cur).map((r) => (r && r.action === "skip" && (r.match === "給与" || r.match === "賞与") ? { ...r, action: "salary", target: r.match } : r)) };
+    }
+    out = { ...out, importRulesSeeded: 3, importRules: [...add, ...((out.importRules || []) as any[])] };
   }
   // 利用者名を一度だけ補う。削除後に復活しないよう版で管理する。
   if (!(Number(out.ownTransferKeywordsSeeded) >= 1)) {
@@ -1115,8 +1125,12 @@ export function cleanOcrText(text: string): string {
 
 export const DEBIT_HINT_RE = /自払|自動払込|口座振替|カード|ｶｰﾄﾞ/;
 // OCRは文字の間に空白を入れることがある(「自 払 セソ * ン」)。空白を落としてから判定する。
-export const isDebitDesc = (desc: string): boolean =>
-  DEBIT_HINT_RE.test(String(desc || "").normalize("NFKC").replace(/[\s　]/g, ""));
+const DEBIT_HINTS = ["自払", "自動払込", "口座振替", "カード"];
+export const isDebitDesc = (desc: string): boolean => {
+  // 濁点や小書きカナが落ちても分かるよう、目印側も同じ正規化にそろえて比べる
+  const nd = normalizeForMatch(desc);
+  return DEBIT_HINTS.some((k) => nd.includes(normalizeForMatch(k)));
+};
 
 // 引き落とし行がどのカードかを推測する。当たらなくても利用者が振り分け直せるので、
 // 「分からないから口座の出金にする」より「カードとして出して選んでもらう」方が実態に合う。

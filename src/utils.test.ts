@@ -939,7 +939,7 @@ describe("給与ルールの既定と移行", () => {
     const after = migrateConfig(before);
     const rules = after.importRules as ImportRule[];
     expect(rules.filter((r: ImportRule) => r.action === "salary").map((r: ImportRule) => r.match)).toEqual(["給与", "賞与"]);
-    expect(after.importRulesSeeded).toBe(2);
+    expect(after.importRulesSeeded).toBe(3);
     // 利用者が消したあとに読み込み直しても復活しない
     const removed = { ...after, importRules: rules.filter((r: ImportRule) => r.match !== "給与") };
     expect((migrateConfig(removed).importRules as ImportRule[]).some((r: ImportRule) => r.match === "給与")).toBe(false);
@@ -1145,10 +1145,9 @@ describe("給与の取り込み(未入力なら手取りとして取り込む)",
   it("旧「取り込まない」ルールは給与として取り込む設定へ移行する", () => {
     const before = { accounts: [], salaryItems: [], importRulesSeeded: 1,
       importRules: [{ id: "a", match: "給与", action: "skip" }, { id: "b", match: "賞与", action: "skip" }] };
-    const after = migrateConfig(before);
-    expect((after.importRules as ImportRule[]).map((r) => [r.match, r.action]))
+    const rules = migrateConfig(before).importRules as ImportRule[];
+    expect(rules.filter((r) => r.match === "給与" || r.match === "賞与").map((r) => [r.match, r.action]))
       .toEqual([["給与", "salary"], ["賞与", "salary"]]);
-    expect(after.importRulesSeeded).toBe(2);
   });
 });
 
@@ -1387,5 +1386,24 @@ describe("JRE BANK: 実際のOCR出力から読み取る", () => {
   });
   it("ハヤシ シユンヤは自分名義として扱う", () => {
     expect(matchesOwnName(txns[1].desc, ["ハヤシ シユンヤ"])).toBe(true);
+  });
+});
+
+describe("既定ルールを増やしたとき既存の設定にも入る", () => {
+  it("ビューカードや三井住友のルールが後から足される", () => {
+    const before = { accounts: [], salaryItems: [], importRulesSeeded: 2,
+      importRules: [{ id: "a", match: "エポス", action: "card", target: "EPOS" }] };
+    const rules = migrateConfig(before).importRules as ImportRule[];
+    expect(rules.some((r) => r.match === "ビューカード" && r.target === "VIEW")).toBe(true);
+    expect(rules.some((r) => r.match === "三井住友" && r.amount === 294 && r.target === "smcc")).toBe(true);
+    expect(rules.some((r) => r.match === "エポス")).toBe(true);          // 既存は残る
+    expect(migrateConfig(before).importRulesSeeded).toBe(3);
+  });
+  it("利用者が消したルールは戻さない(版が上がっていれば足さない)", () => {
+    const after = { accounts: [], salaryItems: [], importRulesSeeded: 3, importRules: [] };
+    expect((migrateConfig(after).importRules as ImportRule[]).length).toBe(0);
+  });
+  it("濁点が落ちた「ヒユーカート」も引き落としと分かる", () => {
+    expect(isDebitDesc("カ ) ヒ ユーカート >")).toBe(true);
   });
 });
