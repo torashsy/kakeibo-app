@@ -116,7 +116,7 @@ function SyncSection() {
 // スクショ取込の振り分けルール管理。摘要のキーワード→カード請求/口座記録/スキップ、を登録・編集できる
 function ImportRulesSection({ rules, cards, accounts, onSave }) {
   const [edit, setEdit] = useState(null);
-  const actionLabel = { card: "カード", account: "口座", skip: "スキップ" };
+  const actionLabel = { card: "カード", account: "口座", salary: "給与", skip: "スキップ" };
   const commit = () => {
     if (!edit.match.trim()) return;
     const rule = { ...edit, match: edit.match.trim() };
@@ -133,7 +133,7 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
         <div style={styles.detailCard}>
           {(rules || []).map((r) => (
             <button key={r.id} style={styles.settingRow} onClick={() => setEdit({ ...r })}>
-              <span style={{ textAlign: "left" }}>「{r.match}」<span style={{ color: MUTED }}>→ {actionLabel[r.action]}{r.target ? `：${r.target}` : ""}</span></span>
+              <span style={{ textAlign: "left" }}>「{r.match}」{r.exact ? <span style={{ color: MUTED, fontSize: 11 }}>だけ</span> : null}<span style={{ color: MUTED }}>→ {actionLabel[r.action]}{r.target ? `：${r.target}` : ""}</span></span>
               <span style={{ color: MUTED, fontSize: 18 }}>›</span>
             </button>
           ))}
@@ -144,8 +144,16 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
           <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetHandle} />
             <div style={styles.sheetTitle}>振り分けルール</div>
-            <label style={styles.fieldLabel}>キーワード（摘要にこの文字列が含まれたら適用）</label>
+            <label style={styles.fieldLabel}>キーワード（{edit.exact ? "摘要がこの文字列だけのときに適用" : "摘要にこの文字列が含まれたら適用"}）</label>
             <input value={edit.match} onChange={(e) => setEdit({ ...edit, match: e.target.value })} placeholder="例）ミツビシ" style={styles.textInput} autoFocus />
+            {/* ゆうちょの「カード」(キャッシュカードのATM取引)のように、
+                他のルール(「自払 三井住友カード」)と語がかぶるときに使う */}
+            <div style={styles.optionRow}>
+              {[[false, "含む"], [true, "この語だけ"]].map(([v, l]) => (
+                <button key={String(v)} style={{ ...styles.optionChip, ...(!!edit.exact === v ? styles.optionChipActive : {}) }}
+                  onClick={() => setEdit({ ...edit, exact: v })}>{l}</button>
+              ))}
+            </div>
             <label style={styles.fieldLabel}>振り分け先</label>
             <div style={styles.optionRow}>
               {["card", "account", "skip"].map((v) => (

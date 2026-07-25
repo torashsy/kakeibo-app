@@ -940,7 +940,7 @@ describe("給与ルールの既定と移行", () => {
     const after = migrateConfig(before);
     const rules = after.importRules as ImportRule[];
     expect(rules.filter((r: ImportRule) => r.action === "salary").map((r: ImportRule) => r.match)).toEqual(["給与", "賞与"]);
-    expect(after.importRulesSeeded).toBe(3);
+    expect(after.importRulesSeeded).toBe(4);
     // 利用者が消したあとに読み込み直しても復活しない
     const removed = { ...after, importRules: rules.filter((r: ImportRule) => r.match !== "給与") };
     expect((migrateConfig(removed).importRules as ImportRule[]).some((r: ImportRule) => r.match === "給与")).toBe(false);
@@ -1398,10 +1398,10 @@ describe("既定ルールを増やしたとき既存の設定にも入る", () =
     expect(rules.some((r) => r.match === "ビューカード" && r.target === "VIEW")).toBe(true);
     expect(rules.some((r) => r.match === "三井住友" && r.amount === 294 && r.target === "smcc")).toBe(true);
     expect(rules.some((r) => r.match === "エポス")).toBe(true);          // 既存は残る
-    expect(migrateConfig(before).importRulesSeeded).toBe(3);
+    expect(migrateConfig(before).importRulesSeeded).toBe(4);
   });
   it("利用者が消したルールは戻さない(版が上がっていれば足さない)", () => {
-    const after = { accounts: [], salaryItems: [], importRulesSeeded: 3, importRules: [] };
+    const after = { accounts: [], salaryItems: [], importRulesSeeded: 4, importRules: [] };
     expect((migrateConfig(after).importRules as ImportRule[]).length).toBe(0);
   });
   it("濁点が落ちた「ヒユーカート」も引き落としと分かる", () => {
@@ -1616,5 +1616,59 @@ describe("摘要に頼らない重複の目印", () => {
     expect(m.get(entrySignature(e({})))).toBe(2);
     expect(m.get(entrySignature(e({ amount: -1000 })))).toBe(1);
     expect(m.get(entrySignature(e({ amount: -9999 })))).toBeUndefined();
+  });
+});
+
+describe("摘要がその語だけのときに当たるルール", () => {
+  const R = DEFAULT_CONFIG.importRules!;
+
+  it("ゆうちょの「カード」はキャッシュカードのATM取引(口座の引出/預入)", () => {
+    // クレジットカードの請求ではないので、カード請求として数えない
+    expect(classifyTxn("カード", R, -6000)).toMatchObject({ action: "account", negItem: "引出", posItem: "預入" });
+    expect(classifyTxn("カード", R, 6000)).toMatchObject({ action: "account", posItem: "預入" });
+  });
+
+  it("カード名を伴う引き落としは、これまでどおりカード請求", () => {
+    expect(classifyTxn("自払　三井住友カード", R, -66065)).toMatchObject({ action: "card", target: "SMCC Gold" });
+    expect(classifyTxn("自払　三井住友カード", R, -294)).toMatchObject({ action: "card", target: "smcc" });
+    expect(classifyTxn("自払　ビューカード", R, -33000)).toMatchObject({ action: "card", target: "VIEW" });
+  });
+
+  it("取込元の口座へ振り分ける(ルール側の口座指定は空でよい)", () => {
+    const src = { action: "account" as const, target: "ゆうちょ" };
+    expect(classifyTxnForImport("カード", R, src, -6000))
+      .toMatchObject({ action: "account", target: "ゆうちょ", negItem: "引出" });
+  });
+
+  it("語だけのルールは、前後に文字が付くと当たらない", () => {
+    const rules: ImportRule[] = [{ id: "1", match: "カード", action: "account", negItem: "引出", posItem: "預入", exact: true }];
+    expect(classifyTxn("カード", rules, -1000)).toMatchObject({ negItem: "引出" });
+    expect(classifyTxn("カードローン返済", rules, -1000)).toBeNull();
+    expect(classifyTxn("自払 エヌカード", rules, -1000)).toBeNull();
+  });
+
+  it("OCRの空白・濁点のゆれは吸収する", () => {
+    expect(classifyTxn("カ ー ド", R, -6000)).toMatchObject({ negItem: "引出" });
+    expect(classifyTxn("カート", R, -6000)).toMatchObject({ negItem: "引出" });
+  });
+});
+
+describe("「カード」ルールの追加(版4)", () => {
+  it("既存の設定にも一度だけ足される", () => {
+    const before = { accounts: [], salaryItems: [], importRulesSeeded: 3,
+      importRules: [{ id: "a", match: "エポス", action: "card", target: "EPOS" }] };
+    const after = migrateConfig(before);
+    const rules = after.importRules as ImportRule[];
+    expect(rules.filter((r) => r.match === "カード" && r.exact)).toHaveLength(1);
+    expect(after.importRulesSeeded).toBe(4);
+    // 版3で消した他の既定ルールまでは戻さない
+    expect(rules.some((r) => r.match === "ビューカード")).toBe(false);
+    expect(rules).toHaveLength(2);
+  });
+
+  it("消したあとに読み込み直しても復活しない", () => {
+    const before = { accounts: [], salaryItems: [], importRulesSeeded: 3, importRules: [] };
+    const removed = { ...migrateConfig(before), importRules: [] };
+    expect((migrateConfig(removed).importRules as ImportRule[])).toHaveLength(0);
   });
 });
