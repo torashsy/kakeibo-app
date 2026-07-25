@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, findCardByTotal, cardMonthTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -84,28 +84,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     return classifyTxnForImport(txn.desc, config.importRules, guess || null);
   };
 
-  // カードの明細CSVを「請求の合計1件」にまとめる。該当しなければ null。
-  // 明細1行ずつ入れると購入日と引き落とし月がずれて、口座側の引き落としと二重計上になる。
-  const buildCardSummaryRow = (res, guess, fileIdx) => {
-    if (!isCardStatement(res.txns, !!res.balance)) return null;
-    const total = res.txns.reduce((a, t) => a + Math.abs(t.amount), 0);
-    const matched = findCardByTotal(total, existing || []);
-    const name = (guess && guess.action === "card" ? guess.target : null) || (matched ? matched.card : null);
-    const lastDate = res.txns.map((t) => t.date).sort().slice(-1)[0];
-    // 請求月は、合計が一致した既存記録の月。分からなければ最終利用日の月度。
-    const ym = matched ? matched.ym : cycleYm(lastDate, config.cycleCutoffDay);
-    const already = name ? cardMonthTotal(existing || [], name, ym) : 0;
-    const settled = already > 0 && already === total;   // 入力済みと一致 → 照合だけして取り込まない
-    return {
-      card: { name, total, ym, already, settled },
-      row: {
-        txn: { date: lastDate, desc: `${name || "カード"} 明細${res.txns.length}件の合計`, amount: -total },
-        cls: settled || !name ? { action: "skip" } : { action: "card", target: name },
-        matchDraft: name || "", autoMatched: true, fileIdx, own: false, cardSummary: true,
-      },
-    };
-  };
-
   // CSVを複数まとめて取り込む。ファイルごとに口座/カードを推定し、
   // ルールに当たらない行の振り分け先として使う(1ファイル=1口座なので取り違えが起きない)。
   const runCsv = async (files) => {
@@ -122,12 +100,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         const guess = (remembered ? { action: "account", target: remembered } : null)
           || guessCsvTarget(file.name, res.preamble, cards, config.accounts, !!res.balance);
         const fileIdx = notes.length;
-        const cardRow = buildCardSummaryRow(res, guess, fileIdx);
-        if (cardRow) {
-          allRows.push(cardRow.row);
-          notes.push({ name: file.name, count: res.txns.length, target: cardRow.card.name, signature: res.signature, card: cardRow.card });
-          continue;
-        }
         for (const txn of res.txns) {
           const auto = classifyRow(txn, guess);
           allRows.push({ txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx,
@@ -202,15 +174,11 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     const res = parseBankCsv(text);
     if (res.txns.length > 0) {
       const guess = guessCsvTarget("", res.preamble, cards, config.accounts, !!res.balance);
-      // カードの明細はファイル選択のときと同じく、請求の合計1件にまとめる
-      const cardRow = buildCardSummaryRow(res, guess, 0);
-      setRows(cardRow ? [cardRow.row] : res.txns.map((txn) => {
+      setRows(res.txns.map((txn) => {
         const auto = classifyRow(txn, guess);
         return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
       }));
-      setCsvNotes([cardRow
-        ? { name: label, count: res.txns.length, target: cardRow.card.name, card: cardRow.card }
-        : { name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck }]);
+      setCsvNotes([{ name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck }]);
       setBalances(res.balance && guess && guess.action === "account" ? [{ account: guess.target, ...res.balance }] : []);
       setOcrError("");
       return true;
@@ -336,12 +304,27 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     const lonely = list.reduce((a, r, i) => a + (items[i].own && pairedRows[i] == null ? 1 : 0), 0);
     return { pairedRows, removeIds, replacementEntries, lonely, ownFlags: items.map((x) => x.own) };
   }, [rows, existing, isExistingTxn, config.ownTransferKeywords]);
+  // 引き落とし行がどのカードか分からないとき、金額から特定する。
+  // 特定できないまま口座の出金として取り込むと、現金の支出として数えてしまう。
+  const cardByAmount = React.useCallback((txn) => {
+    if (!(txn.amount < 0)) return null;
+    const hit = findCardByTotal(Math.abs(txn.amount), existing || []);
+    return hit && hit.ym === cycleYm(txn.date, config.cycleCutoffDay) ? hit.card : null;
+  }, [existing, config.cycleCutoffDay]);
+  // そのカード・その月度に請求が入力済みなら、取り込まず照合だけする(二重計上を防ぐ)
+  const cardAlready = React.useCallback((name, date) =>
+    (name ? cardMonthTotal(existing || [], name, cycleYm(date, config.cycleCutoffDay)) : 0),
+    [existing, config.cycleCutoffDay]);
+
   // その月度に給与が入力済みかどうか。入力済みなら取り込まず、金額の照合だけ行う。
   const salaryEntered = React.useCallback((date) => {
     const t = cycleYm(date, config.cycleCutoffDay);
     return (existing || []).reduce((a, e) => a + (e.ym === t && e.cat === "salary" ? e.amount : 0), 0);
   }, [existing, config.cycleCutoffDay]);
-  const entries = (rows || []).map((r, i) => (r.cls.action === "salary" && salaryEntered(r.txn.date) !== 0 ? null : txnToEntry(r.txn, pairing.pairedRows[i] != null
+  const entries = (rows || []).map((r, i) => (
+    (r.cls.action === "salary" && salaryEntered(r.txn.date) !== 0) ||
+    (r.cls.action === "card" && cardAlready(r.cls.target, r.txn.date) > 0)
+      ? null : txnToEntry(r.txn, pairing.pairedRows[i] != null
     ? { ...r.cls, action: "account", negItem: INTERNAL_TRANSFER_ITEM, posItem: INTERNAL_TRANSFER_ITEM }
     : r.cls, config.cycleCutoffDay)));
   const batchKeys = new Set();
@@ -470,22 +453,30 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             )}
             {/* 残高での検算。CSVの残高列が「手前の残高＋取引＝その行の残高」で繋がるかを見て、
                 読み取り違いや取りこぼしが無いことを取り込む前に確かめられるようにする。 */}
-            {/* カード明細: 入力済みなら検算だけして取り込まない。合わなければ差を出す。 */}
-            {csvNotes.filter((n) => n.card).map((n, i) => {
-              const c = n.card;
-              const ok = c.settled;
-              return (
-                <div key={`c${i}`} style={{ ...styles.flash, background: ok ? "var(--group-bg)" : (c.already > 0 ? "var(--expense-soft)" : "var(--group-bg)"), color: ok ? MUTED : (c.already > 0 ? RED : MUTED) }}>
-                  {!c.name
-                    ? `カード明細（合計 ${yen(c.total)}）ですが、どのカードか分かりませんでした。下でカードを選んでください`
-                    : ok
-                      ? `✓ ${c.name} ${periodLabel(c.ym, config.cycleCutoffDay)} の請求 ${yen(c.total)} は入力済みと一致（取り込みません）`
-                      : c.already > 0
-                        ? `⚠ ${c.name} ${periodLabel(c.ym, config.cycleCutoffDay)}：入力済み ${yen(c.already)} と明細合計 ${yen(c.total)} が ${yen(Math.abs(c.total - c.already))} 違います`
-                        : `${c.name} ${periodLabel(c.ym, config.cycleCutoffDay)} の請求 ${yen(c.total)} として取り込みます（明細${n.count}件を合計）`}
-                </div>
-              );
-            })}
+            {/* カードの引き落とし: 入力済みなら取り込まず照合だけ。無ければ請求額として取り込む。 */}
+            {(() => {
+              const cardRows = (rows || []).filter((r) => r.cls.action === "card" && r.cls.target);
+              if (!cardRows.length) return null;
+              const seen = new Set();
+              return cardRows.map((r, i) => {
+                const t = cycleYm(r.txn.date, config.cycleCutoffDay);
+                const k = `${r.cls.target}|${t}`;
+                if (seen.has(k)) return null;
+                seen.add(k);
+                const amount = Math.abs(r.txn.amount);
+                const already = cardAlready(r.cls.target, r.txn.date);
+                const ok = already > 0 && already === amount;
+                return (
+                  <div key={`cd${i}`} style={{ ...styles.flash, background: already > 0 && !ok ? "var(--expense-soft)" : "var(--group-bg)", color: already > 0 && !ok ? RED : MUTED }}>
+                    {already === 0
+                      ? `${r.cls.target} ${periodLabel(t, config.cycleCutoffDay)} の引き落とし ${yen(amount)} をカード請求として取り込みます`
+                      : ok
+                        ? `✓ ${r.cls.target} ${periodLabel(t, config.cycleCutoffDay)} の引き落とし ${yen(amount)} は入力済みと一致（取り込みません）`
+                        : `⚠ ${r.cls.target} ${periodLabel(t, config.cycleCutoffDay)}：入力済み ${yen(already)} と引き落とし ${yen(amount)} が ${yen(Math.abs(already - amount))} 違います（入力済みを優先）`}
+                  </div>
+                );
+              });
+            })()}
             {/* 給与: 手入力を続ける方針なので取り込まず、入力済みとの照合だけ行う */}
             {(() => {
               const paid = (rows || []).filter((r) => /給与|賞与/.test(r.txn.desc) && r.txn.amount > 0);
