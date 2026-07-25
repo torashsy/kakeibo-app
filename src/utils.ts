@@ -832,14 +832,41 @@ export function parseBankCsv(text: string): CsvImportResult {
 export interface TxnClassification { action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
 
 // 摘要をルールに照らして分類する(登録順で先勝ち)。マッチ無しはnull(要手動判定)。
-export function classifyTxn(desc: string, rules: ImportRule[] | undefined, ownKeywords?: string[]): TxnClassification | null {
+export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnClassification | null {
   const nd = normalizeForMatch(desc);
-  // 自分名義の口座間送金は収支ではないので、ルールより先に除外する
-  for (const k of ownKeywords || []) { const nk = normalizeForMatch(k); if (nk && nd.includes(nk)) return { action: "skip" }; }
   for (const r of rules || []) {
     if (r.match && nd.includes(normalizeForMatch(r.match))) return { action: r.action, target: r.target, negItem: r.negItem, posItem: r.posItem };
   }
   return null;
+}
+
+// 摘要が自分名義(設定のキーワード)かどうか。表記ゆれ・半角カナはNFKCで吸収する。
+export const matchesOwnName = (desc: string, keywords: string[] | undefined): boolean => {
+  const nd = normalizeForMatch(desc);
+  return (keywords || []).some((k) => { const nk = normalizeForMatch(k); return !!nk && nd.includes(nk); });
+};
+
+// 口座間振替の候補。group は「どの口座の明細か」(取り込むCSVのファイル単位)。
+export interface TransferCandidate { date: string; amount: number; group: string | number; own: boolean; }
+
+// 自分名義の取引どうしを「同じ日・同額・逆符号・別口座」で突き合わせ、1組になったものを
+// 口座間の振替とみなす。組になった相手の添字を返す(相手なしは -1)。
+// 名義だけで一律に除外すると、同じ名字の他人とのやり取りまで消えてしまうため、
+// 反対側の記録が実在することを条件にする。
+export function pairOwnTransfers(items: TransferCandidate[]): number[] {
+  const partner = items.map(() => -1);
+  for (let i = 0; i < items.length; i++) {
+    if (!items[i].own || partner[i] >= 0) continue;
+    for (let j = 0; j < items.length; j++) {
+      if (j === i || !items[j].own || partner[j] >= 0) continue;
+      if (items[j].group === items[i].group) continue;      // 同じ口座の中の動きは振替ではない
+      if (items[j].date !== items[i].date) continue;
+      if (items[j].amount !== -items[i].amount) continue;    // 出た額と入った額が一致
+      partner[i] = j; partner[j] = i;
+      break;
+    }
+  }
+  return partner;
 }
 
 // 取込元の明細を一意に表す指紋。CSVの期間が重なっても同じ取引を二重登録しないために使う。

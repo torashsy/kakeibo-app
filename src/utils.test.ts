@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, matchesOwnName, pairOwnTransfers,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -390,8 +390,8 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(classifyTxn("自払　JCBカード", rules)).toEqual({ action: "card", target: "JAL navi" });
     // ことら送金そのものは他人との実際のやり取りなので口座の出金/入金にする
     expect(classifyTxn("ことら　タケナカ", rules)).toMatchObject({ action: "account", target: "NEOBANK" });
-    // 自分名義(ownTransferKeywords)への送金だけは口座間移動なので取り込まない
-    expect(classifyTxn("ことら　ハヤシ　シユンヤ", rules, ["ハヤシ シユンヤ"])).toEqual({ action: "skip" });
+    // 自分名義かどうかは名前で判定できるが、振替かどうかは反対側の記録と組になって初めて決まる
+    expect(matchesOwnName("ことら　ハヤシ　シユンヤ", ["ハヤシ シユンヤ"])).toBe(true);
   });
   it("classifyTxn: マッチしなければnull(要手動判定)", () => {
     expect(classifyTxn("謎の取引", [{ id: "1", match: "ミツビシ", action: "card", target: "MDC" }])).toBeNull();
@@ -419,10 +419,10 @@ describe("スクショ取込(OCR明細インポート)", () => {
 
   it("エンドツーエンド: 実際のスクショ相当のテキストが正しい件数のentryになる", () => {
     const txns = parseBankText(bankText);
-    // 氏名が読めていれば自分名義として除外されるので、カード3件だけが残る
-    const entries = txns.map((t) => txnToEntry(t, classifyTxn(t.desc, DEFAULT_CONFIG.importRules, ["ハヤシ シユンヤ"]))).filter(Boolean);
-    expect(entries).toHaveLength(3);
-    expect(entries.map((e) => e!.item)).toEqual(["MDC", "JAL navi", "SAISON"]);
+    const entries = txns.map((t) => txnToEntry(t, classifyTxn(t.desc, DEFAULT_CONFIG.importRules))).filter(Boolean);
+    // ミツビシ/JCBカード/セゾンの3件＋ことら(口座の出金/入金)の1件
+    expect(entries).toHaveLength(4);
+    expect(entries.map((e) => e!.item)).toEqual(["MDC", "JAL navi", "入金", "SAISON"]);
   });
 
   // 実際にユーザーから報告された生のOCR出力をそのまま再現(濁点の脱落・¥の誤読(\/Y)・
@@ -484,11 +484,8 @@ describe("スクショ取込(OCR明細インポート)", () => {
     expect(classifyTxn("自 払 ミツ ヒ * シ UF J ニ コス", rules)).toEqual({ action: "card", target: "MDC" });
     expect(classifyTxn("自 払 JCB カー ト *", rules)).toEqual({ action: "card", target: "JAL navi" });
     expect(classifyTxn("自 払 セ ソ ` ン", rules)).toEqual({ action: "card", target: "SAISON" });
-    // ことら送金は口座の出金/入金になる(OCRは氏名が崩れやすく自分名義かを判定できないため、
-    // 自分名義の除外はCSV取込のような正確なテキストで効かせる)
+    // ことら送金は口座の出金/入金になる
     expect(classifyTxn("こと ら ハヤ シ シュ ユ ュ ン ヤ", rules)).toMatchObject({ action: "account", target: "NEOBANK" });
-    // 氏名が崩れていなければ自分名義として除外できる
-    expect(classifyTxn("ことら送金　ハヤシ　シユンヤ", rules, ["ハヤシ シユンヤ"])).toEqual({ action: "skip" });
   });
 
   it("エンドツーエンド: 実際のOCRノイズを含むテキストでもMDC/JAL navi/SAISON/ことらが正しく自動仕分けされる", () => {
@@ -830,8 +827,8 @@ describe("CSV取込: ゆうちょ形式(摘要が複数列・古い順・列名�
   it("残高で検算でき、全件一致する", () => {
     expect(r.balanceCheck).toMatchObject({ checked: 4, mismatched: 0 });
   });
-  it("半角カナの相手名も自分名義として除外できる(NFKC)", () => {
-    expect(classifyTxn("ことら ﾊﾔｼ ｼﾕﾝﾔ", [], ["ハヤシ シユンヤ"])).toEqual({ action: "skip" });
+  it("半角カナの相手名も自分名義として判定できる(NFKC)", () => {
+    expect(matchesOwnName("ことら ﾊﾔｼ ｼﾕﾝﾔ", ["ハヤシ シユンヤ"])).toBe(true);
   });
   it("読み取りがずれていれば検算が不一致として気付ける", () => {
     const broken = csv.replace("30000,,ことら,ﾓﾘｱｲ ｺﾀﾛｳ,34456", "39000,,ことら,ﾓﾘｱｲ ｺﾀﾛｳ,34456");
@@ -858,5 +855,57 @@ describe("給与・賞与は取り込まない(給与系は明細から手入力
     // 利用者が消したあとに読み込み直しても復活しない
     const removed = { ...after, importRules: rules.filter((r: ImportRule) => r.match !== "給与") };
     expect((migrateConfig(removed).importRules as ImportRule[]).some((r: ImportRule) => r.match === "給与")).toBe(false);
+  });
+});
+
+describe("口座間の振替は同日・同額・逆符号・別口座の組で判定する", () => {
+  const own = ["ハヤシ シユンヤ"];
+  const mk = (date: string, amount: number, group: number, desc: string) =>
+    ({ date, amount, group, own: matchesOwnName(desc, own) });
+  it("組が揃えば両方とも振替になる", () => {
+    // NEOBANKから出た7,500がゆうちょに入っている
+    const items = [
+      mk("2026-07-18", -7500, 0, "ことら送金　ハヤシ　シユンヤ"),
+      mk("2026-07-18", 7500, 1, "ことら ﾊﾔｼ ｼﾕﾝﾔ"),
+    ];
+    expect(pairOwnTransfers(items)).toEqual([1, 0]);
+  });
+  it("相手がいなければ振替にしない(同じ名字の他人とのやり取りを消さない)", () => {
+    const items = [mk("2026-07-24", 9980, 0, "振込 ﾊﾔｼ ｼﾕﾝﾔ")];
+    expect(pairOwnTransfers(items)).toEqual([-1]);
+  });
+  it("同じ口座の中の同額・逆符号は振替にしない", () => {
+    const items = [
+      mk("2026-07-18", -7500, 0, "ことら ﾊﾔｼ ｼﾕﾝﾔ"),
+      mk("2026-07-18", 7500, 0, "ことら ﾊﾔｼ ｼﾕﾝﾔ"),
+    ];
+    expect(pairOwnTransfers(items)).toEqual([-1, -1]);
+  });
+  it("日付か金額が違えば組にしない", () => {
+    expect(pairOwnTransfers([
+      mk("2026-07-18", -7500, 0, "ことら ﾊﾔｼ ｼﾕﾝﾔ"),
+      mk("2026-07-19", 7500, 1, "ことら ﾊﾔｼ ｼﾕﾝﾔ"),
+    ])).toEqual([-1, -1]);
+    expect(pairOwnTransfers([
+      mk("2026-07-18", -7500, 0, "ことら ﾊﾔｼ ｼﾕﾝﾔ"),
+      mk("2026-07-18", 7000, 1, "ことら ﾊﾔｼ ｼﾕﾝﾔ"),
+    ])).toEqual([-1, -1]);
+  });
+  it("自分名義でない取引は組にしない", () => {
+    const items = [
+      { date: "2026-07-18", amount: -7500, group: 0, own: false },
+      { date: "2026-07-18", amount: 7500, group: 1, own: false },
+    ];
+    expect(pairOwnTransfers(items)).toEqual([-1, -1]);
+  });
+  it("同額の組が複数あっても1対1で消化する", () => {
+    const items = [
+      mk("2026-07-18", -5000, 0, "ハヤシ シユンヤ"),
+      mk("2026-07-18", -5000, 0, "ハヤシ シユンヤ"),
+      mk("2026-07-18", 5000, 1, "ハヤシ シユンヤ"),
+    ];
+    const p = pairOwnTransfers(items);
+    expect(p.filter((x) => x >= 0)).toHaveLength(2); // 1組だけ成立、余った1件は残る
+    expect(p[2]).toBeGreaterThanOrEqual(0);
   });
 });

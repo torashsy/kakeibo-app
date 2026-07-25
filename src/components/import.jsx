@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, uid, yen, cycleYm } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -61,7 +61,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // ルールが「口座」でも振り分け先が未設定なら、そのファイルの口座で補う。
   // ファイル推定をルールより優先すると、投資振替や自分名義の送金が全部ただの出金になってしまう。
   const classifyRow = (txn, guess) => {
-    const byRule = classifyTxn(txn.desc, config.importRules, config.ownTransferKeywords);
+    const byRule = classifyTxn(txn.desc, config.importRules);
     if (byRule) {
       // 口座の記録なら、どの口座かはファイル(=1口座)が正しい。ルールは項目(出金/引出/投資振替)だけ決める。
       // ルールのtargetを優先すると、ゆうちょのCSVがNEOBANK宛のルールに引っ張られてしまう。
@@ -85,7 +85,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         const fileIdx = notes.length;
         for (const txn of res.txns) {
           const auto = classifyRow(txn, guess);
-          allRows.push({ txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx });
+          allRows.push({ txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx,
+            own: matchesOwnName(txn.desc, config.ownTransferKeywords) });
         }
         if (res.balance) bals.push({ account: guess && guess.action === "account" ? guess.target : "", fileIdx, ...res.balance });
         notes.push({ name: file.name, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck });
@@ -94,9 +95,18 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       }
     }
     setCsvNotes(notes); setBalances(bals);
-    if (allRows.length > 0) setRows(allRows);
+    if (allRows.length > 0) setRows(applyTransferPairs(allRows));
     else setOcrError("CSVから取引を読み取れませんでした。別の形式かもしれません。");
     setCsvBusy(false);
+  };
+
+  // 自分名義の取引どうしを突き合わせ、組になったもの(=口座間の振替)は収支に計上しない。
+  // 相手が見つからなかったものは実際のやり取りかもしれないので、そのまま残して画面で知らせる。
+  const applyTransferPairs = (list) => {
+    const partner = pairOwnTransfers(list.map((r) => ({ date: r.txn.date, amount: r.txn.amount, group: r.fileIdx, own: !!r.own })));
+    return list.map((r, i) => (partner[i] >= 0
+      ? { ...r, cls: { action: "skip" }, autoMatched: true, transferWith: list[partner[i]].fileIdx }
+      : r));
   };
 
   const runOcr = async (file) => {
@@ -161,7 +171,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     // "N日"だけの見出し形式(年月の表記が無い)は、今表示中の月を起点に判定する
     const txns = parseBankText(rawText, importYm);
     setRows(txns.map((txn) => {
-      const auto = classifyTxn(txn.desc, config.importRules, config.ownTransferKeywords);
+      const auto = classifyTxn(txn.desc, config.importRules);
       return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
     }));
   };
@@ -261,6 +271,17 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         {rows && (
           <>
             <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 12px" }}>{rows.length}件を検出しました。内容を確認して「追加する」を押してください。</div>
+            {(() => {
+              const pairs = (rows || []).filter((r) => r.transferWith != null).length;
+              const lonely = (rows || []).filter((r) => r.own && r.transferWith == null).length;
+              if (!pairs && !lonely) return null;
+              return (
+                <>
+                  {pairs > 0 && <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>口座間の振替として{pairs}件を除きます（同日・同額・逆向きの組が揃ったもの）</div>}
+                  {lonely > 0 && <div style={{ ...styles.flash, background: "var(--expense-soft)", color: RED }}>自分名義だが相手が見つからない記録が{lonely}件あります。両方の口座のCSVを一緒に取り込むと自動で振替になります</div>}
+                </>
+              );
+            })()}
             {dupCount > 0 && (
               <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>
                 取込済みの{dupCount}件は除きます（同じ明細を二重に登録しません）
@@ -307,6 +328,16 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 return (
                   <div key={i} style={{ ...styles.detailCard, opacity: entry && !isDup ? 1 : 0.55 }}>
                     {isDup && <div style={{ fontSize: 11, color: MUTED, padding: "6px 2px 0" }}>取込済み（重複のため登録しません）</div>}
+                    {r.transferWith != null && (
+                      <div style={{ fontSize: 11, color: ACCENT, padding: "6px 2px 0" }}>
+                        口座間の振替（{csvNotes[r.transferWith] ? (csvNotes[r.transferWith].target || csvNotes[r.transferWith].name) : "別の口座"}と同額・同日の反対の記録あり）。収支には入れません
+                      </div>
+                    )}
+                    {r.own && r.transferWith == null && (
+                      <div style={{ fontSize: 11, color: RED, padding: "6px 2px 0" }}>
+                        自分名義ですが反対側の記録が見つかりません。口座間の振替なら「取り込まない」にしてください
+                      </div>
+                    )}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0 2px", gap: 8 }}>
                       <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>{r.txn.date}</span>
                       <input type="number" inputMode="numeric" value={r.txn.amount}
