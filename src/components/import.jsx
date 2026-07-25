@@ -84,6 +84,9 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     // ルールだけで判定する(ファイル/スクショから推定した口座は含めない)。
     // 口座が分かっていると「その口座の出金」に落ちてしまい、自払の判定に入れないため。
     const byRule = classifyTxn(txn.desc, config.importRules);
+    // カード会社のルールに当たる引き落としはカード請求として取り込む。
+    // (入力済みなら後段で照合して取り込まないので、二重計上にはならない)
+    if (byRule && byRule.action === "card") return byRule;
     // 自払(自動払込)などの引き落としはほとんどがカードの請求。口座の出金にすると
     // 現金の支出として数えてしまうので、カードとして取り込む。
     // カードが特定できなくても摘要の名前で取り込む(選択待ちで止めない)。名前は後から直せる。
