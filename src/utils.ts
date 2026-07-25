@@ -645,8 +645,10 @@ const IMPORT_DAY_RE = /^(\d{1,2})\s*日$/;
 // JRE BANKの明細: 日付(MM/DD)・金額・残高が並び、摘要はそのあとに来る。
 // OCRは列ごとに行を分けることがあるので、1行に揃っていても分かれていても読めるようにする。
 const IMPORT_MD_RE = /^(\d{1,2})\s*\/\s*(\d{1,2})\b/;
-const IMPORT_NUM_RE = /^[-−ー–—+]?[\d,]+$/;
-const toNum = (t: string): number => Number(String(t).replace(/[−ー–—]/g, "-").replace(/,/g, ""));
+// OCRは桁区切りのカンマをピリオドとして読むことがある(「-156.,750」「137.000」)。
+// 日本円の明細に小数は無いので、ピリオドもカンマも桁区切りとして落とす。
+const IMPORT_NUM_RE = /^[-−ー–—+]?\d[\d.,]*$/;
+const toNum = (t: string): number => Number(String(t).replace(/[−ー–—]/g, "-").replace(/[.,]/g, ""));
 // 符号(-/−/ー/_、または明示的な+) + [円マーク相当(¥/\/Y)+数字 または 3桁区切りの数字(+末尾の単位らしき1〜2文字、何でもよい)]
 const MONEY_TOKEN_RE = /(?:([-−ー_])|\+)?\s*(?:[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)|(\d{1,3}(?:[,.]\d{3})+)\s*[^\d\s]{0,2})/;
 const parseMoneyToken = (m: RegExpMatchArray): number => {
@@ -778,17 +780,21 @@ const DAKUTEN_MAP: Record<string, string> = {
 const OCR_NOISE_RE = /[*`'^゙゚]/g;
 
 // 摘要・ルールのキーワードを、キーワード照合用に正規化する(全角/半角・空白・OCRノイズ・濁点ゆれを吸収)
+// 小書きカナはOCRで大きく読まれることがある(「ビューカード」→「ヒユーカート」)ので同一視する
+const SMALL_KANA_MAP: Record<string, string> = {
+  "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ",
+  "ッ": "ツ", "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ヮ": "ワ",
+};
 export function normalizeForMatch(s: string): string {
   const stripped = (s || "").normalize("NFKC").replace(/\s/g, "").replace(OCR_NOISE_RE, "");
-  return Array.from(stripped).map((ch) => DAKUTEN_MAP[ch] || ch).join("");
+  return Array.from(stripped).map((ch) => SMALL_KANA_MAP[ch] || DAKUTEN_MAP[ch] || ch).join("");
 }
 
 // 銀行CSVでは小書きカナが大きいカナで出ることがあるため、氏名照合時だけ同一視する。
 function normalizeOwnName(s: string): string {
-  return normalizeForMatch(s).replace(/[ァィゥェォッャュョヮ]/g, (ch) => ({
-    "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ",
-    "ッ": "ツ", "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ヮ": "ワ",
-  } as Record<string, string>)[ch] || ch);
+  // OCRは同じカナを重ねて読むことがある(「シユンヤ」→「シュユンヤ」)。
+  // 照合する両側に同じ処理をかけるので、連続する同じ文字をまとめても取り違えは起きない。
+  return normalizeForMatch(s).replace(/(.)\1+/g, "$1");
 }
 
 // ── CSV取込 ────────────────────────────────────────────────
