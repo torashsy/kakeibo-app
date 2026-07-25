@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, DEBIT_HINT_RE, guessCardForDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, DEBIT_HINT_RE, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -81,7 +81,16 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // ルールが「口座」でも振り分け先が未設定なら、そのファイルの口座で補う。
   // ファイル推定をルールより優先すると、投資振替や自分名義の送金が全部ただの出金になってしまう。
   const classifyRow = (txn, guess) => {
-    return classifyTxnForImport(txn.desc, config.importRules, guess || null);
+    const byRule = classifyTxnForImport(txn.desc, config.importRules, guess || null);
+    // 自払(自動払込)などの引き落としはほとんどがカードの請求。口座の出金にすると
+    // 現金の支出として数えてしまうので、カードとして取り込む。
+    // カードが特定できなくても摘要の名前で取り込む(選択待ちで止めない)。名前は後から直せる。
+    const unresolved = !byRule || byRule.action === "skip" || (byRule.action === "account" && !byRule.target);
+    if (unresolved && txn.amount < 0 && DEBIT_HINT_RE.test(txn.desc)) {
+      const name = guessCardForDebit(txn.desc, txn.amount, cycleYm(txn.date, config.cycleCutoffDay), (cards || []).map((c) => c.name), existing || []);
+      return { action: "card", target: name || payeeFromDebit(txn.desc) };
+    }
+    return byRule;
   };
 
   // CSVを複数まとめて取り込む。ファイルごとに口座/カードを推定し、

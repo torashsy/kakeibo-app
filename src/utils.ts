@@ -1044,6 +1044,14 @@ export function guessCardForDebit(
   return hit && hit.ym === ym ? hit.card : null;
 }
 
+// 引き落としの摘要から支払先の名前を取り出す(「自払 ｼﾞｪｰｼｰﾋﾞｰ」→「ｼﾞｪｰｼｰﾋﾞｰ」)。
+// カードを特定できないときの暫定の名前として使う。カード請求として金額は正しく載るので、
+// 使いすぎの判定は合う。名前は後からカード管理で直せる。
+export function payeeFromDebit(desc: string): string {
+  const t = String(desc || "").replace(/自動払込|自払|口座振替|カード/g, " ").replace(/[\s　]+/g, " ").trim();
+  return t || "引き落とし";
+}
+
 // 既存の記録から「自分の口座間の振替」を後から探す。
 // 振替の判定は取込時にしか走らないため、機能を入れる前に取り込んだ記録や手入力の記録は
 // 入金/出金のまま残る。それを後から見つけて「口座振替」に直せるようにする。

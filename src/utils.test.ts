@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, guessCardForDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1187,5 +1187,16 @@ describe("残高は記録の無い月に前月から引き継ぐ", () => {
   it("その月より後の記録は使わない", () => {
     expect(balTotalAsOf(es, "2026-02")).toBeNull();
     expect(balancesAsOf(es, "2026-03")["ゆうちょ"]!.amount).toBe(50000);
+  });
+});
+
+describe("引き落としの支払先名", () => {
+  it("自払などの語を取り除いて支払先を取り出す", () => {
+    expect(payeeFromDebit("自払 ｼﾞｪｰｼｰﾋﾞｰ")).toBe("ｼﾞｪｰｼｰﾋﾞｰ");
+    expect(payeeFromDebit("口座振替　エポスカード")).toBe("エポス");
+    expect(payeeFromDebit("自動払込 トウキヨウガス")).toBe("トウキヨウガス");
+  });
+  it("名前が残らない場合も空にしない", () => {
+    expect(payeeFromDebit("自払")).toBe("引き落とし");
   });
 });
