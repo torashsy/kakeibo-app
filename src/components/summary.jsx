@@ -3,7 +3,7 @@ import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
 import { styles } from '../styles.js';
 
-export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose, onImportClipboard }) {
+export function Summary({ summary, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose, onOpenImport }) {
   const [cardOpen, setCardOpen] = useState(false);
   const hasBal = Object.keys(summary.balances).length > 0;
   const balChange = (hasBal && prevBalTotal != null) ? summary.balTotal - prevBalTotal : null;
@@ -17,10 +17,15 @@ export function Summary({ summary, prevBalTotal, plans, subs, config, cards, deb
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
       </div>
-      {onImportClipboard && (
-        <button style={{ ...styles.closeCta, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}`, marginBottom: 10 }} onClick={onImportClipboard}>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>CSV取込</span>
-        </button>
+      {onOpenImport && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+          <button style={{ ...styles.closeCta, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}`, margin: 0 }} onClick={() => onOpenImport("csv")}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>CSV</span>
+          </button>
+          <button style={{ ...styles.closeCta, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}`, margin: 0 }} onClick={() => onOpenImport("screenshot")}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>スクショ</span>
+          </button>
+        </div>
       )}
       {onOpenClose && (
         <button style={styles.closeCta} onClick={onOpenClose}>
