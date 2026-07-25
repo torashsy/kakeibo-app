@@ -982,13 +982,49 @@ export function parseBankCsv(text: string): CsvImportResult {
 export interface TxnClassification { action: "card" | "account" | "salary" | "skip"; target?: string; negItem?: string; posItem?: string; }
 
 // 摘要をルールに照らして分類する(登録順で先勝ち)。マッチ無しはnull(要手動判定)。
+// OCRは1〜2文字を混ぜたり落としたりする(「ビューカード」→「ヒヘユーカート」)。
+// 完全一致で外れたときだけ、少しの違いを許して照合する。
+// 短い語で緩めると別のカードに誤爆するので、語の長さに応じて許容量を決める。
+const editDistanceAtMost = (a: string, b: string, max: number): boolean => {
+  if (Math.abs(a.length - b.length) > max) return false;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const v = a[i - 1] === b[j - 1] ? prev[j - 1] : Math.min(prev[j - 1], prev[j], cur[j - 1]) + 1;
+      cur.push(v);
+      if (v < best) best = v;
+    }
+    if (best > max) return false;   // この行で既に超えていれば以降も超える
+    prev = cur;
+  }
+  return prev[b.length] <= max;
+};
+// 短い語ほど1文字の差が「別の語」である確率が高い。
+// 「セゾン」「ことら」「ATM」「エポス」のような3文字語は緩めない(誤爆する)。
+const fuzzyTolerance = (len: number): number => (len >= 7 ? 2 : len >= 5 ? 1 : 0);
+export function fuzzyIncludes(text: string, keyword: string): boolean {
+  const max = fuzzyTolerance(keyword.length);
+  if (max === 0) return false;
+  for (let i = 0; i < text.length; i++) {
+    for (let w = keyword.length - max; w <= keyword.length + max; w++) {
+      if (w <= 0 || i + w > text.length) continue;
+      if (editDistanceAtMost(text.slice(i, i + w), keyword, max)) return true;
+    }
+  }
+  return false;
+}
+
 export function classifyTxn(desc: string, rules: ImportRule[] | undefined, amount?: number): TxnClassification | null {
   const nd = normalizeForMatch(desc);
-  for (const r of rules || []) {
-    // 金額つきのルールは、その額のときだけ当てる
-    if (r.amount != null && (amount == null || Math.abs(Math.round(amount)) !== Math.abs(Math.round(r.amount)))) continue;
-    if (r.match && nd.includes(normalizeForMatch(r.match))) return { action: r.action, target: r.target, negItem: r.negItem, posItem: r.posItem };
-  }
+  const usable = (rules || []).filter((r) =>
+    r.match && !(r.amount != null && (amount == null || Math.abs(Math.round(amount)) !== Math.abs(Math.round(r.amount)))));
+  const hit = (r: ImportRule) => ({ action: r.action, target: r.target, negItem: r.negItem, posItem: r.posItem });
+  // まず完全一致(正規化後)。当たるものがあればそれを使う。
+  for (const r of usable) if (nd.includes(normalizeForMatch(r.match))) return hit(r);
+  // 外れたときだけ、OCRの読み違いを見越して少しの違いを許す
+  for (const r of usable) if (fuzzyIncludes(nd, normalizeForMatch(r.match))) return hit(r);
   return null;
 }
 

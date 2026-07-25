@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1475,5 +1475,54 @@ describe("同じ日に複数の取引があるときの期末残高", () => {
   });
   it("残高が無い行は無視する", () => {
     expect(cycleEndBalances([{ date: "2026-05-11", desc: "x", amount: -100 }], 10).size).toBe(0);
+  });
+});
+
+describe("OCRの読み違いを許す照合", () => {
+  const R = DEFAULT_CONFIG.importRules!;
+
+  it("1文字混ざっても長いカード名なら拾う(ビューカード→ヒヘユーカート)", () => {
+    // 実際にOCRが出した文字列。「ヒユーカート」に「ヘ」が1文字混ざっている
+    expect(classifyTxn("カ ) ヒ ヘユーカート・ (の", R, -33000))
+      .toMatchObject({ action: "card", target: "VIEW" });
+  });
+
+  it("1文字欠けても拾う", () => {
+    expect(classifyTxn("自払 ビューカド", R, -33000)).toMatchObject({ action: "card", target: "VIEW" });
+    expect(classifyTxn("自払 ハイフリツ", R, -50000)).toMatchObject({ action: "account", negItem: "投資振替" });
+  });
+
+  it("完全一致が、あいまい一致より先に使われる", () => {
+    // 「ミツイスミトモ」は「ミツヒシ」から遠いが、順番が入れ替わらないことも併せて確かめる
+    expect(classifyTxn("自払 ミツビシUFJニコス", R, -1000)).toMatchObject({ target: "MDC" });
+    // 額の条件つきルール(294=smcc)は完全一致の段階で先に当たる
+    expect(classifyTxn("自払 三井住友カード", R, -294)).toMatchObject({ target: "smcc" });
+    expect(classifyTxn("自払 三井住友カード", R, -97724)).toMatchObject({ target: "SMCC Gold" });
+  });
+
+  it("短い語は緩めない(別のカード・別の口座に誤爆するため)", () => {
+    expect(fuzzyIncludes("せそん", "セソン")).toBe(false);   // セゾン(3文字)
+    expect(fuzzyIncludes("ことり", "ことら")).toBe(false);   // ことら(3文字)
+    expect(fuzzyIncludes("atn", "atm")).toBe(false);         // ATM(3文字)
+    // 短い語の完全一致は、あいまい照合の手前(完全一致の段階)で拾われる
+    expect(classifyTxn("口座振替 エポスカード", R, -1000)).toMatchObject({ target: "EPOS" });
+    expect(classifyTxn("ことり銀行", R, -1000)).toBeNull();
+    expect(classifyTxn("エホヌビル管理費", R, -1000)).toBeNull();
+  });
+
+  it("4文字までは緩めない(三井住友・ミツビシ)", () => {
+    expect(fuzzyIncludes("みつひこ", "みつひし")).toBe(false);
+    expect(fuzzyIncludes("三井不動産", "三井住友")).toBe(false);
+  });
+
+  it("差が大きすぎるものは拾わない", () => {
+    expect(fuzzyIncludes("ヒユーテイーヒー", "ヒユーカート")).toBe(false);
+    expect(classifyTxn("ソウダイセイキヨウ", R, -3000)).toBeNull();
+  });
+
+  it("あいまい一致でも入金はカード請求にしない", () => {
+    const src = { action: "account" as const, target: "ゆうちょ" };
+    expect(classifyTxnForImport("カ ) ヒ ヘユーカート・ (の", R, src, 33000))
+      .toMatchObject({ action: "account", target: "ゆうちょ" });
   });
 });
