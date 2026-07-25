@@ -152,8 +152,16 @@ export default function App() {
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
 
   const addEntry = (e) => { const w = { ...e, id: uid() }; setEntries((prev) => { const n = [...prev, w]; save("entries", n); return n; }); return w; };
-  // スクショ取込でまとめて追加する時用。1件ずつではなく一括で保存する
-  const addEntries = (list) => setEntries((prev) => { const n = [...prev, ...list.map((e) => ({ ...e, id: uid() }))]; save("entries", n); return n; });
+  // 取込でまとめて追加する時用。1件ずつではなく一括で保存する。
+  // 残高だけは「その月・その口座で1件」が正しいので、追加ではなく既存を差し替える
+  // (同じ期間のCSVを取り込み直しても残高が二重にならないように)。
+  const addEntries = (list) => setEntries((prev) => {
+    const bals = list.filter((e) => e.cat === "account" && acctRole(e.item) === "bal");
+    const kept = bals.length === 0 ? prev
+      : prev.filter((x) => !bals.some((b) => x.ym === b.ym && x.cat === "account" && x.account === b.account && acctRole(x.item) === "bal"));
+    const n = [...kept, ...list.map((e) => ({ ...e, id: uid() }))];
+    save("entries", n); return n;
+  });
   const commitImportRules = (rules) => commitConfig({ ...config, importRules: rules });
   const updateEntry = (e) => setEntries((prev) => { const n = prev.map((x) => (x.id === e.id ? e : x)); save("entries", n); return n; });
   const removeEntry = (id) => setEntries((prev) => { const n = prev.filter((x) => x.id !== id); save("entries", n); return n; });
@@ -290,7 +298,7 @@ export default function App() {
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} initialText={importText} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => { setSheet(null); setImportText(""); }} />}
+      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} entries={entries} initialText={importText} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => { setSheet(null); setImportText(""); }} />}
       {sheet === "close" && <MonthlyClose key={ym} ym={ym} config={config} cards={cards} entries={entries} onSave={saveMonthlyClose} onClose={() => setSheet(null)} />}
     </div>
   );
