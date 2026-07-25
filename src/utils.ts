@@ -29,7 +29,7 @@ export interface Config {
 // action="card"はtargetをカード名としてカード請求に、"account"はtargetを口座名として口座記録に、
 // "skip"は記録しない(例: 自分名義の口座間送金)。account用のnegItem/posItemを省略すると出金/入金になる
 // (ATMの引出/預入、投資振替のように項目名を変えたい場合に指定する。投資振替は符号のまま反映するので両方同じ値でよい)。
-export interface ImportRule { id: string; match: string; action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
+export interface ImportRule { id: string; match: string; action: "card" | "account" | "salary" | "skip"; target?: string; negItem?: string; posItem?: string; }
 
 export interface Card {
   id: string;
@@ -251,10 +251,10 @@ export const DEFAULT_CONFIG: Config = {
   ownTransferKeywords: ["ハヤシシュンヤ"],
   // スクショ取込の初期ルール例(自払=カード引き落とし、ことら=自分名義の口座間送金なので未計上)
   importRules: [
-    // 給与・賞与は給与明細から手入力する(控除などの内訳を残すため)。
-    // 口座への入金としても取り込むと収入が二重になるので除外する。
-    { id: uid(), match: "給与", action: "skip" },
-    { id: uid(), match: "賞与", action: "skip" },
+    // 給与・賞与の入金は、その月の給与がまだ入力されていなければ手取り額として取り込む。
+    // 既に入力済みなら取り込まず、金額が合っているかの照合だけ行う(取込側で判定)。
+    { id: uid(), match: "給与", action: "salary", target: "給与" },
+    { id: uid(), match: "賞与", action: "salary", target: "賞与" },
     { id: uid(), match: "ミツビシ", action: "card", target: "MDC" },
     { id: uid(), match: "JCBカード", action: "card", target: "JAL navi" },
     { id: uid(), match: "セゾン", action: "card", target: "SAISON" },
@@ -307,8 +307,12 @@ export function migrateConfig(cfg: any): any {
   // 給与・賞与の除外ルールを一度だけ追加する。版で管理するので、利用者が消したら復活しない。
   if (!(Number(out.importRulesSeeded) >= 1)) {
     const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);
-    const add = ["給与", "賞与"].filter((m) => !has(m)).map((m) => ({ id: uid(), match: m, action: "skip" as const }));
-    out = { ...out, importRules: [...add, ...(out.importRules || [])], importRulesSeeded: 1 };
+    const add = ["給与", "賞与"].filter((m) => !has(m)).map((m) => ({ id: uid(), match: m, action: "salary" as const, target: m }));
+    out = { ...out, importRules: [...add, ...(out.importRules || [])], importRulesSeeded: 2 };
+  } else if (Number(out.importRulesSeeded) < 2) {
+    // 給与・賞与は「取り込まない」から「未入力なら手取りとして取り込む」に変更した
+    out = { ...out, importRulesSeeded: 2, importRules: (out.importRules || []).map((r: any) =>
+      (r && r.action === "skip" && (r.match === "給与" || r.match === "賞与") ? { ...r, action: "salary", target: r.match } : r)) };
   }
   // 利用者名を一度だけ補う。削除後に復活しないよう版で管理する。
   if (!(Number(out.ownTransferKeywordsSeeded) >= 1)) {
@@ -884,7 +888,7 @@ export function parseBankCsv(text: string): CsvImportResult {
   return { txns, balance, balanceCheck, preamble, signature };
 }
 
-export interface TxnClassification { action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
+export interface TxnClassification { action: "card" | "account" | "salary" | "skip"; target?: string; negItem?: string; posItem?: string; }
 
 // 摘要をルールに照らして分類する(登録順で先勝ち)。マッチ無しはnull(要手動判定)。
 export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnClassification | null {
@@ -974,6 +978,36 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
   }
   return partner;
 }
+
+// カードの明細CSVかどうか。カードの明細は残高列が無く、全行が利用(同じ向き)になる。
+// 口座の明細は残高列があるか、入金と出金が混ざる。
+export function isCardStatement(txns: ParsedTxn[], hasBalance: boolean): boolean {
+  if (hasBalance || !txns || txns.length === 0) return false;
+  const signs = new Set(txns.filter((t) => t.amount !== 0).map((t) => (t.amount < 0 ? -1 : 1)));
+  return signs.size <= 1;
+}
+
+// カード請求の合計から、どのカードのどの月かを突き止める。
+// カード名がファイル名や前書きから分からなくても、請求額は月ごとにほぼ一意なので特定できる。
+// 候補が1つに絞れないときは null(利用者に選んでもらう)。
+export function findCardByTotal(total: number, entries: Entry[], tolerance = 0): { card: string; ym: string } | null {
+  if (!(total > 0)) return null;
+  const sums = new Map<string, number>();
+  for (const e of entries || []) {
+    if (e.cat !== "card") continue;
+    const k = `${e.ym}\u0000${e.item}`;
+    sums.set(k, (sums.get(k) || 0) + Math.abs(e.amount));
+  }
+  const hits: { card: string; ym: string }[] = [];
+  for (const [k, v] of sums) {
+    if (Math.abs(v - total) <= tolerance) { const [ym, card] = k.split("\u0000"); hits.push({ card, ym }); }
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
+
+// そのカード・その月に既に記録されている請求額の合計
+export const cardMonthTotal = (entries: Entry[], card: string, ym: string): number =>
+  (entries || []).reduce((a, e) => a + (e.cat === "card" && e.item === card && e.ym === ym ? Math.abs(e.amount) : 0), 0);
 
 // 既存の記録から「自分の口座間の振替」を後から探す。
 // 振替の判定は取込時にしか走らないため、機能を入れる前に取り込んだ記録や手入力の記録は
@@ -1108,6 +1142,8 @@ export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, cutoff
   const ym = cycleYm(txn.date, cutoffDay);
   const src = txnKey(txn);
   const source = Number.isFinite(txn.balance) ? { src, srcBalance: Math.round(txn.balance as number) } : { src };
+  // 給与の入金は手取り額としてそのまま給与へ(額面・控除の内訳はあとで給与フォームから入れられる)
+  if (cls.action === "salary") return { ym, cat: "salary", item: cls.target || "給与", account: "", amount: Math.abs(txn.amount), ...source };
   if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount), ...source };
   const item = txn.amount < 0 ? (cls.negItem || "出金") : (cls.posItem || "入金");
   return { ym, cat: "account", item, account: cls.target!, amount: txn.amount, ...source };

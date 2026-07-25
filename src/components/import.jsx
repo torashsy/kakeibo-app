@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -53,8 +53,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvNotes, setCsvNotes] = useState([]);   // ファイルごとの取込結果(件数・推定先・残高)
   const [balances, setBalances] = useState([]);   // CSVの残高列から拾った月末残高
-  const [showIosGuide, setShowIosGuide] = useState(false);
-  const [shortcutCopyStatus, setShortcutCopyStatus] = useState("");
   const [ocrMode, setOcrMode] = useState(false);
   const [openingBalance, setOpeningBalance] = useState("");
   const [openingYm, setOpeningYm] = useState("");   // 開始残高がどの月度末のものか
@@ -76,14 +74,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     : (typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : "https://torashsy.github.io/kakeibo-app/");
   const shortcutPrefix = `${shortcutAppUrl}#import64=`;
 
-  const copyShortcutPrefix = async () => {
-    try {
-      await navigator.clipboard.writeText(shortcutPrefix);
-      setShortcutCopyStatus("コピーしました");
-    } catch {
-      setShortcutCopyStatus("コピーできませんでした。下のURLを長押ししてコピーしてください");
-    }
-  };
 
   // 1行の振り分けを決める。優先順位は
   //   1. 摘要のルール(自分名義の送金=skip、ハイブリッド=投資振替、ATM=引出/預入、カード引落=カード…)
@@ -92,6 +82,28 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // ファイル推定をルールより優先すると、投資振替や自分名義の送金が全部ただの出金になってしまう。
   const classifyRow = (txn, guess) => {
     return classifyTxnForImport(txn.desc, config.importRules, guess || null);
+  };
+
+  // カードの明細CSVを「請求の合計1件」にまとめる。該当しなければ null。
+  // 明細1行ずつ入れると購入日と引き落とし月がずれて、口座側の引き落としと二重計上になる。
+  const buildCardSummaryRow = (res, guess, fileIdx) => {
+    if (!isCardStatement(res.txns, !!res.balance)) return null;
+    const total = res.txns.reduce((a, t) => a + Math.abs(t.amount), 0);
+    const matched = findCardByTotal(total, existing || []);
+    const name = (guess && guess.action === "card" ? guess.target : null) || (matched ? matched.card : null);
+    const lastDate = res.txns.map((t) => t.date).sort().slice(-1)[0];
+    // 請求月は、合計が一致した既存記録の月。分からなければ最終利用日の月度。
+    const ym = matched ? matched.ym : cycleYm(lastDate, config.cycleCutoffDay);
+    const already = name ? cardMonthTotal(existing || [], name, ym) : 0;
+    const settled = already > 0 && already === total;   // 入力済みと一致 → 照合だけして取り込まない
+    return {
+      card: { name, total, ym, already, settled },
+      row: {
+        txn: { date: lastDate, desc: `${name || "カード"} 明細${res.txns.length}件の合計`, amount: -total },
+        cls: settled || !name ? { action: "skip" } : { action: "card", target: name },
+        matchDraft: name || "", autoMatched: true, fileIdx, own: false, cardSummary: true,
+      },
+    };
   };
 
   // CSVを複数まとめて取り込む。ファイルごとに口座/カードを推定し、
@@ -110,6 +122,12 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         const guess = (remembered ? { action: "account", target: remembered } : null)
           || guessCsvTarget(file.name, res.preamble, cards, config.accounts, !!res.balance);
         const fileIdx = notes.length;
+        const cardRow = buildCardSummaryRow(res, guess, fileIdx);
+        if (cardRow) {
+          allRows.push(cardRow.row);
+          notes.push({ name: file.name, count: res.txns.length, target: cardRow.card.name, signature: res.signature, card: cardRow.card });
+          continue;
+        }
         for (const txn of res.txns) {
           const auto = classifyRow(txn, guess);
           allRows.push({ txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx,
@@ -177,18 +195,22 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     }
   };
 
-  // 1つのテキスト(CSV)を取り込む。ショートカット経由(URL)・クリップボード・貼り付けで共用する。
+  // 1つのテキスト(CSV)を取り込む。ショートカット経由(URL)からの受け取りで使う。
   // CSVとして読めなければ明細テキストとして扱う。
   const ingestText = (text, label) => {
     if (!String(text || "").trim()) { setOcrError("中身が空でした。"); return false; }
     const res = parseBankCsv(text);
     if (res.txns.length > 0) {
       const guess = guessCsvTarget("", res.preamble, cards, config.accounts, !!res.balance);
-      setRows(res.txns.map((txn) => {
+      // カードの明細はファイル選択のときと同じく、請求の合計1件にまとめる
+      const cardRow = buildCardSummaryRow(res, guess, 0);
+      setRows(cardRow ? [cardRow.row] : res.txns.map((txn) => {
         const auto = classifyRow(txn, guess);
         return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
       }));
-      setCsvNotes([{ name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck }]);
+      setCsvNotes([cardRow
+        ? { name: label, count: res.txns.length, target: cardRow.card.name, card: cardRow.card }
+        : { name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck }]);
       setBalances(res.balance && guess && guess.action === "account" ? [{ account: guess.target, ...res.balance }] : []);
       setOcrError("");
       return true;
@@ -210,18 +232,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
 
   // クリップボードから直接取り込む。iOSはPWAを共有シートに出せない(Web Share Target未対応)ため、
   // 「CSVをコピー → ここを1タップ」が確実に動く導線になる。
-  const runClipboard = async () => {
-    setOcrError("");
-    let text = "";
-    try {
-      text = await navigator.clipboard.readText();
-    } catch {
-      setOcrError("クリップボードを読み取れませんでした。下のテキスト欄に貼り付けてください。");
-      return;
-    }
-    // ショートカットがBase64でコピーしている場合もあるので復元してから解析する
-    ingestText(decodeImportPayload(text), "クリップボード");
-  };
 
   const setRow = (i, patch) => setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
@@ -326,9 +336,14 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     const lonely = list.reduce((a, r, i) => a + (items[i].own && pairedRows[i] == null ? 1 : 0), 0);
     return { pairedRows, removeIds, replacementEntries, lonely, ownFlags: items.map((x) => x.own) };
   }, [rows, existing, isExistingTxn, config.ownTransferKeywords]);
-  const entries = (rows || []).map((r, i) => txnToEntry(r.txn, pairing.pairedRows[i] != null
+  // その月度に給与が入力済みかどうか。入力済みなら取り込まず、金額の照合だけ行う。
+  const salaryEntered = React.useCallback((date) => {
+    const t = cycleYm(date, config.cycleCutoffDay);
+    return (existing || []).reduce((a, e) => a + (e.ym === t && e.cat === "salary" ? e.amount : 0), 0);
+  }, [existing, config.cycleCutoffDay]);
+  const entries = (rows || []).map((r, i) => (r.cls.action === "salary" && salaryEntered(r.txn.date) !== 0 ? null : txnToEntry(r.txn, pairing.pairedRows[i] != null
     ? { ...r.cls, action: "account", negItem: INTERNAL_TRANSFER_ITEM, posItem: INTERNAL_TRANSFER_ITEM }
-    : r.cls, config.cycleCutoffDay));
+    : r.cls, config.cycleCutoffDay)));
   const batchKeys = new Set();
   const dupFlags = entries.map((e, i) => {
     if (!e || !e.src) return false;
@@ -376,20 +391,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         <div style={styles.sheetTitle}>取込</div>
         {!rows && (
           <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <button data-testid="ios-shortcut-guide-toggle" style={{ ...styles.backupBtn, marginTop: 0, flex: 1 }} onClick={() => setShowIosGuide((v) => !v)}>
-                iPhone設定
-              </button>
-              <button style={{ ...styles.backupBtn, marginTop: 0, flex: 1 }} onClick={runClipboard}>貼り付け</button>
-            </div>
-            {showIosGuide && (
-              <div data-testid="ios-shortcut-guide" style={{ ...styles.detailCard, padding: "10px 12px", marginBottom: 10, fontSize: 12 }}>
-                  <div style={{ color: MUTED, marginBottom: 8 }}>共有シート → Base64 → URLを開く</div>
-                  <button data-testid="copy-shortcut-prefix" style={{ ...styles.saveBtn, marginTop: 0 }} onClick={copyShortcutPrefix}>URLをコピー</button>
-                  {shortcutCopyStatus && <div style={{ fontSize: 11.5, color: shortcutCopyStatus === "コピーしました" ? GREEN : RED, marginTop: 4 }}>{shortcutCopyStatus}</div>}
-                  <a href="shortcuts://create-shortcut" style={{ ...styles.backupBtn, display: "block", textAlign: "center", textDecoration: "none", marginTop: 8 }}>ショートカット</a>
-              </div>
-            )}
             <button data-testid="csv-upload" style={{ ...styles.saveBtn, marginTop: 0 }} onClick={() => csvRef.current && csvRef.current.click()} disabled={csvBusy}>
               {csvBusy ? "読込中…" : "CSVを選ぶ"}
             </button>
@@ -469,6 +470,41 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             )}
             {/* 残高での検算。CSVの残高列が「手前の残高＋取引＝その行の残高」で繋がるかを見て、
                 読み取り違いや取りこぼしが無いことを取り込む前に確かめられるようにする。 */}
+            {/* カード明細: 入力済みなら検算だけして取り込まない。合わなければ差を出す。 */}
+            {csvNotes.filter((n) => n.card).map((n, i) => {
+              const c = n.card;
+              const ok = c.settled;
+              return (
+                <div key={`c${i}`} style={{ ...styles.flash, background: ok ? "var(--group-bg)" : (c.already > 0 ? "var(--expense-soft)" : "var(--group-bg)"), color: ok ? MUTED : (c.already > 0 ? RED : MUTED) }}>
+                  {!c.name
+                    ? `カード明細（合計 ${yen(c.total)}）ですが、どのカードか分かりませんでした。下でカードを選んでください`
+                    : ok
+                      ? `✓ ${c.name} ${periodLabel(c.ym, config.cycleCutoffDay)} の請求 ${yen(c.total)} は入力済みと一致（取り込みません）`
+                      : c.already > 0
+                        ? `⚠ ${c.name} ${periodLabel(c.ym, config.cycleCutoffDay)}：入力済み ${yen(c.already)} と明細合計 ${yen(c.total)} が ${yen(Math.abs(c.total - c.already))} 違います`
+                        : `${c.name} ${periodLabel(c.ym, config.cycleCutoffDay)} の請求 ${yen(c.total)} として取り込みます（明細${n.count}件を合計）`}
+                </div>
+              );
+            })}
+            {/* 給与: 手入力を続ける方針なので取り込まず、入力済みとの照合だけ行う */}
+            {(() => {
+              const paid = (rows || []).filter((r) => /給与|賞与/.test(r.txn.desc) && r.txn.amount > 0);
+              if (!paid.length) return null;
+              return paid.map((r, i) => {
+                const t = cycleYm(r.txn.date, config.cycleCutoffDay);
+                const entered = (existing || []).reduce((a, e) => a + (e.ym === t && e.cat === "salary" ? e.amount : 0), 0);
+                const ok = entered > 0 && Math.abs(entered - r.txn.amount) < 1;
+                return (
+                  <div key={`s${i}`} style={{ ...styles.flash, background: ok || !entered ? "var(--group-bg)" : "var(--expense-soft)", color: ok || !entered ? MUTED : RED }}>
+                    {entered === 0
+                      ? `${periodLabel(t, config.cycleCutoffDay)} の給与 ${yen(r.txn.amount)} を手取りとして取り込みます（額面・控除はあとで給与フォームから入れられます）`
+                      : ok
+                        ? `✓ ${periodLabel(t, config.cycleCutoffDay)} の給与 ${yen(r.txn.amount)} は入力済みの手取りと一致（取り込みません）`
+                        : `⚠ ${periodLabel(t, config.cycleCutoffDay)} の給与：入金 ${yen(r.txn.amount)} と入力済みの手取り ${yen(entered)} が ${yen(Math.abs(entered - r.txn.amount))} 違います（入力済みを優先して取り込みません）`}
+                  </div>
+                );
+              });
+            })()}
             {(() => {
               // 月をまたぐ取込でも、各取引が日付からどの月度へ入るかを見せる
               const by = {};
@@ -528,7 +564,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                     </div>
                     <div style={{ fontSize: 13, marginBottom: 8, wordBreak: "break-all" }}>{r.txn.desc || "(摘要なし)"}</div>
                     <div style={styles.optionRow}>
-                      {[["skip", "取り込まない"], ["card", "カード"], ["account", "口座"]].map(([v, l]) => (
+                      {[["skip", "取り込まない"], ["card", "カード"], ["account", "口座"], ["salary", "給与"]].map(([v, l]) => (
                         <button key={v} style={{ ...styles.optionChip, ...(r.cls.action === v ? styles.optionChipActive : {}) }}
                           onClick={() => setRow(i, { cls: { action: v, target: v === r.cls.action ? r.cls.target : undefined } })}>{l}</button>
                       ))}
