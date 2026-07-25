@@ -940,8 +940,10 @@ export function parseBankCsv(text: string): CsvImportResult {
     if (amount == null && ai >= 0) amount = parseCsvAmount(r[ai] || "");
     if (amount == null || amount === 0) continue;
     const desc = sis.map((k) => String(r[k] || "").trim()).filter(Boolean).join(" ");
-    txns.push({ date, desc, amount });
-    bals.push(bi >= 0 ? parseCsvAmount(r[bi] || "") : null);
+    const rowBal = bi >= 0 ? parseCsvAmount(r[bi] || "") : null;
+    // 各行に残高を持たせる(月度ごとの期末残高を取り出すのに使う)
+    txns.push({ date, desc, amount, ...(rowBal != null ? { balance: rowBal } : {}) });
+    bals.push(rowBal);
   }
   // 並び順の判定: 先頭の取引日が末尾より新しければ「新しい順」なので先頭が最新の残高。
   const descending = txns.length > 1 && txns[0].date > txns[txns.length - 1].date;
