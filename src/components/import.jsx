@@ -58,6 +58,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const [openingYm, setOpeningYm] = useState("");   // 開始残高がどの月度末のものか
   // スクショは銀行ごとに明細の並びが違うため、読み取る前にどの口座かを選んでもらう
   const [pendingShots, setPendingShots] = useState(null);
+  const [ocrText, setOcrText] = useState("");        // 読み取った生のテキスト(取りこぼしの原因を確かめる用)
+  const [showOcrText, setShowOcrText] = useState(false);
   const ocrStartDate = cycleStartDate(ym, config.cycleCutoffDay);
   const initialPickerOpened = useRef(false);
 
@@ -149,6 +151,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         allTxns.push(...fixSignsFromBalances(parseBankText(text, ym)));
       }
       const combined = texts.join("\n\n");
+      setOcrText(combined);
       // 月をまたぐスクショもそのまま扱う。各取引は自分の日付から月度へ振り分けられるので、
       // 表示中の月度で切り捨てない(以前は開始日より前を捨てていて、前月分が取り込めなかった)。
       const periodTxns = dedupeTxns(allTxns);
@@ -520,6 +523,16 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 );
               });
             })()}
+            {ocrText && (
+              <div style={{ ...styles.detailCard, marginBottom: 8, padding: "8px 10px" }}>
+                <button style={{ ...styles.chipGhost, padding: "4px 0" }} onClick={() => setShowOcrText((v) => !v)}>
+                  読み取ったテキストを{showOcrText || (rows || []).length <= 2 ? "隠す" : "見る"}（{(rows || []).length}件を検出）
+                </button>
+                {(showOcrText || (rows || []).length <= 2) && (
+                  <pre style={{ fontSize: 10.5, color: MUTED, whiteSpace: "pre-wrap", wordBreak: "break-all", margin: "6px 0 0", maxHeight: 260, overflowY: "auto", lineHeight: 1.5 }}>{ocrText}</pre>
+                )}
+              </div>
+            )}
             {(() => {
               // 月をまたぐ取込でも、各取引が日付からどの月度へ入るかを見せる
               const by = {};
