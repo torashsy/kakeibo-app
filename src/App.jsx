@@ -86,6 +86,25 @@ export default function App() {
     })();
   }, []);
 
+  // iOSショートカットからの取込。共有シート→ショートカットでCSVの中身を
+  // "#import=<encodeURIComponent(csv)>" に載せて開くと、取込画面が解析済みで立ち上がる。
+  // ハッシュはサーバへ送られないので中身が外に出ない。読んだ後は履歴を汚さないよう即座に消す。
+  const [importText, setImportText] = useState("");
+  useEffect(() => {
+    const readHash = () => {
+      const h = window.location.hash || "";
+      const m = h.match(/[#&]import=([^&]*)/);
+      if (!m) return;
+      let text = "";
+      try { text = decodeURIComponent(m[1].replace(/\+/g, " ")); } catch { return; }
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (text.trim()) { setImportText(text); setSheet("import"); }
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+
   // バックグラウンド同期で別端末の更新を取り込んだら、古いReact状態を残さず再読込する。
   // 古い画面のまま編集してクラウドを巻き戻す事故を防ぐ。
   useEffect(() => {
@@ -199,6 +218,19 @@ export default function App() {
         list = list.filter((x) => !(x.ym === targetYm && x.cat === "account" && x.account === b.account && acctRole(x.item) === "bal"));
         list.push({ id: uid(), ym: targetYm, cat: "account", item: "残高", account: b.account, amount: Math.round(v) });
       }
+      // 現金・投資・送金: カードと同じく、変えたときだけ1件の合計へ置き換える(既存明細を不用意に消さない)。
+      // 投資振替は符号で方向を表すため、「投資へ入れた」=負・「投資から戻した」=正 で保存する。
+      for (const f of (data.flows || [])) {
+        const v = evalAmount(f.amount); if (v == null) continue; // 空欄は現状維持
+        const rounded = Math.abs(Math.round(v));
+        if (rounded === (f.baseSum || 0)) continue; // 変更なし
+        const isInvest = f.key === "投資振替" || f.key === "投資戻し";
+        const item = isInvest ? "投資振替" : f.key;
+        // 投資は方向ごとに符号で持つので、同じ向きの記録だけを入れ替える。口座も一致するものだけ。
+        list = list.filter((x) => !(x.ym === targetYm && x.cat === "account" && x.item === item && x.account === f.account
+          && (!isInvest || (f.dir < 0 ? x.amount < 0 : x.amount > 0))));
+        if (rounded > 0) list.push({ id: uid(), ym: targetYm, cat: "account", item, account: f.account, amount: f.dir < 0 ? -rounded : rounded });
+      }
       save("entries", list);
       return list;
     });
@@ -258,7 +290,7 @@ export default function App() {
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => setSheet(null)} />}
+      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} initialText={importText} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => { setSheet(null); setImportText(""); }} />}
       {sheet === "close" && <MonthlyClose key={ym} ym={ym} config={config} cards={cards} entries={entries} onSave={saveMonthlyClose} onClose={() => setSheet(null)} />}
     </div>
   );

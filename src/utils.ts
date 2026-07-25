@@ -17,6 +17,7 @@ export interface Config {
   memoCategories?: string[]; // メモのカテゴリのうち、計画タブで目安/実績を追跡するもの
   importRules?: ImportRule[]; // スクショ取込で摘要から自動振り分けするルール(先勝ち)
   cycleCutoffDay?: number;    // 家計の月の締め日。0/未設定は暦通り。10なら「10日締め」=11日〜翌月10日を1周期(土日祝は翌営業日)
+  ownTransferKeywords?: string[]; // 自分名義の口座間送金とみなす摘要のキーワード(例: 自分の氏名)。該当は収支に計上しない
 }
 
 // スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
@@ -229,12 +230,13 @@ export const DEFAULT_CONFIG: Config = {
     "JRE BANK": ["入金", "出金", "投資振替"],        // 預入・引出は使わない
   },
   memoCategories: ["交際費"],
+  ownTransferKeywords: [],
   // スクショ取込の初期ルール例(自払=カード引き落とし、ことら=自分名義の口座間送金なので未計上)
   importRules: [
     { id: uid(), match: "ミツビシ", action: "card", target: "MDC" },
     { id: uid(), match: "JCBカード", action: "card", target: "JAL navi" },
     { id: uid(), match: "セゾン", action: "card", target: "SAISON" },
-    { id: uid(), match: "ことら", action: "skip" },
+    { id: uid(), match: "ことら", action: "account", target: "NEOBANK", negItem: "出金", posItem: "入金" },
     { id: uid(), match: "ハイブリッド", action: "account", target: "NEOBANK", negItem: "投資振替", posItem: "投資振替" },
     { id: uid(), match: "ATM", action: "account", target: "NEOBANK", negItem: "引出", posItem: "預入" },
     { id: uid(), match: "エポス", action: "card", target: "EPOS" },
@@ -273,6 +275,13 @@ export function migrateConfig(cfg: any): any {
   }
   if (!Array.isArray(out.memoCategories)) out = { ...out, memoCategories: ["交際費"] };
   if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
+  if (!Array.isArray(out.ownTransferKeywords)) out = { ...out, ownTransferKeywords: [] };
+  // 旧「ことら→取り込まない」は他人との送金・受取まで落としてしまうので、口座の出金/入金へ直す。
+  // 自分名義ぶんは ownTransferKeywords で除外する。
+  if ((out.importRules || []).some((r: any) => r && r.match === "ことら" && r.action === "skip")) {
+    out = { ...out, importRules: out.importRules.map((r: any) => (r && r.match === "ことら" && r.action === "skip"
+      ? { ...r, action: "account", target: (out.accounts && out.accounts[0]) || "", negItem: "出金", posItem: "入金" } : r)) };
+  }
   // 旧「開始日(cycleStartDay)」→「締め日(cycleCutoffDay=開始日-1)」へ移行
   if (out.cycleCutoffDay == null && out.cycleStartDay != null) {
     const c = Number(out.cycleStartDay) - 1;
@@ -653,11 +662,135 @@ export function normalizeForMatch(s: string): string {
   return Array.from(stripped).map((ch) => DAKUTEN_MAP[ch] || ch).join("");
 }
 
+// ── CSV取込 ────────────────────────────────────────────────
+// 銀行・カード会社の明細CSVを取り込む。OCRと違い金額・日付が正確で、
+// 多くの銀行CSVは残高列を持つため月末残高まで自動で取れる(入力が不要になる)。
+
+// RFC4180ふう。ダブルクォート内のカンマ・改行・""(エスケープ)を扱う。
+export function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], field = "", inQuotes = false;
+  const s = String(text || "").replace(/^﻿/, ""); // BOM除去
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inQuotes) {
+      if (ch === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += ch;
+      continue;
+    }
+    if (ch === '"') { inQuotes = true; continue; }
+    if (ch === ",") { row.push(field); field = ""; continue; }
+    if (ch === "\r") continue;
+    if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; continue; }
+    field += ch;
+  }
+  if (field !== "" || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => String(c).trim() !== ""));
+}
+
+// 日付セルを YYYY-MM-DD へ。"2026/7/5"・"2026-07-05"・"20260705"・"26/7/5" を許容。
+export function normalizeCsvDate(raw: string): string | null {
+  const s = String(raw || "").trim().replace(/[年月]/g, "/").replace(/日/g, "");
+  let m = s.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{2})\D+(\d{1,2})\D+(\d{1,2})/); // 2桁年は20xx年とみなす
+  if (m) return `20${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  return null;
+}
+
+// 金額セル → 数値。"1,234"・"¥1,234"・"△1,234"/"▲1,234"(和文のマイナス)・"(1,234)" を扱う。空はnull。
+export function parseCsvAmount(raw: string): number | null {
+  let s = String(raw || "").trim();
+  if (s === "" || s === "-" || s === "―") return null;
+  let neg = false;
+  if (/^[△▲]/.test(s)) { neg = true; s = s.slice(1); }
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/[¥￥,，\s円]/g, "").replace(/[－−ー]/g, "-");
+  if (s.startsWith("-")) { neg = true; s = s.slice(1); }
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const v = Number(s);
+  if (!Number.isFinite(v)) return null;
+  return neg ? -v : v;
+}
+
+const CSV_HEAD = {
+  date: ["日付", "取引日", "ご利用日", "お取引日", "利用日", "計上日", "date"],
+  desc: ["摘要", "内容", "取引内容", "お取引内容", "ご利用店名", "ご利用先", "利用店名", "店名", "備考", "description"],
+  out: ["出金", "お引出", "引出", "支払金額", "お支払金額", "ご利用金額", "利用金額", "出金金額", "withdrawal"],
+  inc: ["入金", "お預入", "預入", "入金金額", "deposit"],
+  amount: ["金額", "取引金額", "amount"],
+  balance: ["残高", "差引残高", "balance"],
+};
+const headIndex = (headers: string[], keys: string[]) =>
+  headers.findIndex((h) => { const n = String(h || "").replace(/[（(].*?[)）]/g, "").replace(/\s/g, ""); return keys.some((k) => n.includes(k)); });
+
+export interface CsvImportResult {
+  txns: ParsedTxn[];
+  balance: { date: string; amount: number } | null;  // CSVに残高列があれば最新日の残高
+  preamble: string;   // ヘッダー行より前の前書き(口座名などが書かれている。振り分け先の推定に使う)
+  error?: string;
+}
+
+// 明細CSVを取引の配列へ。ヘッダー行は先頭20行から自動判定する(前置きのある銀行CSVに対応)。
+// 出金/入金が別列なら符号を合成し、金額1列ならその符号をそのまま使う。
+// カード明細のように符号が無く支払のみのCSVは、呼び出し側で「カード」に分類すれば絶対値で扱われる。
+export function parseBankCsv(text: string): CsvImportResult {
+  const rows = parseCsvRows(text);
+  if (rows.length === 0) return { txns: [], balance: null, preamble: "", error: "CSVを読み取れませんでした" };
+  let hi = -1, headers: string[] = [];
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const r = rows[i];
+    if (headIndex(r, CSV_HEAD.date) >= 0 && (headIndex(r, CSV_HEAD.out) >= 0 || headIndex(r, CSV_HEAD.inc) >= 0 || headIndex(r, CSV_HEAD.amount) >= 0)) { hi = i; headers = r; break; }
+  }
+  const preamble = rows.slice(0, Math.max(0, hi < 0 ? Math.min(rows.length, 5) : hi)).map((r) => r.join(" ")).join("\n");
+  if (hi < 0) return { txns: [], balance: null, preamble, error: "日付・金額の列が見つかりませんでした。別の形式のCSVかもしれません。" };
+  const di = headIndex(headers, CSV_HEAD.date);
+  const si = headIndex(headers, CSV_HEAD.desc);
+  const oi = headIndex(headers, CSV_HEAD.out);
+  const ii = headIndex(headers, CSV_HEAD.inc);
+  const ai = headIndex(headers, CSV_HEAD.amount);
+  const bi = headIndex(headers, CSV_HEAD.balance);
+
+  const txns: ParsedTxn[] = [];
+  // 残高はファイルの並び順のまま貯めておき、最後に「新しい順/古い順」を判定して最新を選ぶ。
+  // 同じ日に複数行あるCSV(1日に何度も振替がある等)では日付だけでは最新を決められないため。
+  const balSeq: { date: string; amount: number }[] = [];
+  for (let i = hi + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const date = normalizeCsvDate(r[di] || "");
+    if (!date) continue;
+    let amount: number | null = null;
+    if (oi >= 0 || ii >= 0) {
+      const out = oi >= 0 ? parseCsvAmount(r[oi] || "") : null;
+      const inc = ii >= 0 ? parseCsvAmount(r[ii] || "") : null;
+      if (out != null && out !== 0) amount = -Math.abs(out);
+      else if (inc != null && inc !== 0) amount = Math.abs(inc);
+    }
+    if (amount == null && ai >= 0) amount = parseCsvAmount(r[ai] || "");
+    if (amount == null || amount === 0) continue;
+    const desc = si >= 0 ? String(r[si] || "").trim() : "";
+    txns.push({ date, desc, amount });
+    if (bi >= 0) {
+      const b = parseCsvAmount(r[bi] || "");
+      if (b != null) balSeq.push({ date, amount: b });
+    }
+  }
+  // 並び順の判定: 先頭の取引日が末尾より新しければ「新しい順」なので先頭が最新の残高。
+  const descending = txns.length > 1 && txns[0].date > txns[txns.length - 1].date;
+  const balance = balSeq.length ? (descending ? balSeq[0] : balSeq[balSeq.length - 1]) : null;
+  if (txns.length === 0) return { txns: [], balance, preamble, error: "取引を1件も読み取れませんでした" };
+  return { txns, balance, preamble };
+}
+
 export interface TxnClassification { action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
 
 // 摘要をルールに照らして分類する(登録順で先勝ち)。マッチ無しはnull(要手動判定)。
-export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnClassification | null {
+export function classifyTxn(desc: string, rules: ImportRule[] | undefined, ownKeywords?: string[]): TxnClassification | null {
   const nd = normalizeForMatch(desc);
+  // 自分名義の口座間送金は収支ではないので、ルールより先に除外する
+  for (const k of ownKeywords || []) { const nk = normalizeForMatch(k); if (nk && nd.includes(nk)) return { action: "skip" }; }
   for (const r of rules || []) {
     if (r.match && nd.includes(normalizeForMatch(r.match))) return { action: r.action, target: r.target, negItem: r.negItem, posItem: r.posItem };
   }
