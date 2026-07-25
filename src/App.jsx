@@ -112,6 +112,15 @@ export default function App() {
     return () => window.removeEventListener("hashchange", readHash);
   }, []);
 
+  // ショートカットから来たとき用の1タップ取込。クリップボードの読み取りは
+  // 利用者の操作の中でしか許可されないため、ボタンのハンドラで読んでからシートを開く。
+  const importFromClipboard = async () => {
+    let text = "";
+    try { text = await navigator.clipboard.readText(); } catch { text = ""; }
+    setImportText(decodeImportPayload(text || ""));
+    setSheet("import");
+  };
+
   // バックグラウンド同期で別端末の更新を取り込んだら、古いReact状態を残さず再読込する。
   // 古い画面のまま編集してクラウドを巻き戻す事故を防ぐ。
   useEffect(() => {
@@ -283,7 +292,7 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { paddingBottom: 96 } : {}) }}>
-        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} />}
+        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onImportClipboard={importFromClipboard} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}
