@@ -63,7 +63,9 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const classifyRow = (txn, guess) => {
     const byRule = classifyTxn(txn.desc, config.importRules, config.ownTransferKeywords);
     if (byRule) {
-      if (byRule.action === "account" && !byRule.target && guess && guess.action === "account") return { ...byRule, target: guess.target };
+      // 口座の記録なら、どの口座かはファイル(=1口座)が正しい。ルールは項目(出金/引出/投資振替)だけ決める。
+      // ルールのtargetを優先すると、ゆうちょのCSVがNEOBANK宛のルールに引っ張られてしまう。
+      if (byRule.action === "account" && guess && guess.action === "account") return { ...byRule, target: guess.target };
       return byRule;
     }
     return guess || null;
@@ -80,14 +82,13 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         const res = parseBankCsv(text);
         if (res.error && res.txns.length === 0) { notes.push({ name: file.name, error: res.error }); continue; }
         const guess = guessCsvTarget(file.name, res.preamble, cards, config.accounts, !!res.balance);
+        const fileIdx = notes.length;
         for (const txn of res.txns) {
           const auto = classifyRow(txn, guess);
-          allRows.push({ txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto });
+          allRows.push({ txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx });
         }
-        if (res.balance && guess && guess.action === "account") {
-          bals.push({ account: guess.target, ...res.balance });
-        }
-        notes.push({ name: file.name, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance });
+        if (res.balance) bals.push({ account: guess && guess.action === "account" ? guess.target : "", fileIdx, ...res.balance });
+        notes.push({ name: file.name, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck });
       } catch (e) {
         notes.push({ name: file.name, error: "読み取りに失敗しました" });
       }
@@ -124,7 +125,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         const auto = classifyRow(txn, guess);
         return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
       }));
-      setCsvNotes([{ name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance }]);
+      setCsvNotes([{ name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck }]);
       setBalances(res.balance && guess && guess.action === "account" ? [{ account: guess.target, ...res.balance }] : []);
       setOcrError("");
       return true;
@@ -167,6 +168,22 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
 
   const setRow = (i, patch) => setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
+  // ファイル単位で口座をまとめて指定する。1ファイル=1口座なので、
+  // 自動判定できなかったCSV(前書きに銀行名が無いゆうちょ等)でも1回選ぶだけで全行に反映できる。
+  const setFileAccount = (fileIdx, account) => {
+    setCsvNotes((prev) => prev.map((n, i) => (i === fileIdx ? { ...n, target: account } : n)));
+    setRows((prev) => prev.map((r) => {
+      if (r.fileIdx !== fileIdx) return r;
+      // 口座の記録は宛先をこのファイルの口座に揃える
+      if (r.cls.action === "account") return { ...r, cls: { ...r.cls, target: account } };
+      // ルールに当たらず宙に浮いていた行(給与・送金など)も、この口座の出金/入金として取り込む。
+      // 利用者が自分で「取り込まない」にした行や、自分名義として除外された行(autoMatched)は触らない。
+      if (!r.autoMatched && r.cls.action === "skip") return { ...r, cls: { action: "account", target: account } };
+      return r;
+    }));
+    setBalances((prev) => prev.map((b) => (b.fileIdx === fileIdx ? { ...b, account } : b)));
+  };
+
   const rememberRule = (i) => {
     const r = rows[i];
     const match = (r.matchDraft || "").trim();
@@ -185,7 +202,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const includedCount = newEntries.length;
   // CSVの残高列から拾った月末残高も一緒に登録する(残高の手入力が不要になる)。
   // 残高は同じ月・口座で1件だけ持つべきなので、追加ではなく置き換える(App側で差し替え)。
-  const balEntries = balances.map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) }));
+  const balEntries = balances.filter((b) => b.account).map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) }));
   const commit = () => {
     const list = [...newEntries, ...balEntries];
     if (list.length) onAddEntries(list);
@@ -249,6 +266,28 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 取込済みの{dupCount}件は除きます（同じ明細を二重に登録しません）
               </div>
             )}
+            {/* ファイルごとの口座。1ファイル=1口座なので、ここで選べば全行に反映される。 */}
+            {csvNotes.filter((n) => !n.error).map((n, i) => (
+              <div key={i} style={{ ...styles.detailCard, marginBottom: 8, padding: "10px 12px" }}>
+                <div style={{ fontSize: 11.5, color: MUTED, wordBreak: "break-all", marginBottom: 6 }}>{n.name}（{n.count}件）</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: n.target ? MUTED : RED }}>{n.target ? "この明細の口座" : "口座を選んでください"}</span>
+                  <select value={n.target || ""} onChange={(e) => setFileAccount(i, e.target.value)} style={{ ...styles.textInput, width: "auto", margin: 0, padding: "6px 8px", fontSize: 13 }}>
+                    <option value="">（未選択）</option>
+                    {(config.accounts || []).map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+              </div>
+            ))}
+            {/* 残高での検算。CSVの残高列が「手前の残高＋取引＝その行の残高」で繋がるかを見て、
+                読み取り違いや取りこぼしが無いことを取り込む前に確かめられるようにする。 */}
+            {csvNotes.filter((n) => n.check).map((n, i) => (
+              <div key={i} style={{ ...styles.flash, background: n.check.mismatched ? "var(--expense-soft)" : "var(--group-bg)", color: n.check.mismatched ? RED : MUTED }}>
+                {n.check.mismatched === 0
+                  ? `✓ 残高で検算：${n.check.checked}件すべて計算が合いました${n.balance ? `（最終残高 ${yen(n.balance.amount)}）` : ""}`
+                  : `⚠ 残高が合わない箇所が${n.check.mismatched}件あります（読み取り違い・取りこぼしの可能性）${n.check.firstMismatch ? `／最初の不一致：${n.check.firstMismatch.date} ${n.check.firstMismatch.desc.slice(0, 16)} 期待 ${yen(n.check.firstMismatch.expected)} → 実際 ${yen(n.check.firstMismatch.actual)}` : ""}`}
+              </div>
+            ))}
             {balEntries.length > 0 && (
               <div style={{ ...styles.detailCard, marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, padding: "8px 2px 4px" }}>CSVから読み取った残高（一緒に登録します）</div>

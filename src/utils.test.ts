@@ -802,3 +802,42 @@ describe("取込の重複防止", () => {
     expect(withNew[0].amount).toBe(-5000);
   });
 });
+
+describe("CSV取込: ゆうちょ形式(摘要が複数列・古い順・列名の揺れ)", () => {
+  // 「入出金明細ＩＤ」は「出金」を含むため、素朴な部分一致だとIDを金額として読んでしまう。
+  const csv = [
+    "お客さま口座情報",
+    '現在高：,"404,784",円,',
+    "明細件数：4",
+    "取引日,入出金明細ＩＤ,受入金額（円）,払出金額（円）,詳細１,詳細２,現在（貸付）高,",
+    "20260716,202607160000001,1600,,ことら,ﾔｽﾄﾒﾁｾ,4456,",
+    "20260718,202607180000001,30000,,ことら,ﾓﾘｱｲ ｺﾀﾛｳ,34456,",
+    "20260718,202607180000002,7500,,ことら,ﾊﾔｼ ｼﾕﾝﾔ,41956,",
+    "20260718,202607180000003,,40700,ことら,ﾓﾘｱｲ ｺﾀﾛｳ,1256,",
+    "20260724,202607240000001,385850,,給与,ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ,387106,",
+  ].join("\n");
+  const r = parseBankCsv(csv);
+  it("明細IDを金額と誤認しない", () => {
+    expect(r.txns.map((t) => t.amount)).toEqual([1600, 30000, 7500, -40700, 385850]);
+  });
+  it("摘要は詳細1と詳細2をつないで使う(相手名まで取れる)", () => {
+    expect(r.txns[0].desc).toBe("ことら ﾔｽﾄﾒﾁｾ");
+    expect(r.txns[4].desc).toBe("給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ");
+  });
+  it("古い順のCSVでは末尾が最新の残高", () => {
+    expect(r.balance).toEqual({ date: "2026-07-24", amount: 387106 });
+  });
+  it("残高で検算でき、全件一致する", () => {
+    expect(r.balanceCheck).toMatchObject({ checked: 4, mismatched: 0 });
+  });
+  it("半角カナの相手名も自分名義として除外できる(NFKC)", () => {
+    expect(classifyTxn("ことら ﾊﾔｼ ｼﾕﾝﾔ", [], ["ハヤシ シユンヤ"])).toEqual({ action: "skip" });
+  });
+  it("読み取りがずれていれば検算が不一致として気付ける", () => {
+    const broken = csv.replace("30000,,ことら,ﾓﾘｱｲ ｺﾀﾛｳ,34456", "39000,,ことら,ﾓﾘｱｲ ｺﾀﾛｳ,34456");
+    expect(parseBankCsv(broken).balanceCheck!.mismatched).toBeGreaterThan(0);
+    // 行がまるごと欠けても検算で気付ける
+    const missing = csv.split("\n").filter((l) => !l.includes("0000002")).join("\n");
+    expect(parseBankCsv(missing).balanceCheck!.mismatched).toBeGreaterThan(0);
+  });
+});
