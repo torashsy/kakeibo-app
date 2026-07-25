@@ -5,7 +5,7 @@
 // 参照が変わるため、キャッシュ優先にすると「古いindex.htmlが、既に消えた古いJSファイルを
 // 参照して読み込みに失敗し白画面になる」事故が起きる(実際に発生した不具合)。
 // JS/CSS等のハッシュ付き静的ファイルはファイル名自体が内容を表すので、キャッシュ優先で問題ない。
-const CACHE = "kakeibo-v2";
+const CACHE = "kakeibo-v3";
 
 self.addEventListener("install", () => { self.skipWaiting(); });
 
