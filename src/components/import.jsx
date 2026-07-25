@@ -54,6 +54,24 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvNotes, setCsvNotes] = useState([]);   // ファイルごとの取込結果(件数・推定先・残高)
   const [balances, setBalances] = useState([]);   // CSVの残高列から拾った月末残高
+  const [showIosGuide, setShowIosGuide] = useState(false);
+  const [shortcutCopyStatus, setShortcutCopyStatus] = useState("");
+
+  // iPhoneのショートカットは公開版を開く。開発中のlocalhostをコピーすると
+  // iPhoneから到達できないため、ローカル表示中だけ本番URLへ差し替える。
+  const shortcutAppUrl = typeof window !== "undefined" && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+    ? "https://torashsy.github.io/kakeibo-app/"
+    : (typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : "https://torashsy.github.io/kakeibo-app/");
+  const shortcutPrefix = `${shortcutAppUrl}#import64=`;
+
+  const copyShortcutPrefix = async () => {
+    try {
+      await navigator.clipboard.writeText(shortcutPrefix);
+      setShortcutCopyStatus("コピーしました");
+    } catch {
+      setShortcutCopyStatus("コピーできませんでした。下のURLを長押ししてコピーしてください");
+    }
+  };
 
   // 1行の振り分けを決める。優先順位は
   //   1. 摘要のルール(自分名義の送金=skip、ハイブリッド=投資振替、ATM=引出/預入、カード引落=カード…)
@@ -267,13 +285,41 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
 
         {!rows && (
           <>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.6 }}>
-              <b>CSVがいちばん確実です。</b>銀行・カードのサイトで明細CSVを保存してから選んでください
-              （複数まとめて選べます。iPhoneはファイル選択の「最近使った項目」に出ます）。
-              金額の誤読がなく、残高も自動で取り込みます。
+            <div style={{ ...styles.detailCard, padding: "12px 14px", marginBottom: 12, background: "var(--group-bg)" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 5 }}>iPhoneなら、CSVを共有するだけ</div>
+              <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.65 }}>
+                銀行サイトでCSVをダウンロード → ファイルを表示して共有 →「家計簿CSV取込」。
+                取込画面が解析済みで開きます。最初にショートカットを1回作れば、次回からこの流れです。
+              </div>
+              <button data-testid="ios-shortcut-guide-toggle" style={{ ...styles.backupBtn, marginTop: 9 }} onClick={() => setShowIosGuide((v) => !v)}>
+                {showIosGuide ? "設定手順を閉じる" : "共有から1タップ取込を設定する"}
+              </button>
+              {showIosGuide && (
+                <div data-testid="ios-shortcut-guide" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", fontSize: 12, lineHeight: 1.7 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>初回だけ（ショートカットを作成）</div>
+                  <ol style={{ margin: "0 0 8px", paddingLeft: 22, color: MUTED }}>
+                    <li>下の「ショートカットを開く」で新規作成し、名前を「家計簿CSV取込」にする</li>
+                    <li>詳細で「共有シートに表示」をオン、受け入れる種類を「ファイル」にする</li>
+                    <li>「Base64エンコード」アクションを追加し、入力を「ショートカットの入力」にする</li>
+                    <li>「テキスト」アクションへ、下のURL部分と「Base64エンコード済み」の変数を続けて入れる</li>
+                    <li>最後に「URLを開く」アクションを追加して保存する</li>
+                  </ol>
+                  <button data-testid="copy-shortcut-prefix" style={{ ...styles.saveBtn, marginTop: 0 }} onClick={copyShortcutPrefix}>ショートカット用URL部分をコピー</button>
+                  <div style={{ fontSize: 10.5, color: MUTED, margin: "5px 2px 0", wordBreak: "break-all" }}>{shortcutPrefix}</div>
+                  {shortcutCopyStatus && <div style={{ fontSize: 11.5, color: shortcutCopyStatus === "コピーしました" ? GREEN : RED, marginTop: 4 }}>{shortcutCopyStatus}</div>}
+                  <a href="shortcuts://create-shortcut" style={{ ...styles.backupBtn, display: "block", textAlign: "center", textDecoration: "none", marginTop: 8 }}>ショートカットを開く</a>
+                  <div style={{ fontSize: 11, color: MUTED, marginTop: 7 }}>
+                    以後は、ダウンロードしたCSVの共有メニューから「家計簿CSV取込」を押すだけです。
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.6 }}>
+              ショートカットを使わない場合は、ダウンロード後に下を押してください。iPhoneの「最近使った項目」から選べます。
             </div>
             <button style={{ ...styles.saveBtn, marginTop: 0 }} onClick={() => csvRef.current && csvRef.current.click()} disabled={csvBusy}>
-              {csvBusy ? "読み取り中…" : "CSVを選ぶ（複数可）"}
+              {csvBusy ? "読み取り中…" : "ダウンロードしたCSVを選ぶ（複数可）"}
             </button>
             <input ref={csvRef} type="file" accept=".csv,.txt,text/csv,text/plain" multiple style={{ display: "none" }}
               onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runCsv(f); e.target.value = ""; }} />
