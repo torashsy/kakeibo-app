@@ -155,7 +155,9 @@ export default function App() {
   // 取込でまとめて追加する時用。1件ずつではなく一括で保存する。
   // 残高だけは「その月・その口座で1件」が正しいので、追加ではなく既存を差し替える
   // (同じ期間のCSVを取り込み直しても残高が二重にならないように)。
-  const addEntries = (list) => setEntries((prev) => {
+  const addEntries = (list, removeIds) => setEntries((prev0) => {
+    // 取込で「口座間の振替」と判明した過去の記録は収支から外す
+    const prev = removeIds && removeIds.length ? prev0.filter((x) => !removeIds.includes(x.id)) : prev0;
     const bals = list.filter((e) => e.cat === "account" && acctRole(e.item) === "bal");
     const kept = bals.length === 0 ? prev
       : prev.filter((x) => !bals.some((b) => x.ym === b.ym && x.cat === "account" && x.account === b.account && acctRole(x.item) === "bal"));
@@ -298,7 +300,7 @@ export default function App() {
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} entries={entries} initialText={importText} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onClose={() => { setSheet(null); setImportText(""); }} />}
+      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} entries={entries} initialText={importText} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onSaveConfig={commitConfig} onClose={() => { setSheet(null); setImportText(""); }} />}
       {sheet === "close" && <MonthlyClose key={ym} ym={ym} config={config} cards={cards} entries={entries} onSave={saveMonthlyClose} onClose={() => setSheet(null)} />}
     </div>
   );
