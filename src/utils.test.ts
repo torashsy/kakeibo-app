@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1584,5 +1584,37 @@ describe("残高の連なりから金額を復元する", () => {
   it("端の行には触らない(隣が片方しか無い)", () => {
     const rows = [t(154588), t(-10000, 162343)];
     expect(repairAmountsFromBalances(rows)[0]).toEqual(t(154588));
+  });
+});
+
+describe("摘要に頼らない重複の目印", () => {
+  type Sig = Parameters<typeof entrySignature>[0];
+  const e = (o: Partial<Sig>): Sig => ({ ym: "2026-04", cat: "account", item: "投資振替", account: "NEOBANK", amount: -50000, ...o });
+
+  it("摘要が違っても、中身が同じなら同じ目印になる", () => {
+    // CSVとスクショで摘要の読み取り方が違っても同じ取引と分かる
+    expect(entrySignature(e({}))).toBe(entrySignature(e({})));
+  });
+
+  it("月度・種類・項目・口座・金額のどれかが違えば別の目印", () => {
+    const base = entrySignature(e({}));
+    expect(entrySignature(e({ ym: "2026-05" }))).not.toBe(base);
+    expect(entrySignature(e({ cat: "card" }))).not.toBe(base);
+    expect(entrySignature(e({ item: "出金" }))).not.toBe(base);
+    expect(entrySignature(e({ account: "ゆうちょ" }))).not.toBe(base);
+    expect(entrySignature(e({ amount: -50001 }))).not.toBe(base);
+    expect(entrySignature(e({ amount: 50000 }))).not.toBe(base); // 符号が逆なら別物(振替の相手側)
+  });
+
+  it("口座を持たない記録(カード・給与)も数えられる", () => {
+    const card = { ym: "2026-04", cat: "card" as const, item: "SAISON", amount: -7755 };
+    expect(entrySignature(card)).toBe(entrySignature({ ...card, account: undefined }));
+  });
+
+  it("同じ内容が何件あるかを数える", () => {
+    const m = countBySignature([e({}), e({}), e({ amount: -1000 })]);
+    expect(m.get(entrySignature(e({})))).toBe(2);
+    expect(m.get(entrySignature(e({ amount: -1000 })))).toBe(1);
+    expect(m.get(entrySignature(e({ amount: -9999 })))).toBeUndefined();
   });
 });

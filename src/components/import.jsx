@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cycleEndBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cycleEndBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, entrySignature, countBySignature, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -348,15 +348,33 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       ? null : txnToEntry(r.txn, pairing.pairedRows[i] != null
     ? { ...r.cls, action: "account", negItem: INTERNAL_TRANSFER_ITEM, posItem: INTERNAL_TRANSFER_ITEM }
     : r.cls, config.cycleCutoffDay)));
+  // 指紋(日付・金額・摘要)は、同じ取引でも摘要の読み取り方が違うと一致しない。
+  // CSVとスクショを別々に取り込むと同じ取引が二重に入っていた(実例: 投資振替)。
+  // そこで摘要に頼らず「同じ月度・同じ行き先・同じ金額」の記録があるかでも重複を見る。
+  // ただし同じ内容の取引が本当に複数あることもあるので、既にある件数の分だけを
+  // 重複とみなし、行ごとに「別の取引として取り込む」で取り消せるようにする。
+  const sigCounts = React.useMemo(() => countBySignature(existing || []), [existing]);
   const batchKeys = new Set();
-  const dupFlags = entries.map((e, i) => {
-    if (!e || !e.src) return false;
+  const sigLeft = new Map(sigCounts);
+  // null=重複でない / "key"=同じ明細を取り込み済み / "same"=同じ内容の記録が既にある
+  const dupKinds = entries.map((e, i) => {
+    if (!e || !e.src) return null;
     const strong = txnBalanceKey(rows[i].txn);
     const key = strong || e.src;
-    const duplicate = isExistingTxn(rows[i].txn) || batchKeys.has(key);
+    const sig = entrySignature(e);
+    const left = sigLeft.get(sig) || 0;
+    if (isExistingTxn(rows[i].txn)) {
+      if (left > 0) sigLeft.set(sig, left - 1); // 既存の1件と対応が付いた
+      batchKeys.add(key);
+      return "key";
+    }
+    if (batchKeys.has(key)) return "key";
     batchKeys.add(key);
-    return duplicate;
+    if (rows[i].force || left <= 0) return null;
+    sigLeft.set(sig, left - 1);
+    return "same";
   });
+  const dupFlags = dupKinds.map(Boolean);
   const dupCount = dupFlags.filter(Boolean).length;
   const newEntries = entries.filter((e, i) => e && !dupFlags[i]);
   const includedCount = newEntries.length;
@@ -586,9 +604,19 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 const entry = entries[i];
                 const isDup = dupFlags[i];
                 const needsTarget = r.cls.action !== "skip" && !r.cls.target;
+                // 「同じ内容の記録がある」行は選び直せるので、薄くしすぎない
                 return (
-                  <div key={i} style={{ ...styles.detailCard, opacity: entry && !isDup ? 1 : 0.55 }}>
-                    {isDup && <div style={{ fontSize: 11, color: MUTED, padding: "6px 2px 0" }}>取込済み（重複のため登録しません）</div>}
+                  <div key={i} style={{ ...styles.detailCard, opacity: entry && !isDup ? 1 : (dupKinds[i] === "same" ? 0.85 : 0.55) }}>
+                    {isDup && (dupKinds[i] === "same" ? (
+                      <div style={{ fontSize: 11, color: MUTED, padding: "6px 2px 0" }}>
+                        同じ内容の記録が既にあります（重複とみなして登録しません）
+                        <button style={{ ...styles.optionChip, fontSize: 11.5, padding: "4px 10px", marginTop: 5 }} onClick={() => setRow(i, { force: true })}>
+                          別の取引として取り込む
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: MUTED, padding: "6px 2px 0" }}>取込済み（重複のため登録しません）</div>
+                    ))}
                     {pairing.pairedRows[i] != null && (
                       <div style={{ fontSize: 11, color: ACCENT, padding: "6px 2px 0" }}>
                         振替（{pairing.pairedRows[i]}）
