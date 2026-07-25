@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, findCardByTotal, cardMonthTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -304,13 +304,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     const lonely = list.reduce((a, r, i) => a + (items[i].own && pairedRows[i] == null ? 1 : 0), 0);
     return { pairedRows, removeIds, replacementEntries, lonely, ownFlags: items.map((x) => x.own) };
   }, [rows, existing, isExistingTxn, config.ownTransferKeywords]);
-  // 引き落とし行がどのカードか分からないとき、金額から特定する。
-  // 特定できないまま口座の出金として取り込むと、現金の支出として数えてしまう。
-  const cardByAmount = React.useCallback((txn) => {
-    if (!(txn.amount < 0)) return null;
-    const hit = findCardByTotal(Math.abs(txn.amount), existing || []);
-    return hit && hit.ym === cycleYm(txn.date, config.cycleCutoffDay) ? hit.card : null;
-  }, [existing, config.cycleCutoffDay]);
   // そのカード・その月度に請求が入力済みなら、取り込まず照合だけする(二重計上を防ぐ)
   const cardAlready = React.useCallback((name, date) =>
     (name ? cardMonthTotal(existing || [], name, cycleYm(date, config.cycleCutoffDay)) : 0),
