@@ -246,6 +246,11 @@ export function Settings({ config, onSave, onConvertTransfers, entries, cards, d
       <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
       <SyncSection />
 
+      {/* どの版が動いているかを表示する(古いキャッシュのままか、直っていないのかの切り分け用) */}
+      <div style={{ fontSize: 11, color: MUTED, textAlign: "center", padding: "4px 0 14px" }}>
+        版 {typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}
+      </div>
+
       <div style={{ marginBottom: 8 }}>
         <div style={styles.detailHead}><span>バックアップ</span></div>
         <div style={styles.detailCard}>
