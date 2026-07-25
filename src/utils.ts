@@ -718,18 +718,33 @@ export function parseCsvAmount(raw: string): number | null {
 
 const CSV_HEAD = {
   date: ["日付", "取引日", "ご利用日", "お取引日", "利用日", "計上日", "date"],
-  desc: ["摘要", "内容", "取引内容", "お取引内容", "ご利用店名", "ご利用先", "利用店名", "店名", "備考", "description"],
-  out: ["出金", "お引出", "引出", "支払金額", "お支払金額", "ご利用金額", "利用金額", "出金金額", "withdrawal"],
-  inc: ["入金", "お預入", "預入", "入金金額", "deposit"],
+  // 摘要は銀行により複数列に分かれる(ゆうちょは詳細1=種別・詳細2=相手名)。該当列は全部つないで使う。
+  desc: ["摘要", "内容", "取引内容", "お取引内容", "ご利用店名", "ご利用先", "利用店名", "店名", "詳細", "備考", "description"],
+  out: ["出金", "お引出", "引出", "払出", "支払金額", "お支払金額", "ご利用金額", "利用金額", "出金金額", "withdrawal"],
+  inc: ["入金", "お預入", "預入", "受入", "入金金額", "deposit"],
   amount: ["金額", "取引金額", "amount"],
-  balance: ["残高", "差引残高", "balance"],
+  balance: ["残高", "差引残高", "現在高", "balance"],
 };
+const headName = (h: string) => String(h || "").replace(/[（(].*?[)）]/g, "").replace(/\s/g, "");
 const headIndex = (headers: string[], keys: string[]) =>
-  headers.findIndex((h) => { const n = String(h || "").replace(/[（(].*?[)）]/g, "").replace(/\s/g, ""); return keys.some((k) => n.includes(k)); });
+  headers.findIndex((h) => { const n = headName(h); return keys.some((k) => n.includes(k)); });
+// 金額列を探すときに除外する見出し。例: ゆうちょの「入出金明細ＩＤ」は「出金」を含むため、
+// 単純な部分一致だと明細IDを金額として読んでしまう。
+const AMOUNT_HEAD_NG = /(ＩＤ|ID|番号|明細|コード|区分)/i;
+const headIndexAmount = (headers: string[], keys: string[]) =>
+  headers.findIndex((h) => { const n = headName(h); if (AMOUNT_HEAD_NG.test(n)) return false; return keys.some((k) => n.includes(k)); });
+// 該当する列を全部返す(摘要が複数列に分かれる形式のため)
+const headIndexAll = (headers: string[], keys: string[]) =>
+  headers.map((h, i) => (keys.some((k) => headName(h).includes(k)) ? i : -1)).filter((i) => i >= 0);
+
+// 残高の検算結果。CSVの残高列が「手前の残高＋取引＝その行の残高」で繋がるかを見る。
+export interface BalanceMismatch { date: string; desc: string; expected: number; actual: number; }
+export interface BalanceCheck { checked: number; mismatched: number; firstMismatch?: BalanceMismatch; }
 
 export interface CsvImportResult {
   txns: ParsedTxn[];
   balance: { date: string; amount: number } | null;  // CSVに残高列があれば最新日の残高
+  balanceCheck?: BalanceCheck | null;                // 残高の連なりによる検算(残高列が無ければnull)
   preamble: string;   // ヘッダー行より前の前書き(口座名などが書かれている。振り分け先の推定に使う)
   error?: string;
 }
@@ -739,25 +754,25 @@ export interface CsvImportResult {
 // カード明細のように符号が無く支払のみのCSVは、呼び出し側で「カード」に分類すれば絶対値で扱われる。
 export function parseBankCsv(text: string): CsvImportResult {
   const rows = parseCsvRows(text);
-  if (rows.length === 0) return { txns: [], balance: null, preamble: "", error: "CSVを読み取れませんでした" };
+  if (rows.length === 0) return { txns: [], balance: null, balanceCheck: null, preamble: "", error: "CSVを読み取れませんでした" };
   let hi = -1, headers: string[] = [];
   for (let i = 0; i < Math.min(rows.length, 20); i++) {
     const r = rows[i];
-    if (headIndex(r, CSV_HEAD.date) >= 0 && (headIndex(r, CSV_HEAD.out) >= 0 || headIndex(r, CSV_HEAD.inc) >= 0 || headIndex(r, CSV_HEAD.amount) >= 0)) { hi = i; headers = r; break; }
+    if (headIndex(r, CSV_HEAD.date) >= 0 && (headIndexAmount(r, CSV_HEAD.out) >= 0 || headIndexAmount(r, CSV_HEAD.inc) >= 0 || headIndexAmount(r, CSV_HEAD.amount) >= 0)) { hi = i; headers = r; break; }
   }
   const preamble = rows.slice(0, Math.max(0, hi < 0 ? Math.min(rows.length, 5) : hi)).map((r) => r.join(" ")).join("\n");
-  if (hi < 0) return { txns: [], balance: null, preamble, error: "日付・金額の列が見つかりませんでした。別の形式のCSVかもしれません。" };
+  if (hi < 0) return { txns: [], balance: null, balanceCheck: null, preamble, error: "日付・金額の列が見つかりませんでした。別の形式のCSVかもしれません。" };
   const di = headIndex(headers, CSV_HEAD.date);
-  const si = headIndex(headers, CSV_HEAD.desc);
-  const oi = headIndex(headers, CSV_HEAD.out);
-  const ii = headIndex(headers, CSV_HEAD.inc);
-  const ai = headIndex(headers, CSV_HEAD.amount);
-  const bi = headIndex(headers, CSV_HEAD.balance);
+  const sis = headIndexAll(headers, CSV_HEAD.desc);
+  const oi = headIndexAmount(headers, CSV_HEAD.out);
+  const ii = headIndexAmount(headers, CSV_HEAD.inc);
+  const ai = headIndexAmount(headers, CSV_HEAD.amount);
+  const bi = headIndexAmount(headers, CSV_HEAD.balance);
 
   const txns: ParsedTxn[] = [];
-  // 残高はファイルの並び順のまま貯めておき、最後に「新しい順/古い順」を判定して最新を選ぶ。
-  // 同じ日に複数行あるCSV(1日に何度も振替がある等)では日付だけでは最新を決められないため。
-  const balSeq: { date: string; amount: number }[] = [];
+  // 残高は取引と同じ並び・同じ添字で保持する。最後に「新しい順/古い順」を判定して
+  // 最新の残高を選び、さらに残高の連なりで検算する(同じ日に複数行あっても取り違えない)。
+  const bals: (number | null)[] = [];
   for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i];
     const date = normalizeCsvDate(r[di] || "");
@@ -771,18 +786,36 @@ export function parseBankCsv(text: string): CsvImportResult {
     }
     if (amount == null && ai >= 0) amount = parseCsvAmount(r[ai] || "");
     if (amount == null || amount === 0) continue;
-    const desc = si >= 0 ? String(r[si] || "").trim() : "";
+    const desc = sis.map((k) => String(r[k] || "").trim()).filter(Boolean).join(" ");
     txns.push({ date, desc, amount });
-    if (bi >= 0) {
-      const b = parseCsvAmount(r[bi] || "");
-      if (b != null) balSeq.push({ date, amount: b });
-    }
+    bals.push(bi >= 0 ? parseCsvAmount(r[bi] || "") : null);
   }
   // 並び順の判定: 先頭の取引日が末尾より新しければ「新しい順」なので先頭が最新の残高。
   const descending = txns.length > 1 && txns[0].date > txns[txns.length - 1].date;
-  const balance = balSeq.length ? (descending ? balSeq[0] : balSeq[balSeq.length - 1]) : null;
-  if (txns.length === 0) return { txns: [], balance, preamble, error: "取引を1件も読み取れませんでした" };
-  return { txns, balance, preamble };
+  const latestIdx = descending ? bals.findIndex((b) => b != null) : bals.length - 1 - [...bals].reverse().findIndex((b) => b != null);
+  const balance = bals.some((b) => b != null) && latestIdx >= 0 && bals[latestIdx] != null
+    ? { date: txns[latestIdx].date, amount: bals[latestIdx] as number } : null;
+
+  // 残高で検算する。隣り合う行は「手前の残高 + その取引 = その行の残高」が成り立つはずなので、
+  // 合わなければ読み取り違い・取りこぼしがある。取り込む前に気付けるようにする。
+  let checked = 0, mismatched = 0;
+  let firstMismatch: BalanceMismatch | undefined;
+  for (let i = 0; i < txns.length; i++) {
+    const prevIdx = descending ? i + 1 : i - 1;   // 時系列でひとつ前の行
+    if (prevIdx < 0 || prevIdx >= txns.length) continue;
+    const prev = bals[prevIdx], cur = bals[i];
+    if (prev == null || cur == null) continue;
+    checked++;
+    const expected = prev + txns[i].amount;
+    if (Math.abs(expected - cur) >= 1) {
+      mismatched++;
+      if (!firstMismatch) firstMismatch = { date: txns[i].date, desc: txns[i].desc, expected, actual: cur };
+    }
+  }
+  const balanceCheck: BalanceCheck | null = checked > 0 ? { checked, mismatched, firstMismatch } : null;
+
+  if (txns.length === 0) return { txns: [], balance, balanceCheck, preamble, error: "取引を1件も読み取れませんでした" };
+  return { txns, balance, balanceCheck, preamble };
 }
 
 export interface TxnClassification { action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
