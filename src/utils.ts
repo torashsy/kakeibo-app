@@ -1417,6 +1417,24 @@ export function parseTxnKey(src: string | undefined): { date: string; amount: nu
   return { date: m[1], amount: Number(m[2]), desc: m[3] };
 }
 
+// 記録の「中身」を表す目印。摘要は含めない。
+// 同じ取引でもCSVとスクショでは摘要の読み取り方が違い、指紋(日付・金額・摘要)では
+// 一致しないため、別々に取り込むと二重に入っていた(実例: 投資振替)。
+// 月度・種類・項目・口座・金額が同じなら、摘要が違っても同じ取引とみなす。
+export const entrySignature = (e: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount">): string =>
+  `${e.ym}|${e.cat}|${e.item}|${e.account || ""}|${Math.round(e.amount)}`;
+
+// 目印ごとの件数。同じ内容の取引が本当に複数あることもあるので、
+// 重複の判定では「既にある件数の分だけ」を取込済みとみなす。
+export function countBySignature(entries: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount">[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const e of entries || []) {
+    const s = entrySignature(e);
+    m.set(s, (m.get(s) || 0) + 1);
+  }
+  return m;
+}
+
 // 分類結果をentry(id無し)に変換する。skip・未分類・対象未選択はnull。
 // cutoffDay(締め日)を渡すと、取引日をその周期の月バケツへ自動で振り分ける(例: 締め日10で7/5→6月度)。
 export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, cutoffDay: number = 0): Omit<Entry, "id"> | null {
