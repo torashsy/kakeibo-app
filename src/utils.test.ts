@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, guessCardForDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1147,5 +1147,45 @@ describe("給与の取り込み(未入力なら手取りとして取り込む)",
     expect((after.importRules as ImportRule[]).map((r) => [r.match, r.action]))
       .toEqual([["給与", "salary"], ["賞与", "salary"]]);
     expect(after.importRulesSeeded).toBe(2);
+  });
+});
+
+describe("自払などの引き落としからカードを推測する", () => {
+  const cards = ["EPOS", "JCB Gold", "SMCC Gold"];
+  const card = (ym: string, item: string, amount: number) => ({ ym, cat: "card" as const, item, account: "", amount });
+  it("引き落としらしい摘要を見分ける", () => {
+    expect(DEBIT_HINT_RE.test("自払 ｼﾞｪｰｼｰﾋﾞｰ")).toBe(true);
+    expect(DEBIT_HINT_RE.test("口座振替 エポスカード")).toBe(true);
+    expect(DEBIT_HINT_RE.test("ATM引出")).toBe(false);
+    expect(DEBIT_HINT_RE.test("ことら送金 タナカ")).toBe(false);
+  });
+  it("摘要にカード名があればそれを使う", () => {
+    expect(guessCardForDebit("自払 EPOS", -15322, "2026-06", cards, [])).toBe("EPOS");
+  });
+  it("カード名が無くても、その月度の入力済み請求額と一致すれば特定できる", () => {
+    const es = [card("2026-06", "JCB Gold", 7777)];
+    expect(guessCardForDebit("自払 ****", -7777, "2026-06", cards, es)).toBe("JCB Gold");
+    // 別の月度の一致は使わない
+    expect(guessCardForDebit("自払 ****", -7777, "2026-07", cards, es)).toBeNull();
+  });
+  it("手がかりが無ければnull(利用者が選ぶ)", () => {
+    expect(guessCardForDebit("自払 ****", -1234, "2026-06", cards, [])).toBeNull();
+  });
+});
+
+describe("残高は記録の無い月に前月から引き継ぐ", () => {
+  const bal = (ym: string, account: string, amount: number) => ({ ym, cat: "account" as const, item: "残高", account, amount });
+  const es = [bal("2026-03", "ゆうちょ", 50000), bal("2026-03", "NEOBANK", 20000), bal("2026-05", "ゆうちょ", 60000)];
+  it("記録の無い4月は3月の残高を引き継ぐ", () => {
+    expect(balancesAsOf(es, "2026-04")).toEqual({ "ゆうちょ": { amount: 50000, ym: "2026-03" }, "NEOBANK": { amount: 20000, ym: "2026-03" } });
+    expect(balTotalAsOf(es, "2026-04")).toBe(70000);
+  });
+  it("記録のある月はその月の残高を使う", () => {
+    expect(balancesAsOf(es, "2026-05")["ゆうちょ"]).toEqual({ amount: 60000, ym: "2026-05" });
+    expect(balTotalAsOf(es, "2026-05")).toBe(80000);   // ゆうちょ6万 + NEOBANK 2万(3月から)
+  });
+  it("その月より後の記録は使わない", () => {
+    expect(balTotalAsOf(es, "2026-02")).toBeNull();
+    expect(balancesAsOf(es, "2026-03")["ゆうちょ"]!.amount).toBe(50000);
   });
 });

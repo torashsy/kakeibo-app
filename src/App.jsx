@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -266,11 +266,8 @@ export default function App() {
 
   const summary = useMemo(() => computeSummary(monthEntries), [monthEntries]);
 
-  const prevBalTotal = useMemo(() => {
-    const pym = addMonth(ym, -1); const b = {};
-    for (const e of entries) if (e.ym === pym && e.cat === "account" && acctRole(e.item) === "bal") b[e.account] = e.amount;
-    return Object.keys(b).length ? Object.values(b).reduce((a, x) => a + x, 0) : null;
-  }, [entries, ym]);
+  // 前月末の残高。その月に記録が無ければ、記録のある直近の月から引き継ぐ
+  const prevBalTotal = useMemo(() => balTotalAsOf(entries, addMonth(ym, -1)), [entries, ym]);
 
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
@@ -291,7 +288,7 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
-        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
+        {tab === "today" && <Summary summary={summary} balancesNow={balancesAsOf(entries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}

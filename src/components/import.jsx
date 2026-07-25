@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, DEBIT_HINT_RE, guessCardForDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
