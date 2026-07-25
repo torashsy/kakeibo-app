@@ -1028,7 +1028,10 @@ export const cardMonthTotal = (entries: Entry[], card: string, ym: string): numb
   (entries || []).reduce((a, e) => a + (e.cat === "card" && e.item === card && e.ym === ym ? Math.abs(e.amount) : 0), 0);
 
 // 口座からの引き落としらしい摘要(自払=自動払込、口座振替など)。ほとんどがカードの請求。
-export const DEBIT_HINT_RE = /自払|自動払込|口座振替|カード/;
+export const DEBIT_HINT_RE = /自払|自動払込|口座振替|カード|ｶｰﾄﾞ/;
+// OCRは文字の間に空白を入れることがある(「自 払 セソ * ン」)。空白を落としてから判定する。
+export const isDebitDesc = (desc: string): boolean =>
+  DEBIT_HINT_RE.test(String(desc || "").normalize("NFKC").replace(/[\s　]/g, ""));
 
 // 引き落とし行がどのカードかを推測する。当たらなくても利用者が振り分け直せるので、
 // 「分からないから口座の出金にする」より「カードとして出して選んでもらう」方が実態に合う。
@@ -1048,7 +1051,10 @@ export function guessCardForDebit(
 // カードを特定できないときの暫定の名前として使う。カード請求として金額は正しく載るので、
 // 使いすぎの判定は合う。名前は後からカード管理で直せる。
 export function payeeFromDebit(desc: string): string {
-  const t = String(desc || "").replace(/自動払込|自払|口座振替|カード/g, " ").replace(/[\s　]+/g, " ").trim();
+  // OCRの字間の空白を落としてから支払先を取り出す(「自 払 セソ * ン」→「セソ*ン」)
+  const t = String(desc || "").normalize("NFKC").replace(/[\s　]/g, "")
+    .replace(/自動払込|自払|口座振替|カード|ｶｰﾄﾞ/g, "")
+    .replace(/[*＊_^｀`]+/g, "").trim();
   return t || "引き落とし";
 }
 

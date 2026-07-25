@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1192,11 +1192,25 @@ describe("残高は記録の無い月に前月から引き継ぐ", () => {
 
 describe("引き落としの支払先名", () => {
   it("自払などの語を取り除いて支払先を取り出す", () => {
-    expect(payeeFromDebit("自払 ｼﾞｪｰｼｰﾋﾞｰ")).toBe("ｼﾞｪｰｼｰﾋﾞｰ");
+    expect(payeeFromDebit("自払 ｼﾞｪｰｼｰﾋﾞｰ")).toBe("ジェーシービー");   // 半角カナは全角へ揃える
     expect(payeeFromDebit("口座振替　エポスカード")).toBe("エポス");
     expect(payeeFromDebit("自動払込 トウキヨウガス")).toBe("トウキヨウガス");
   });
   it("名前が残らない場合も空にしない", () => {
     expect(payeeFromDebit("自払")).toBe("引き落とし");
+  });
+});
+
+describe("OCRの字間の空白があっても自払を見分ける", () => {
+  it("「自 払 セソ * ン」のように空白が入っても引き落としと分かる", () => {
+    expect(isDebitDesc("自 払 セソ * ン")).toBe(true);
+    expect(isDebitDesc("自 払 JCB_ カート *^")).toBe(true);
+    expect(isDebitDesc("自払 ｼﾞｪｰｼｰﾋﾞｰ")).toBe(true);
+    expect(isDebitDesc("こと ら ハヤ シ シュ ン ヤ")).toBe(false);
+    expect(isDebitDesc("ATM引出")).toBe(false);
+  });
+  it("支払先の名前も空白を落として取り出す", () => {
+    expect(payeeFromDebit("自 払 セソ * ン")).toBe("セソン");
+    expect(payeeFromDebit("自 払 JCB_ カート *^")).toBe("JCBカート");   // OCRの誤読はそのまま残す(後から直せる)
   });
 });
