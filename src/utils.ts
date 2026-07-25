@@ -1135,6 +1135,28 @@ export function payeeFromDebit(desc: string): string {
   return t || "引き落とし";
 }
 
+// 月度ごとに「期首残高 + その月度の増減 = 期末残高」が合っているかを確かめる。
+// 期首残高は前の月度末の残高(記録が無ければ直近から引き継ぐ)。
+// 合っていればその月度は取りこぼしが無いと言えるので、確定(締め)にできる。
+export interface CycleCheck {
+  ym: string; opening: number | null; net: number; expected: number | null;
+  closing: number | null; diff: number | null; ok: boolean;
+}
+export function verifyCycles(entries: Entry[], closedMonths?: string[]): CycleCheck[] {
+  const yms = Array.from(new Set((entries || []).map((e) => e.ym))).sort();
+  return yms.map((ym) => {
+    const opening = balTotalAsOf(entries, addMonth(ym, -1));
+    const monthEntries = (entries || []).filter((e) => e.ym === ym);
+    const net = computeSummary(monthEntries).net;
+    // その月度に残高の記録が無ければ照合できない(引き継ぎでは増減が0になり意味がない)
+    const hasOwnBalance = monthEntries.some((e) => e.cat === "account" && acctRole(e.item) === "bal");
+    const closing = hasOwnBalance ? balTotalAsOf(entries, ym) : null;
+    const expected = opening == null ? null : Math.round(opening + net);
+    const diff = expected == null || closing == null ? null : Math.round(closing - expected);
+    return { ym, opening, net: Math.round(net), expected, closing, diff, ok: diff === 0 };
+  });
+}
+
 // 既存の記録から「自分の口座間の振替」を後から探す。
 // 振替の判定は取込時にしか走らないため、機能を入れる前に取り込んだ記録や手入力の記録は
 // 入金/出金のまま残る。それを後から見つけて「口座振替」に直せるようにする。

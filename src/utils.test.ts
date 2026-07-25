@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1310,5 +1310,33 @@ describe("JRE BANK: OCRが列ごとに行を分けても読める", () => {
                   "2026年06月", "06/22", "19,760", "20,399", "カ）ビユーカード"].join("\n");
     const t = parseBankText(cleanOcrText(text));
     expect(t.map((x) => x.date)).toEqual(["2026-07-06", "2026-06-22"]);
+  });
+});
+
+describe("月度ごとの残高照合", () => {
+  const bal = (ym: string, account: string, amount: number) => ({ ym, cat: "account" as const, item: "残高", account, amount });
+  const card = (ym: string, amount: number) => ({ ym, cat: "card" as const, item: "EPOS", account: "", amount });
+  const salary = (ym: string, amount: number) => ({ ym, cat: "salary" as const, item: "給与", account: "", amount });
+  it("期首残高＋増減＝期末残高 なら一致", () => {
+    // 3月度末10万 → 4月度は給与+30万・カード-5万 → 期末35万
+    const es = [bal("2026-03", "A", 100000), salary("2026-04", 300000), card("2026-04", 50000), bal("2026-04", "A", 350000)];
+    const r = verifyCycles(es).find((x) => x.ym === "2026-04")!;
+    expect(r).toMatchObject({ opening: 100000, net: 250000, expected: 350000, closing: 350000, diff: 0, ok: true });
+  });
+  it("取りこぼしがあれば差として出る", () => {
+    const es = [bal("2026-03", "A", 100000), salary("2026-04", 300000), bal("2026-04", "A", 350000)];
+    const r = verifyCycles(es).find((x) => x.ym === "2026-04")!;
+    expect(r.ok).toBe(false);
+    expect(r.diff).toBe(-50000);   // 記録に無い5万の支出がある
+  });
+  it("その月度に残高の記録が無ければ照合しない", () => {
+    const es = [bal("2026-03", "A", 100000), salary("2026-04", 300000)];
+    const r = verifyCycles(es).find((x) => x.ym === "2026-04")!;
+    expect(r.closing).toBeNull();
+    expect(r.ok).toBe(false);
+  });
+  it("全ての月度を返す", () => {
+    const es = [bal("2026-03", "A", 100000), bal("2026-04", "A", 100000), bal("2026-05", "A", 100000)];
+    expect(verifyCycles(es).map((r) => r.ym)).toEqual(["2026-03", "2026-04", "2026-05"]);
   });
 });
