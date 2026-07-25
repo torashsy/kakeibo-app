@@ -854,7 +854,8 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
 // 文字コードの判定もここで行う。Base64でなければそのまま返す。
 export function decodeImportPayload(raw: string): string {
   const s = String(raw || "");
-  const compact = s.replace(/\s/g, "");
+  // URL安全なBase64(-と_)も受け付ける
+  const compact = s.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
   // Base64以外の文字が混ざっていれば、そのままのCSVとみなす(CSVには必ずカンマや改行が入る)
   if (compact.length < 16 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return s;
   try {

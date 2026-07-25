@@ -135,7 +135,12 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       return true;
     }
     setRawText(text);
-    setOcrError("CSVとして読み取れなかったので、テキストとして読み込みました。下の「解析する」を押してください。");
+    // 何が届いたのか分からないと直しようがないので、受け取った中身の先頭を見せる
+    const head = String(text).replace(/\s+/g, " ").slice(0, 120);
+    const looksUrl = /^https?:\/\//.test(String(text).trim());
+    setOcrError(looksUrl
+      ? `CSVではなくURLが渡されています（${head}）。共有するときは「リンク」ではなく、ダウンロードしたCSVファイル本体を共有してください。`
+      : `CSVとして読み取れませんでした。受け取った内容の先頭：「${head}」。下の欄で確認・修正して「解析する」を押せます。`);
     return false;
   };
 
