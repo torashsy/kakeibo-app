@@ -31,10 +31,9 @@ export function DetailList({ monthEntries, onEdit }) {
   const catLabel = { salary: "給与系", card: "カード", account: "口座" };
   const catColor = { salary: GREEN, card: RED, account: ACCENT };
   const list = [...monthEntries].reverse();
-  if (!list.length) return <div style={{ color: MUTED, fontSize: 13, padding: 12 }}>この月の記録はまだありません。右下の＋から追加できます。</div>;
+  if (!list.length) return <div style={{ color: MUTED, fontSize: 13, padding: 12 }}>記録なし</div>;
   return (
     <div>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>追加した記録の一覧です。行をタップすると編集・削除できます。</div>
       <div style={styles.detailCard}>
         {list.map((e) => (
           <button key={e.id} style={styles.listRow} onClick={() => onEdit(e)}>
@@ -102,7 +101,6 @@ export function DetailCards({ S, config, cards, onEdit }) {
 
   return (
     <>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 10px" }}>0円の項目も表示しています。複数回入力した項目はタップで開けます。</div>
 
       {/* 給与系 */}
       <div style={{ marginBottom: 18 }}>
@@ -188,7 +186,6 @@ export function DetailTable({ S, config, cards, onEdit }) {
   const cols = Array.from({ length: maxCount }, (_, i) => i + 1);
   return (
     <div style={{ marginTop: 4 }}>
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>項目別と同じ並びです。横スクロール可。数字をタップで編集。</div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (cols.length + 1) * 96 }}>
           <colgroup><col style={{ width: 132 }} />{cols.map((c) => <col key={"col-" + c} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
@@ -268,7 +265,6 @@ export function YearTable({ entries, ym, config, cards }) {
   return (
     <div style={{ marginTop: 4 }}>
       <SavingsChart entries={entries} months={months} ym={ym} />
-      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 4px 8px" }}>{fyStart}年4月〜{fyStart + 1}年3月の12か月。横スクロールできます。</div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (months.length + 1) * 96 }}>
           <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>

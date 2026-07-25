@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
 import { uid, periodRange } from '../utils';
 import { styles } from '../styles.js';
-import { getSyncConfig, setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
+import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
 // クラウド同期(Supabase)の設定・ログイン。URL/anon keyは端末のlocalStorageにのみ保存する。
 function SyncSection() {
@@ -21,7 +21,7 @@ function SyncSection() {
   }, []);
   const syncLabel = state.status === "syncing" ? "同期中…"
     : state.status === "error" ? "同期エラー"
-      : state.lastSyncAt ? `最終同期 ${new Date(state.lastSyncAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}` : "自動同期待機中";
+      : state.lastSyncAt ? `同期 ${new Date(state.lastSyncAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}` : "待機";
 
   const saveCfg = () => {
     if (!url.trim() || !anonKey.trim()) { setMsg("URLとanon keyを入力してください"); return; }
@@ -56,12 +56,10 @@ function SyncSection() {
     <div style={{ marginBottom: 18 }}>
       <div style={styles.detailHead}><span>クラウド同期</span></div>
       <div style={styles.detailCard}>
-        {(() => { const u = (getSyncConfig() || {}).url; return u ? <div style={{ fontSize: 11.5, color: MUTED, padding: "6px 2px 0", wordBreak: "break-all" }}>接続先（Supabaseのプロジェクト）：<span style={{ color: ACCENT }}>{u}</span></div> : null; })()}
         {msg && <div style={{ ...styles.flash, marginTop: 8 }}>{msg}</div>}
         {state.mode === "loading" && <div style={{ color: MUTED, fontSize: 13, padding: 6 }}>確認中…</div>}
         {state.mode === "off" && (
           <div style={{ padding: "6px 0" }}>
-            <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 8 }}>SupabaseのプロジェクトURLとanon keyを入力すると、複数端末でデータを同期できます（キーはこの端末にのみ保存）。</div>
             <label style={styles.fieldLabel}>プロジェクトURL</label>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" style={styles.textInput} autoCapitalize="none" />
             <label style={styles.fieldLabel}>anon key</label>
@@ -73,7 +71,6 @@ function SyncSection() {
           <div style={{ padding: "6px 0" }}>
             {state.personal ? (
               <>
-                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.7, marginBottom: 10 }}>各端末で<b>同じユーザー名とPIN</b>を入れると同期します（メール不要・端末ごとに最初の1回だけ）。初めてなら「初回登録」、2台目以降は「ログイン」。</div>
                 <label style={styles.fieldLabel}>ユーザー名</label>
                 <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="例）tora" style={styles.textInput} autoCapitalize="none" autoCorrect="off" />
                 <label style={styles.fieldLabel}>PIN（6桁以上）</label>
@@ -85,7 +82,6 @@ function SyncSection() {
               </>
             ) : (
               <>
-                <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 8 }}>{state.builtIn ? "PCとスマホで同じアカウントにログインすると、自動で同期します。" : "設定済み。ログインすると同期が始まります（初回は「新規登録」）。"}</div>
                 <label style={styles.fieldLabel}>メールアドレス</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" style={styles.textInput} autoCapitalize="none" />
                 <label style={styles.fieldLabel}>パスワード</label>
@@ -107,8 +103,7 @@ function SyncSection() {
               <span>{syncLabel}</span>
             </div>
             {state.error && <div style={{ fontSize: 11.5, color: RED, padding: "0 2px 4px", wordBreak: "break-word" }}>{state.error}</div>}
-            <div style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.6, padding: "0 2px 4px" }}>変更時・アプリ起動時・オンライン復帰時に自動同期します。</div>
-            <button style={{ ...styles.backupBtn, opacity: busy || state.status === "syncing" ? 0.5 : 1 }} disabled={busy || state.status === "syncing"} onClick={doSync}>今すぐ同期</button>
+            <button style={{ ...styles.backupBtn, opacity: busy || state.status === "syncing" ? 0.5 : 1 }} disabled={busy || state.status === "syncing"} onClick={doSync}>同期</button>
             <button style={styles.backupBtn} onClick={doSignOut}>ログアウト</button>
             {!state.builtIn && <button style={styles.cancelBtn} onClick={unconfigure}>同期設定を削除</button>}
           </div>
@@ -131,10 +126,9 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
   const remove = () => { onSave((rules || []).filter((r) => r.id !== edit.id)); setEdit(null); };
   return (
     <div style={{ marginBottom: 18 }}>
-      <div style={styles.detailHead}><span>スクショ取込のルール</span><button style={styles.addBtn} onClick={() => setEdit({ id: uid(), match: "", action: "card", target: "" })}>＋ 追加</button></div>
-      <div style={{ fontSize: 12, color: MUTED, margin: "0 4px 10px", lineHeight: 1.6 }}>摘要にキーワードが含まれる取引を、登録順で先勝ちして自動振り分けします。</div>
+      <div style={styles.detailHead}><span>取込ルール</span><button style={styles.addBtn} onClick={() => setEdit({ id: uid(), match: "", action: "card", target: "" })}>＋ 追加</button></div>
       {(rules || []).length === 0 ? (
-        <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだルールがありません。「＋ 追加」または取込時の「覚える」から登録できます。</div></div>
+        <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>ルールなし</div></div>
       ) : (
         <div style={styles.detailCard}>
           {(rules || []).map((r) => (
@@ -164,8 +158,8 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
             {edit.action === "account" && (
               <div style={styles.optionRow}>{(accounts || []).map((a) => <button key={a} style={{ ...styles.optionChip, ...(edit.target === a ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, target: a })}>{a}</button>)}</div>
             )}
-            <button style={{ ...styles.saveBtn, opacity: edit.match.trim() && (edit.action === "skip" || edit.target) ? 1 : 0.4 }} disabled={!edit.match.trim() || (edit.action !== "skip" && !edit.target)} onClick={commit}>保存する</button>
-            <button style={styles.deleteBtn} onClick={remove}>このルールを削除</button>
+            <button style={{ ...styles.saveBtn, opacity: edit.match.trim() && (edit.action === "skip" || edit.target) ? 1 : 0.4 }} disabled={!edit.match.trim() || (edit.action !== "skip" && !edit.target)} onClick={commit}>保存</button>
+            <button style={styles.deleteBtn} onClick={remove}>削除</button>
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
           </div>
         </div>
@@ -179,8 +173,8 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
   useEffect(() => setC(config), [config]);
-  const groups = [{ key: "accounts", title: "口座" }, { key: "salaryItems", title: "給与系の項目" }, { key: "memoCategories", title: "メモの分類" },
-    { key: "ownTransferKeywords", title: "自分名義の送金キーワード", hint: "自分の口座間の移動は収支ではないため、摘要にこの文字を含む取引は取り込みません（例：自分の氏名）。" }];
+  const groups = [{ key: "accounts", title: "口座" }, { key: "salaryItems", title: "給与項目" }, { key: "memoCategories", title: "メモ分類" },
+    { key: "ownTransferKeywords", title: "自分名義キーワード" }];
   const addItem = (key) => { const name = (prompt(`新しい${groups.find((g) => g.key === key).title}の名前`) || "").trim(); if (!name) return; const next = { ...c, [key]: [...(c[key] || []), name] }; setC(next); onSave(next); };
   const removeItem = (key, i) => onRemoveItem(key, c[key][i]);
   const exportJSON = () => { const blob = new Blob([JSON.stringify({ entries, config: c, cards, debt, memos, subs, plans, closedMonths, theme }, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); };
@@ -207,13 +201,11 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
   const exportCSV = () => { const lines = ["ym,cat,item,account,amount"]; for (const e of entries) lines.push([e.ym, e.cat, `"${e.item || ""}"`, `"${e.account || ""}"`, e.amount].join(",")); const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url); };
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <div style={{ color: MUTED, fontSize: 13, margin: "2px 4px 14px", lineHeight: 1.6 }}>口座・給与項目・カードの登録や、取込ルール・同期・バックアップを管理します。</div>
-
       {/* カード管理への導線 */}
       <button style={styles.navRow} onClick={onOpenCards}>
         <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <span style={{ fontSize: 14.5, fontWeight: 600 }}>カード管理</span>
-          <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>所有カードの登録・編集（{(cards || []).length}枚）</span>
+          <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{(cards || []).length}枚</span>
         </span>
         <span style={{ color: MUTED, fontSize: 20 }}>›</span>
       </button>
@@ -222,7 +214,6 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
       <button style={styles.navRow} onClick={onOpenDesign}>
         <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <span style={{ fontSize: 14.5, fontWeight: 600 }}>テーマ</span>
-          <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>アクセント色・ダークモード</span>
         </span>
         <span style={{ color: MUTED, fontSize: 20 }}>›</span>
       </button>
@@ -231,16 +222,13 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
       <div style={{ marginBottom: 18 }}>
         <div style={styles.detailHead}><span>月の締め日</span></div>
         <div style={styles.detailCard}>
-          <div style={{ fontSize: 12, color: MUTED, padding: "8px 2px 4px", lineHeight: 1.6 }}>
-            家計の1ヶ月をこの日で締めます（0＝暦通り）。例）10なら「11日〜翌月10日」を1周期とし、6月度＝6/11〜7/10。給与とそれで払うカードを同じ月にまとめられます。締め日が土日祝なら引き落としは翌営業日にずれるため、その分も自動で同じ周期に含めます（日本の祝日を判定）。スクショ取込は取引日をこの周期へ自動で振り分けます。
-          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 2px 8px" }}>
             <span style={{ fontSize: 14 }}>毎月</span>
             <input type="number" inputMode="numeric" min={0} max={28} value={c.cycleCutoffDay ?? 10}
               onChange={(e) => { const v = Math.max(0, Math.min(28, Number(e.target.value) || 0)); const next = { ...c, cycleCutoffDay: v }; setC(next); onSave(next); }}
               style={{ ...styles.textInput, width: 72, textAlign: "center", margin: 0 }} />
             <span style={{ fontSize: 14 }}>日 締め</span>
-            {Number(c.cycleCutoffDay) >= 1 && <span style={{ fontSize: 12, color: ACCENT, marginLeft: "auto" }}>例：6月度＝{periodRange("2026-06", c.cycleCutoffDay)}</span>}
+            {Number(c.cycleCutoffDay) >= 1 && <span style={{ fontSize: 12, color: ACCENT, marginLeft: "auto" }}>{periodRange("2026-06", c.cycleCutoffDay)}</span>}
           </div>
         </div>
       </div>
@@ -248,7 +236,6 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
       {groups.map((g) => (
         <div key={g.key} style={{ marginBottom: 18 }}>
           <div style={styles.detailHead}><span>{g.title}</span><button style={styles.addBtn} onClick={() => addItem(g.key)}>＋ 追加</button></div>
-          {g.hint && <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>{g.hint}</div>}
           <div style={styles.detailCard}>{(c[g.key] || []).map((name, i) => <div key={i} style={styles.settingRow}><span>{name}</span><button style={styles.removeBtn} onClick={() => removeItem(g.key, i)}>削除</button></div>)}</div>
         </div>
       ))}
@@ -256,7 +243,7 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
           実際に使えるURLを利用者にコピーして登録してもらう。 */}
       <div style={{ marginBottom: 18 }}>
         <div style={styles.detailHead}>
-          <span>明細を取りに行くリンク</span>
+          <span>明細リンク</span>
           <button style={styles.addBtn} onClick={() => {
             const name = (prompt("表示名（例：ゆうちょ）") || "").trim(); if (!name) return;
             const url = (prompt("URL（Safariでその画面を開いてURLをコピーして貼り付け）") || "").trim();
@@ -264,9 +251,6 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
             const next = { ...c, importLinks: [...(c.importLinks || []), { id: uid(), name, url }] };
             setC(next); onSave(next);
           }}>＋ 追加</button>
-        </div>
-        <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>
-          取込画面から1タップで開けます。銀行によっては明細画面へ直接飛べないので、その場合はログイン画面のURLを登録してください。
         </div>
         <div style={styles.detailCard}>
           {(c.importLinks || []).length === 0 && <div style={{ color: MUTED, fontSize: 12.5, padding: "6px 2px" }}>まだありません</div>}
@@ -289,10 +273,9 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
         <div style={styles.detailHead}><span>バックアップ</span></div>
         <div style={styles.detailCard}>
           {flash && <div style={{ ...styles.flash, marginTop: 8 }}>✓ {flash}</div>}
-          <div style={{ fontSize: 12.5, color: MUTED, padding: "8px 2px", lineHeight: 1.6 }}>記録・カード・メモ・サブスク・計画・テーマをまとめて保存/復元できます。</div>
-          <button style={styles.backupBtn} onClick={exportCSV}>CSVで書き出す（Excel用）</button>
-          <button style={styles.backupBtn} onClick={exportJSON}>バックアップを保存（復元用）</button>
-          <button style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()}>バックアップから復元</button>
+          <button style={styles.backupBtn} onClick={exportCSV}>CSV出力</button>
+          <button style={styles.backupBtn} onClick={exportJSON}>保存</button>
+          <button style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()}>復元</button>
           <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) importJSON(f); e.target.value = ""; }} />
         </div>
       </div>
@@ -305,9 +288,7 @@ export function ThemeEditor({ theme, onSave, onBack }) {
   const isCustom = !ACCENT_PRESETS.some((p) => p.color.toLowerCase() === (theme.accent || "").toLowerCase());
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <button style={styles.backLink} onClick={onBack}>‹ 設定にもどる</button>
-      <div style={{ color: MUTED, fontSize: 13, margin: "2px 4px 14px", lineHeight: 1.6 }}>変更はすぐ反映・自動保存されます。</div>
-
+      <button style={styles.backLink} onClick={onBack}>‹ 設定</button>
       <div style={styles.themeSection}>表示モード</div>
       <div style={styles.detailCard}>
         <div style={styles.themeRow}>

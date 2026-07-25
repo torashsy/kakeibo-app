@@ -56,7 +56,7 @@ export function Subs({ subs, onSave, cards }) {
       </div>
       <div style={styles.detailHead}><span>登録中（{subs.length}）</span><button style={styles.addBtn} onClick={newSub}>＋ 追加</button></div>
       {subs.length === 0 ? (
-        <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだ登録がありません。「＋ 追加」からサブスク・通信費・光熱費などを登録できます。</div></div>
+        <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>登録なし</div></div>
       ) : (
         groups.map(([cat, items]) => {
           const catMonthly = items.reduce((a, s) => a + subMonthly(s), 0);
@@ -118,14 +118,14 @@ export function Subs({ subs, onSave, cards }) {
                 <button key={c.id} style={{ ...styles.optionChip, ...(edit.card === c.name ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, card: c.name })}>{c.name}</button>
               ))}
             </div>
-            <label style={styles.fieldLabel}>更新日（任意）</label>
+            <label style={styles.fieldLabel}>更新日</label>
             <input type="date" value={edit.renewal ?? ""} onChange={(e) => setEdit({ ...edit, renewal: e.target.value })} style={styles.textInput} />
             <label style={styles.fieldLabel}>プラン名（任意）</label>
             <input value={edit.plan ?? ""} onChange={(e) => setEdit({ ...edit, plan: e.target.value })} placeholder="例）Premium / 年間プラン" style={styles.textInput} />
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <textarea value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="解約条件や備考など" style={styles.memoTextarea} />
-            <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新する" : "追加する"}</button>
-            {edit.id && <button style={styles.deleteBtn} onClick={remove}>この定期費を削除</button>}
+            <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新" : "追加"}</button>
+            {edit.id && <button style={styles.deleteBtn} onClick={remove}>削除</button>}
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
           </div>
         </div>
