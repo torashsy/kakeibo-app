@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  yen, num, addMonth, ymLabel, cycleYm, periodLabel, periodRange, isBankHoliday,
+  yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday,
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
-  parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, evalAmount,
+  parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
   parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
@@ -377,10 +377,10 @@ describe("スクショ取込(OCR明細インポート)", () => {
   it("parseBankText: 日付→摘要→取引額→残高(無視)の並びを取引ごとに分解する", () => {
     const txns = parseBankText(bankText);
     expect(txns).toHaveLength(4);
-    expect(txns[0]).toEqual({ date: "2026-07-10", desc: "自払　ミツビシUFJニコス", amount: -548 });
-    expect(txns[1]).toEqual({ date: "2026-07-10", desc: "自払　JCBカード", amount: -93846 });
-    expect(txns[2]).toEqual({ date: "2026-07-08", desc: "ことら　ハヤシ　シユンヤ", amount: 95000 });
-    expect(txns[3]).toEqual({ date: "2026-07-06", desc: "自払　セゾン", amount: -3600 });
+    expect(txns[0]).toEqual({ date: "2026-07-10", desc: "自払　ミツビシUFJニコス", amount: -548, balance: 2856 });
+    expect(txns[1]).toEqual({ date: "2026-07-10", desc: "自払　JCBカード", amount: -93846, balance: 3404 });
+    expect(txns[2]).toEqual({ date: "2026-07-08", desc: "ことら　ハヤシ　シユンヤ", amount: 95000, balance: 97250 });
+    expect(txns[3]).toEqual({ date: "2026-07-06", desc: "自払　セゾン", amount: -3600, balance: 2250 });
   });
   it("parseBankText: 摘要が複数行に折り返されても連結する", () => {
     const t = `2026.07.10\n自払　ミツビ゛シUFJニコ\nス\n-¥548\n¥2,856`;
@@ -470,11 +470,11 @@ describe("スクショ取込(OCR明細インポート)", () => {
   it("parseBankText: 実際のOCRノイズ(濁点脱落・¥の誤読・行内に金額が入る)を含む生テキストからも取引を検出する", () => {
     const txns = parseBankText(realOcrText);
     expect(txns.length).toBeGreaterThanOrEqual(5);
-    expect(txns[0]).toEqual({ date: "2026-07-10", desc: "自 払 ミツ ヒ * シ UF J ニ コス", amount: -548 });
-    expect(txns[1]).toEqual({ date: "2026-07-10", desc: "自 払 JCB カー ト *", amount: -93846 });
-    expect(txns[2]).toEqual({ date: "2026-07-08", desc: "こと ら ハヤ シ シュ ユ ュ ン ヤ", amount: 95000 });
-    expect(txns[3]).toEqual({ date: "2026-07-06", desc: "自 払 セ ソ ` ン", amount: -3600 });
-    expect(txns[4]).toEqual({ date: "2026-07-06", desc: "自 払 セ ソ * ン", amount: -10000 });
+    expect(txns[0]).toMatchObject({ date: "2026-07-10", desc: "自 払 ミツ ヒ * シ UF J ニ コス", amount: -548, balance: 2856 });
+    expect(txns[1]).toMatchObject({ date: "2026-07-10", desc: "自 払 JCB カー ト *", amount: -93846, balance: 3404 });
+    expect(txns[2]).toMatchObject({ date: "2026-07-08", desc: "こと ら ハヤ シ シュ ユ ュ ン ヤ", amount: 95000, balance: 97250 });
+    expect(txns[3]).toMatchObject({ date: "2026-07-06", desc: "自 払 セ ソ ` ン", amount: -3600, balance: 2250 });
+    expect(txns[4]).toMatchObject({ date: "2026-07-06", desc: "自 払 セ ソ * ン", amount: -10000, balance: 5850 });
   });
 
   it("parseBankText: 金額を検出した後にフッターのナビ文字等が続いても摘要に巻き込まない", () => {
@@ -538,9 +538,9 @@ describe("スクショ取込(OCR明細インポート)", () => {
 
   it("parseBankText: 'N日'見出し形式(NEOBANK等)を日ごとにグループ化し、年月はcontextYmを使う", () => {
     const txns = parseBankText(neobankText, "2026-08");
-    expect(txns[0]).toEqual({ date: "2026-08-10", desc: "ＳＢＩハイブリッド預...", amount: 10000 });
-    expect(txns[1]).toEqual({ date: "2026-08-10", desc: "ATM　セブン銀行", amount: -17000 });
-    expect(txns[3]).toEqual({ date: "2026-08-08", desc: "ことら送金　ハヤシ　...", amount: -95000 });
+    expect(txns[0]).toMatchObject({ date: "2026-08-10", desc: "ＳＢＩハイブリッド預...", amount: 10000, balance: 14660 });
+    expect(txns[1]).toMatchObject({ date: "2026-08-10", desc: "ATM　セブン銀行", amount: -17000, balance: 4660 });
+    expect(txns[3]).toMatchObject({ date: "2026-08-08", desc: "ことら送金　ハヤシ　...", amount: -95000, balance: 20660 });
   });
 
   it("parseBankText: 日が前より大きくなったら前月へ遡ったとみなす(新しい順の一覧を過去へ辿る想定)", () => {
@@ -548,6 +548,18 @@ describe("スクショ取込(OCR明細インポート)", () => {
     // 8日→30日で前月(7月)に切り替わる(日が前より大きくなった=遡って前月に入った)
     const afterRollover = txns.find((t) => t.desc.includes("エポス"));
     expect(afterRollover!.date).toBe("2026-07-29");
+  });
+
+  it("parseBankText: 月見出しが変わる複数月の明細を日付へ自動変換する", () => {
+    const text = [
+      "2026年5月", "12日", "入金 +1,000円", "残高11,000円",
+      "2026年4月", "30日", "出金 -2,000円", "残高10,000円",
+    ].join("\n");
+    const txns = parseBankText(text);
+    expect(txns).toEqual([
+      { date: "2026-05-12", desc: "入金", amount: 1000, balance: 11000 },
+      { date: "2026-04-30", desc: "出金", amount: -2000, balance: 10000 },
+    ]);
   });
 
   it("classifyTxn/txnToEntry: ハイブリッド預金は投資振替、ATMは引出/預入として口座記録になる", () => {
@@ -636,6 +648,8 @@ describe("cycleYm / periodLabel / periodRange", () => {
     expect(periodLabel("2026-06", 10)).toBe("2026年6月度");
     expect(periodRange("2026-06", 0)).toBe("");
     expect(periodRange("2026-06", 10)).toBe("6/11〜7/10");
+    expect(periodRange("2026-04", 10)).toBe("4/11〜5/11");
+    expect(periodRange("2026-05", 10)).toBe("5/12〜6/10");
   });
   it("isBankHoliday: 土日・祝日・年末年始", () => {
     expect(isBankHoliday("2026-01-12")).toBe(true);  // 成人の日(1月第2月曜)
@@ -651,6 +665,11 @@ describe("cycleYm / periodLabel / periodRange", () => {
     expect(cycleYm("2026-01-12", 10)).toBe("2025-12"); // 振替でずれた分も前周期
     expect(cycleYm("2026-01-13", 10)).toBe("2025-12"); // 実際の引き落とし日(営業日)まで前周期
     expect(cycleYm("2026-01-14", 10)).toBe("2026-01"); // 翌日から新周期(1月度)
+  });
+  it("cycleStartDate: 締め日が日曜なら翌営業日のさらに翌日から始まる", () => {
+    expect(cycleStartDate("2026-04", 10)).toBe("2026-04-11");
+    // 2026/5/10(日)の引落は5/11(月)。5月度はその翌日の5/12から。
+    expect(cycleStartDate("2026-05", 10)).toBe("2026-05-12");
   });
 });
 
@@ -804,6 +823,35 @@ describe("取込の重複防止", () => {
     ];
     expect(dedupeTxns(txns)).toHaveLength(2);
   });
+  it("OCR摘要が揺れても日付・金額・取引後残高が同じなら重複にする", () => {
+    const txns = [
+      { date: "2026-04-24", desc: "送金 ニッポン", amount: 2102, balance: 76522 },
+      { date: "2026-04-24", desc: "送金 ニッボン", amount: 2102, balance: 76522 },
+    ];
+    expect(dedupeTxns(txns)).toHaveLength(1);
+  });
+  it("同日・同額・同摘要でも取引後残高が違えば実在する別取引として残す", () => {
+    const txns = [
+      { date: "2026-04-30", desc: "入金", amount: 400, balance: 211943 },
+      { date: "2026-04-30", desc: "入金", amount: 400, balance: 132343 },
+    ];
+    expect(dedupeTxns(txns)).toHaveLength(2);
+  });
+  it("開始残高から画像順に依存せず全件のOCR残高を検算する", () => {
+    const txns = [
+      { date: "2026-04-30", desc: "入金", amount: 400, balance: 132343 },
+      { date: "2026-04-13", desc: "送金", amount: 24000, balance: 55570 },
+      { date: "2026-04-30", desc: "入金", amount: 2600, balance: 131943 },
+      { date: "2026-04-30", desc: "ことら", amount: -80000, balance: 129343 },
+      { date: "2026-04-20", desc: "振込", amount: 153773, balance: 209343 },
+    ];
+    const ok = verifyOcrBalanceChain(txns, 31570);
+    expect(ok.mismatched).toBe(0);
+    expect(ok.checked).toBe(5);
+    expect(ok.finalBalance).toBe(132343);
+    const bad = verifyOcrBalanceChain(txns, 31571);
+    expect(bad.mismatched).toBeGreaterThan(0);
+  });
   it("同じCSVを2回取り込んでも、既存のsrcと一致する分は除外できる", () => {
     const txns = [
       { date: "2026-07-10", desc: "ＡＴＭ　セブン銀行", amount: -17000 },
@@ -830,6 +878,10 @@ describe("口座スクショの自動判別と振り分け", () => {
   it("口座明細のカード引落は二重計上を避けて除外する", () => {
     expect(classifyTxnForImport("自払 JCBカード", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" })).toEqual({ action: "skip" });
     expect(classifyTxnForImport("自 払 三井 住友 カー ド", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" })).toEqual({ action: "skip" });
+  });
+  it("自払でもセブンATMの引出は除外せず口座支出にする", () => {
+    expect(classifyTxnForImport("自払 セブン", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" }))
+      .toEqual({ action: "account", target: "ゆうちょ" });
   });
   it("口座ルールの振り分け先はスクショ元の口座へ揃える", () => {
     expect(classifyTxnForImport("ことら ハヤシ シュンヤ", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" }))

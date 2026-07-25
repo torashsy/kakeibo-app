@@ -29,6 +29,7 @@ export default function App() {
   // 起動時は当月を表示(その月の入力・使いすぎ判定にすぐ入れるように)。矢印で前後の月へ移動できる。
   const [ym, setYm] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [sheet, setSheet] = useState(null);
+  const [importMode, setImportMode] = useState("");
   const [editing, setEditing] = useState(null);
 
   useEffect(() => {
@@ -111,15 +112,6 @@ export default function App() {
     window.addEventListener("hashchange", readHash);
     return () => window.removeEventListener("hashchange", readHash);
   }, []);
-
-  // ショートカットから来たとき用の1タップ取込。クリップボードの読み取りは
-  // 利用者の操作の中でしか許可されないため、ボタンのハンドラで読んでからシートを開く。
-  const importFromClipboard = async () => {
-    let text = "";
-    try { text = await navigator.clipboard.readText(); } catch { text = ""; }
-    setImportText(decodeImportPayload(text || ""));
-    setSheet("import");
-  };
 
   // バックグラウンド同期で別端末の更新を取り込んだら、古いReact状態を残さず再読込する。
   // 古い画面のまま編集してクラウドを巻き戻す事故を防ぐ。
@@ -292,7 +284,7 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
-        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onImportClipboard={importFromClipboard} />}
+        {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} />}
@@ -311,12 +303,12 @@ export default function App() {
         <TabBtn active={tab === "settings" || tab === "design" || tab === "cards"} onClick={() => setTab("settings")} label="設定" icon="settings" />
       </nav>
 
-      {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); setSheet(cat); }} />}
+      {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); if (cat === "import") setImportMode(""); setSheet(cat); }} />}
       {sheet === "salary" && <SalaryForm key={ym} ym={ym} config={config} entries={entries} onClose={() => { setSheet(null); setEditing(null); }} onSave={(rows) => { replaceSalary(ym, rows); setSheet(null); }} />}
       {sheet === "salaryEdit" && <SalaryEditForm key={editing ? editing.id : "s"} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "card" && <CardForm key={editing ? editing.id : "new-card"} ym={ym} cards={cards} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
       {sheet === "account" && <AccountForm key={editing ? editing.id : "new-account"} ym={ym} config={config} entries={entries} editing={editing} onClose={() => { setSheet(null); setEditing(null); }} onAdd={addEntry} onUpdate={updateEntry} onDelete={removeEntry} />}
-      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} entries={entries} initialText={importText} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onSaveConfig={commitConfig} onClose={() => { setSheet(null); setImportText(""); }} />}
+      {sheet === "import" && <ImportSheet cards={cards} config={config} ym={ym} entries={entries} initialText={importText} initialMode={importMode} onAddEntries={addEntries} onSaveImportRules={commitImportRules} onSaveConfig={commitConfig} onClose={() => { setSheet(null); setImportText(""); setImportMode(""); }} />}
       {sheet === "close" && <MonthlyClose key={ym} ym={ym} config={config} cards={cards} entries={entries} onSave={saveMonthlyClose} onClose={() => setSheet(null)} />}
     </div>
   );

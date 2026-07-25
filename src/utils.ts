@@ -9,6 +9,7 @@ export interface Entry {
   account?: string;
   amount: number;
   src?: string;        // 取込元の指紋(日付|金額|摘要)。同じ明細を二重に取り込まないための目印
+  srcBalance?: number; // OCR明細に表示された取引後残高。摘要が揺れても同じ取引を判別する
 }
 
 export interface Config {
@@ -179,6 +180,16 @@ export const cycleYm = (dateStr: string, cutoffDay: number = 0): string => {
   const cutoff = businessCutoffDay(y, m, cutoffDay); // 締め日を営業日で自動調整
   return d > cutoff ? ym : addMonth(ym, -1);
 };
+
+// 指定月度の開始日。締め日が休日で後ろへずれる場合も cycleYm と同じ規則で求める。
+export const cycleStartDate = (ym: string, cutoffDay: number = 0): string => {
+  if (!cutoffDay || cutoffDay < 1) return `${ym}-01`;
+  for (let day = 1; day <= 20; day++) {
+    const date = `${ym}-${String(day).padStart(2, "0")}`;
+    if (cycleYm(date, cutoffDay) === ym) return date;
+  }
+  return `${ym}-${String(cutoffDay + 1).padStart(2, "0")}`;
+};
 // 今日が属する周期の ym
 export const currentCycleYm = (cutoffDay: number = 0): string => {
   const d = new Date();
@@ -190,10 +201,12 @@ export const periodLabel = (ym: string, cutoffDay: number = 0): string => (!cuto
 // 周期の日付範囲「6/11〜7/10」。締め日が無ければ空。
 export const periodRange = (ym: string, cutoffDay: number = 0): string => {
   if (!cutoffDay || cutoffDay < 1) return "";
-  const [, m] = ym.split("-").map(Number);
-  const end = addMonth(ym, 1);
-  const em = Number(end.split("-")[1]);
-  return `${m}/${cutoffDay + 1}〜${em}/${cutoffDay}`;
+  const start = cycleStartDate(ym, cutoffDay);
+  const nextStart = cycleStartDate(addMonth(ym, 1), cutoffDay);
+  const [ny, nm, nd] = nextStart.split("-").map(Number);
+  const end = new Date(ny, nm - 1, nd - 1);
+  const sm = Number(start.slice(5, 7)), sd = Number(start.slice(8, 10));
+  return `${sm}/${sd}〜${end.getMonth() + 1}/${end.getDate()}`;
 };
 
 
@@ -586,7 +599,7 @@ export function cardBreakdown(cards: Card[], debt: Record<string, Record<string,
 }
 
 // ===== スクショ取込(OCR明細インポート) =====
-export interface ParsedTxn { date: string; desc: string; amount: number; }
+export interface ParsedTxn { date: string; desc: string; amount: number; balance?: number; }
 
 // 銀行アプリの明細画面から、日付の表し方が2通りあるテキストを取引ごとへ分解する。
 // (a) 取引ごとに"YYYY.MM.DD"の行が付く形式(ゆうちょアプリ等)
@@ -597,6 +610,7 @@ export interface ParsedTxn { date: string; desc: string; amount: number; }
 // "円"を全く別の漢字(哲/折/四など、実機で確認)に誤読したりするため、行の途中にある
 // 金額トークンも拾えるようにし、"円"自体は無くても3桁区切りの数字パターンで金額と判定する。
 const IMPORT_DATE_RE = /^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/;
+const IMPORT_MONTH_RE = /^(?:[^\d]*)?(\d{4})\D+(\d{1,2})\s*月(?:\D.*)?$/;
 const IMPORT_DAY_RE = /^(\d{1,2})\s*日$/;
 // 符号(-/−/ー/_、または明示的な+) + [円マーク相当(¥/\/Y)+数字 または 3桁区切りの数字(+末尾の単位らしき1〜2文字、何でもよい)]
 const MONEY_TOKEN_RE = /(?:([-−ー_])|\+)?\s*(?:[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)|(\d{1,3}(?:[,.]\d{3})+)\s*[^\d\s]{0,2})/;
@@ -624,6 +638,14 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
       i++;
       continue;
     }
+    const monthMatch = line.match(IMPORT_MONTH_RE);
+    if (monthMatch) {
+      curYm = `${monthMatch[1]}-${monthMatch[2].padStart(2, "0")}`;
+      currentDate = null;
+      prevDay = null;
+      i++;
+      continue;
+    }
     const dayMatch = line.match(IMPORT_DAY_RE);
     if (dayMatch && curYm) {
       const day = Number(dayMatch[1]);
@@ -636,6 +658,7 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
     if (!currentDate) { i++; continue; } // 最初の日付/日見出しより前の行(ヘッダー等)は無視
     const descParts: string[] = [];
     let amount: number | null = null;
+    let balance: number | null = null;
     let linesForTxn = 0;
     // 取引額が見つかるまで摘要として蓄積し、見つけた直後の1行(残高)まで読んだら打ち切る。
     // 金額を検出した後に金額を含まない行が来たら、それはフッターのナビ文字等の無関係な行なので
@@ -654,15 +677,19 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
       if (amount === null) {
         if (before) descParts.push(before);
         amount = parseMoneyToken(mm);
+        const after = l2.slice(mm.index + mm[0].length);
+        const second = after.match(MONEY_TOKEN_RE);
+        if (second) balance = parseMoneyToken(second);
       } else {
         // 2つ目の金額(残高)を読んだら終了。"残高"ラベル(前後にOCRノイズが付くこともある)は
         // 摘要に含めないが、それ以外の文字が残っている場合は折り返した摘要の続きの可能性があるので拾う。
         if (before && !before.replace(/\s/g, "").includes("残高")) descParts.push(before);
+        balance = parseMoneyToken(mm);
         break;
       }
     }
     if (amount === null) continue; // 金額を検出できなかった行は取引として扱わない
-    out.push({ date: currentDate, desc: descParts.join(""), amount });
+    out.push({ date: currentDate, desc: descParts.join(""), amount, ...(balance == null ? {} : { balance }) });
   }
   return out;
 }
@@ -873,8 +900,12 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
 // 取込元も考慮した最終分類。口座明細内のカード引落は、カード請求を手入力する運用では二重計上になるため除外する。
 // 口座ルールは取込元の口座へ付け替え、CSV・スクショで同じ挙動に揃える。
 export function classifyTxnForImport(desc: string, rules: ImportRule[] | undefined, source: TxnClassification | null): TxnClassification | null {
-  if (source?.action === "account" && normalizeForMatch(desc).startsWith(normalizeForMatch("自払"))) return { action: "skip" };
   const byRule = classifyTxn(desc, rules);
+  const nd = normalizeForMatch(desc);
+  // 「自払 セブン」はATM引出なので収支へ残す。一方、カード名が明記された自払と
+  // 登録済みカード会社ルールに当たる自払は、カード請求の手入力と二重になるため除外する。
+  if (source?.action === "account" && nd.startsWith(normalizeForMatch("自払"))
+    && (byRule?.action === "card" || nd.includes(normalizeForMatch("カード")))) return { action: "skip" };
   if (!byRule) return source;
   if (source?.action === "account" && byRule.action === "card") return { action: "skip" };
   if (source?.action === "account" && byRule.action === "account") return { ...byRule, target: source.target };
@@ -950,15 +981,64 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
 // 摘要は表記ゆれ・OCRの揺れを吸収した正規化後の先頭部分だけを使う。
 export const txnKey = (txn: ParsedTxn): string => `${txn.date}|${Math.round(txn.amount)}|${normalizeForMatch(txn.desc).slice(0, 24)}`;
 
+// OCRでは同じ摘要でも文字認識が揺れる。取引後残高が読めた行は、日付・金額・残高を
+// 強い指紋として使う。同日・同額の実在する別取引も残高が異なるため誤って潰さない。
+export const txnBalanceKey = (txn: ParsedTxn): string | null => Number.isFinite(txn.balance)
+  ? `${txn.date}|${Math.round(txn.amount)}|bal:${Math.round(txn.balance as number)}` : null;
+
 // 重なったスクショや期間の重なるCSVを同時選択した時、同じ明細を1件にまとめる。
 export function dedupeTxns(txns: ParsedTxn[]): ParsedTxn[] {
   const seen = new Set<string>();
   return (txns || []).filter((txn) => {
-    const key = txnKey(txn);
+    const key = txnBalanceKey(txn) || txnKey(txn);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+export interface OcrBalanceCheck extends BalanceCheck {
+  total: number;
+  missing: number;
+  finalBalance?: number;
+  finalDate?: string;
+  ordered: ParsedTxn[];
+}
+
+// 開始残高を起点に「直前残高 + 取引額 = OCR残高」が全件つながる順番を復元する。
+// 画像の選択順や、同じ日の明細順に依存しない。1件でも残高欠落・不一致があれば失敗。
+export function verifyOcrBalanceChain(txns: ParsedTxn[], openingBalance: number): OcrBalanceCheck {
+  const unique = dedupeTxns(txns || []);
+  const missing = unique.filter((t) => !Number.isFinite(t.balance)).length;
+  if (missing) return { checked: 0, mismatched: missing, total: unique.length, missing, ordered: [] };
+
+  const remaining = [...unique];
+  const ordered: ParsedTxn[] = [];
+  let current = Math.round(openingBalance);
+  let lastDate = "";
+  while (remaining.length) {
+    const candidates = remaining
+      .map((txn, index) => ({ txn, index }))
+      .filter(({ txn }) => txn.date >= lastDate && Math.round((txn.balance as number) - txn.amount) === current)
+      .sort((a, b) => a.txn.date.localeCompare(b.txn.date));
+    if (!candidates.length) break;
+    const next = candidates[0];
+    remaining.splice(next.index, 1);
+    ordered.push(next.txn);
+    current = Math.round(next.txn.balance as number);
+    lastDate = next.txn.date;
+  }
+
+  const first = remaining.sort((a, b) => a.date.localeCompare(b.date))[0];
+  return {
+    checked: ordered.length,
+    mismatched: remaining.length,
+    total: unique.length,
+    missing: 0,
+    ordered,
+    ...(ordered.length ? { finalBalance: current, finalDate: ordered[ordered.length - 1].date } : {}),
+    ...(first ? { firstMismatch: { date: first.date, desc: first.desc, expected: current + first.amount, actual: first.balance as number } } : {}),
+  };
 }
 
 // 指紋(src)から取込元の日付・金額・摘要を取り出す。過去に取り込んだ記録を
@@ -977,9 +1057,10 @@ export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, cutoff
   if ((cls.action === "card" || cls.action === "account") && !cls.target) return null;
   const ym = cycleYm(txn.date, cutoffDay);
   const src = txnKey(txn);
-  if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount), src };
+  const source = Number.isFinite(txn.balance) ? { src, srcBalance: Math.round(txn.balance as number) } : { src };
+  if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount), ...source };
   const item = txn.amount < 0 ? (cls.negItem || "出金") : (cls.posItem || "入金");
-  return { ym, cat: "account", item, account: cls.target!, amount: txn.amount, src };
+  return { ym, cat: "account", item, account: cls.target!, amount: txn.amount, ...source };
 }
 
 // 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。

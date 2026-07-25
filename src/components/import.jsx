@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, addMonth, verifyOcrBalanceChain, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -42,21 +42,31 @@ const styleOf = (cls) => ACCOUNT_ITEM_STYLES.find((s) => s.neg === (cls.negItem 
 
 // スクショ取込。銀行アプリなどの明細スクショをOCR(tesseract.js、取込時のみ動的読込・要通信)で
 // 文字起こしし、登録済みルール(config.importRules)で自動的にentryへ振り分ける。
-// OCRが誤読してもテキスト欄で修正・貼り付け直しができ、最後は必ずレビュー画面で内容を確認してから追加する。
-export function ImportSheet({ cards, config, ym, entries: existing, initialText, onAddEntries, onSaveImportRules, onSaveConfig, onClose }) {
+// OCR結果は明細へ整形して表示し、最後は必ずレビュー画面で内容を確認してから追加する。
+export function ImportSheet({ cards, config, ym, entries: existing, initialText, initialMode, onAddEntries, onSaveImportRules, onSaveConfig, onClose }) {
   const fileRef = useRef(null);
   const csvRef = useRef(null);
-  const [rawText, setRawText] = useState("");
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState("");
   const [ocrError, setOcrError] = useState("");
-  const [importYm, setImportYm] = useState(ym);
   const [rows, setRows] = useState(null); // null=未解析。解析後は [{txn, cls, matchDraft}]
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvNotes, setCsvNotes] = useState([]);   // ファイルごとの取込結果(件数・推定先・残高)
   const [balances, setBalances] = useState([]);   // CSVの残高列から拾った月末残高
   const [showIosGuide, setShowIosGuide] = useState(false);
   const [shortcutCopyStatus, setShortcutCopyStatus] = useState("");
+  const [ocrMode, setOcrMode] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState("");
+  const ocrStartDate = cycleStartDate(ym, config.cycleCutoffDay);
+  const initialPickerOpened = useRef(false);
+
+  // トップのCSV/スクショから来た場合は、そのタップのまま対応する選択画面を開く。
+  React.useLayoutEffect(() => {
+    if (initialPickerOpened.current) return;
+    initialPickerOpened.current = true;
+    if (initialMode === "csv") csvRef.current?.click();
+    if (initialMode === "screenshot") fileRef.current?.click();
+  }, [initialMode]);
 
   // iPhoneのショートカットは公開版を開く。開発中のlocalhostをコピーすると
   // iPhoneから到達できないため、ローカル表示中だけ本番URLへ差し替える。
@@ -87,6 +97,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // ルールに当たらない行の振り分け先として使う(1ファイル=1口座なので取り違えが起きない)。
   const runCsv = async (files) => {
     setCsvBusy(true); setOcrError("");
+    setOcrMode(false); setOpeningBalance("");
     const allRows = [], notes = [], bals = [];
     for (const file of files) {
       try {
@@ -128,25 +139,29 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
         const { data } = await worker.recognize(files[i]);
         const text = data.text || "";
         texts.push(text);
-        allTxns.push(...parseBankText(text, importYm));
+        allTxns.push(...parseBankText(text, ym));
       }
       const combined = texts.join("\n\n");
       const unique = dedupeTxns(allTxns);
-      const periodTxns = unique.filter((txn) => cycleYm(txn.date, config.cycleCutoffDay) === importYm);
+      // 取込を開始した月度より前だけを除外する。以後は日付から各月度へ自動で振り分ける。
+      const periodTxns = unique.filter((txn) => txn.date >= ocrStartDate);
       const target = guessYuchoScreenshotAccount(combined, config.accounts);
       const guess = target ? { action: "account", target } : null;
-      setRawText(combined);
       if (periodTxns.length > 0) {
+        setOcrMode(true);
         setRows(periodTxns.map((txn) => {
           const auto = classifyRow(txn, guess);
           return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx: 0 };
         }));
         setCsvNotes([{ name: `スクショ ${files.length}枚`, count: periodTxns.length, target, duplicateCount: allTxns.length - unique.length, outsideCount: unique.length - periodTxns.length }]);
+        const previousYm = addMonth(ym, -1);
+        const savedOpening = (existing || []).find((e) => e.ym === previousYm && e.cat === "account" && e.item === "残高" && e.account === target);
+        setOpeningBalance(savedOpening ? String(savedOpening.amount) : "");
       } else {
-        setOcrError(unique.length > 0 ? "選択した月の取引がありませんでした。" : "取引を読み取れませんでした。下のテキストを確認して解析してください。");
+        setOcrError(unique.length > 0 ? `${ocrStartDate}以降の取引がありません。` : "取引を読み取れませんでした。");
       }
     } catch {
-      setOcrError("画像の読み取りに失敗しました。通信状況を確認するか、下の欄に直接テキストを貼り付けてください。");
+      setOcrError("画像の読み取りに失敗しました。");
     } finally {
       if (worker) { try { await worker.terminate(); } catch {} }
       setOcrBusy(false); setOcrProgress("");
@@ -169,13 +184,10 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       setOcrError("");
       return true;
     }
-    setRawText(text);
-    // 何が届いたのか分からないと直しようがないので、受け取った中身の先頭を見せる
-    const head = String(text).replace(/\s+/g, " ").slice(0, 120);
     const looksUrl = /^https?:\/\//.test(String(text).trim());
     setOcrError(looksUrl
-      ? `CSVではなくURLが渡されています（${head}）。共有するときは「リンク」ではなく、ダウンロードしたCSVファイル本体を共有してください。`
-      : `CSVとして読み取れませんでした。受け取った内容の先頭：「${head}」。下の欄で確認・修正して「解析する」を押せます。`);
+      ? "CSVではなくURLが渡されています。CSVファイル本体を共有してください。"
+      : "CSVとして読み取れませんでした。");
     return false;
   };
 
@@ -200,20 +212,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     }
     // ショートカットがBase64でコピーしている場合もあるので復元してから解析する
     ingestText(decodeImportPayload(text), "クリップボード");
-  };
-
-  const parse = () => {
-    // "N日"だけの見出し形式(年月の表記が無い)は、今表示中の月を起点に判定する
-    const parsed = parseBankText(rawText, importYm);
-    const unique = dedupeTxns(parsed);
-    const txns = unique.filter((txn) => cycleYm(txn.date, config.cycleCutoffDay) === importYm);
-    const target = guessYuchoScreenshotAccount(rawText, config.accounts);
-    const guess = target ? { action: "account", target } : null;
-    setRows(txns.map((txn) => {
-      const auto = classifyRow(txn, guess);
-      return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx: 0 };
-    }));
-    setCsvNotes([{ name: "スクショ", count: txns.length, target, duplicateCount: parsed.length - unique.length, outsideCount: unique.length - txns.length }]);
   };
 
   const setRow = (i, patch) => setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -241,6 +239,10 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       return r;
     }));
     setBalances((prev) => prev.map((b) => (b.fileIdx === fileIdx ? { ...b, account } : b)));
+    if (ocrMode && account) {
+      const savedOpening = (existing || []).find((e) => e.ym === addMonth(ym, -1) && e.cat === "account" && e.item === "残高" && e.account === account);
+      if (savedOpening) setOpeningBalance(String(savedOpening.amount));
+    }
   };
 
   const rememberRule = (i) => {
@@ -254,6 +256,31 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // 取込済みの明細の指紋。CSVの期間が重なっても同じ取引を二重に登録しないため、
   // 既に同じ指紋の記録があるものは取り込み対象から外す。
   const existingKeys = React.useMemo(() => new Set((existing || []).map((e) => e.src).filter(Boolean)), [existing]);
+  const existingByBase = React.useMemo(() => {
+    const map = new Map();
+    for (const e of (existing || [])) {
+      if (!e.src) continue;
+      if (!map.has(e.src)) map.set(e.src, []);
+      map.get(e.src).push(e);
+    }
+    return map;
+  }, [existing]);
+  const existingBalanceKeys = React.useMemo(() => {
+    const keys = new Set();
+    for (const e of (existing || [])) {
+      const parsed = parseTxnKey(e.src);
+      if (!parsed || !Number.isFinite(e.srcBalance)) continue;
+      keys.add(txnBalanceKey({ ...parsed, balance: e.srcBalance }));
+    }
+    return keys;
+  }, [existing]);
+  const isExistingTxn = React.useCallback((txn) => {
+    const strong = txnBalanceKey(txn);
+    if (!strong) return existingKeys.has(txnKey(txn));
+    if (existingBalanceKeys.has(strong)) return true;
+    // 旧版の記録にはOCR残高が無いので、従来の指紋が一致した場合だけ互換判定する。
+    return (existingByBase.get(txnKey(txn)) || []).some((e) => !Number.isFinite(e.srcBalance));
+  }, [existingKeys, existingBalanceKeys, existingByBase]);
 
   // 口座間の振替の判定。今回のCSVどうしだけでなく、過去に取り込んだ記録とも突き合わせる。
   // これにより、両方の口座のCSVを同時に選ばなくても(別々の日に取り込んでも)振替として扱える。
@@ -265,7 +292,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     const items = list.map((r) => ({
       date: r.txn.date, amount: r.txn.amount,
       group: r.cls.action === "account" && r.cls.target ? `acct:${r.cls.target}` : `file:${r.fileIdx}`,
-      own: r.cls.action === "account" && !existingKeys.has(txnKey(r.txn)) && matchesOwnName(r.txn.desc, own),
+      own: r.cls.action === "account" && !isExistingTxn(r.txn) && matchesOwnName(r.txn.desc, own),
     }));
     // 過去の記録(自分名義で収支に載っているもの)も候補に加える
     const past = (existing || [])
@@ -289,15 +316,17 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     }
     const lonely = list.reduce((a, r, i) => a + (items[i].own && pairedRows[i] == null ? 1 : 0), 0);
     return { pairedRows, removeIds, replacementEntries, lonely, ownFlags: items.map((x) => x.own) };
-  }, [rows, existing, existingKeys, config.ownTransferKeywords]);
+  }, [rows, existing, isExistingTxn, config.ownTransferKeywords]);
   const entries = (rows || []).map((r, i) => txnToEntry(r.txn, pairing.pairedRows[i] != null
     ? { ...r.cls, action: "account", negItem: INTERNAL_TRANSFER_ITEM, posItem: INTERNAL_TRANSFER_ITEM }
     : r.cls, config.cycleCutoffDay));
   const batchKeys = new Set();
-  const dupFlags = entries.map((e) => {
+  const dupFlags = entries.map((e, i) => {
     if (!e || !e.src) return false;
-    const duplicate = existingKeys.has(e.src) || batchKeys.has(e.src);
-    batchKeys.add(e.src);
+    const strong = txnBalanceKey(rows[i].txn);
+    const key = strong || e.src;
+    const duplicate = isExistingTxn(rows[i].txn) || batchKeys.has(key);
+    batchKeys.add(key);
     return duplicate;
   });
   const dupCount = dupFlags.filter(Boolean).length;
@@ -305,7 +334,23 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const includedCount = newEntries.length;
   // CSVの残高列から拾った月末残高も一緒に登録する(残高の手入力が不要になる)。
   // 残高は同じ月・口座で1件だけ持つべきなので、追加ではなく置き換える(App側で差し替え)。
-  const balEntries = balances.filter((b) => b.account).map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) }));
+  const openingNumber = openingBalance === "" ? null : Number(openingBalance);
+  const ocrCheck = React.useMemo(() => (ocrMode && rows && Number.isFinite(openingNumber)
+    ? verifyOcrBalanceChain(rows.map((r) => r.txn), openingNumber) : null), [ocrMode, rows, openingNumber]);
+  const ocrVerified = !ocrMode || !!(ocrCheck && ocrCheck.total > 0 && ocrCheck.missing === 0 && ocrCheck.mismatched === 0 && ocrCheck.checked === ocrCheck.total);
+  const ocrAccount = ocrMode && csvNotes[0] ? csvNotes[0].target : "";
+  const ocrBalEntries = [];
+  if (ocrMode && ocrVerified && ocrAccount && ocrCheck) {
+    // 開始残高は直前月度の終残高として保存。以後は各月度の最後のOCR残高を保存する。
+    ocrBalEntries.push({ ym: addMonth(ym, -1), cat: "account", item: "残高", account: ocrAccount, amount: Math.round(openingNumber) });
+    const endings = new Map();
+    for (const txn of ocrCheck.ordered) endings.set(cycleYm(txn.date, config.cycleCutoffDay), txn.balance);
+    for (const [entryYm, amount] of endings) ocrBalEntries.push({ ym: entryYm, cat: "account", item: "残高", account: ocrAccount, amount: Math.round(amount) });
+  }
+  const balEntries = [
+    ...balances.filter((b) => b.account).map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) })),
+    ...ocrBalEntries,
+  ];
   const commit = () => {
     const list = [...newEntries, ...pairing.replacementEntries, ...balEntries];
     // 過去の片側も「口座振替」に置き換え、両口座の移動記録を残したまま収支から外す
@@ -334,7 +379,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                   <a href="shortcuts://create-shortcut" style={{ ...styles.backupBtn, display: "block", textAlign: "center", textDecoration: "none", marginTop: 8 }}>ショートカット</a>
               </div>
             )}
-            <button style={{ ...styles.saveBtn, marginTop: 0 }} onClick={() => csvRef.current && csvRef.current.click()} disabled={csvBusy}>
+            <button data-testid="csv-upload" style={{ ...styles.saveBtn, marginTop: 0 }} onClick={() => csvRef.current && csvRef.current.click()} disabled={csvBusy}>
               {csvBusy ? "読込中…" : "CSVを選ぶ"}
             </button>
             <input ref={csvRef} type="file" accept=".csv,.txt,text/csv,text/plain" multiple style={{ display: "none" }}
@@ -359,17 +404,12 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
               </div>
             )}
             <div style={{ height: 12 }} />
-            <label style={styles.fieldLabel}>月</label>
-            <input type="month" value={importYm} onChange={(e) => setImportYm(e.target.value)} style={styles.textInput} />
-            <button style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()} disabled={ocrBusy}>
+            <button data-testid="screenshot-upload" style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()} disabled={ocrBusy}>
               {ocrBusy ? `読込中 ${ocrProgress}` : "スクショ"}
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }}
               onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runOcr(f); e.target.value = ""; }} />
             {ocrError && <div style={{ fontSize: 12.5, color: RED, margin: "8px 2px 0" }}>{ocrError}</div>}
-            <label style={styles.fieldLabel}>テキスト</label>
-            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} style={{ ...styles.memoTextarea, minHeight: 160 }} />
-            <button style={{ ...styles.saveBtn, opacity: rawText.trim() ? 1 : 0.4 }} disabled={!rawText.trim()} onClick={parse}>解析</button>
             <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
           </>
         )}
@@ -406,6 +446,25 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 </div>
               </div>
             ))}
+            {ocrMode && (
+              <div style={{ ...styles.detailCard, marginBottom: 8, padding: "10px 12px" }}>
+                <label style={{ ...styles.fieldLabel, marginTop: 0 }}>{ocrStartDate.slice(5).replace("-", "/")} 残高</label>
+                <input type="number" inputMode="numeric" value={openingBalance}
+                  onChange={(e) => setOpeningBalance(e.target.value)} style={{ ...styles.textInput, marginBottom: 0 }} />
+              </div>
+            )}
+            {ocrMode && openingBalance === "" && (
+              <div style={{ ...styles.flash, background: "var(--expense-soft)", color: RED }}>開始残高を入力</div>
+            )}
+            {ocrMode && ocrCheck && (
+              <div style={{ ...styles.flash, background: ocrVerified ? "var(--group-bg)" : "var(--expense-soft)", color: ocrVerified ? MUTED : RED }}>
+                {ocrVerified
+                  ? `✓ 検算 ${ocrCheck.checked}件`
+                  : ocrCheck.missing
+                    ? `⚠ 残高を読めない明細 ${ocrCheck.missing}件`
+                    : `⚠ 不一致 ${ocrCheck.mismatched}件${ocrCheck.firstMismatch ? ` / ${ocrCheck.firstMismatch.date}` : ""}`}
+              </div>
+            )}
             {/* 残高での検算。CSVの残高列が「手前の残高＋取引＝その行の残高」で繋がるかを見て、
                 読み取り違いや取りこぼしが無いことを取り込む前に確かめられるようにする。 */}
             {csvNotes.filter((n) => n.check).map((n, i) => (
@@ -493,10 +552,10 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
                 );
               })}
             </div>
-            <button style={{ ...styles.saveBtn, opacity: (includedCount || balEntries.length) ? 1 : 0.4 }} disabled={!includedCount && !balEntries.length} onClick={commit}>
+            <button style={{ ...styles.saveBtn, opacity: ((includedCount || balEntries.length) && ocrVerified) ? 1 : 0.4 }} disabled={(!includedCount && !balEntries.length) || !ocrVerified} onClick={commit}>
               {includedCount}件を追加{balEntries.length > 0 ? `＋残高${balEntries.length}件` : ""}
             </button>
-            <button style={styles.cancelBtn} onClick={() => setRows(null)}>やり直す</button>
+            <button style={styles.cancelBtn} onClick={() => { setRows(null); setOcrMode(false); setOpeningBalance(""); }}>やり直す</button>
             <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
           </>
         )}
