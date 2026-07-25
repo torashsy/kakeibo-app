@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, txnToEntry, txnKey, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxnForImport, txnToEntry, txnKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -48,6 +48,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const csvRef = useRef(null);
   const [rawText, setRawText] = useState("");
   const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState("");
   const [ocrError, setOcrError] = useState("");
   const [importYm, setImportYm] = useState(ym);
   const [rows, setRows] = useState(null); // null=未解析。解析後は [{txn, cls, matchDraft}]
@@ -79,14 +80,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   // ルールが「口座」でも振り分け先が未設定なら、そのファイルの口座で補う。
   // ファイル推定をルールより優先すると、投資振替や自分名義の送金が全部ただの出金になってしまう。
   const classifyRow = (txn, guess) => {
-    const byRule = classifyTxn(txn.desc, config.importRules);
-    if (byRule) {
-      // 口座の記録なら、どの口座かはファイル(=1口座)が正しい。ルールは項目(出金/引出/投資振替)だけ決める。
-      // ルールのtargetを優先すると、ゆうちょのCSVがNEOBANK宛のルールに引っ張られてしまう。
-      if (byRule.action === "account" && guess && guess.action === "account") return { ...byRule, target: guess.target };
-      return byRule;
-    }
-    return guess || null;
+    return classifyTxnForImport(txn.desc, config.importRules, guess || null);
   };
 
   // CSVを複数まとめて取り込む。ファイルごとに口座/カードを推定し、
@@ -121,18 +115,41 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     setCsvBusy(false);
   };
 
-  const runOcr = async (file) => {
+  const runOcr = async (files) => {
     setOcrBusy(true); setOcrError("");
+    setCsvNotes([]); setBalances([]);
+    let worker = null;
     try {
       const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker("jpn");
-      const { data } = await worker.recognize(file);
-      await worker.terminate();
-      setRawText(data.text || "");
+      worker = await createWorker("jpn");
+      const texts = [], allTxns = [];
+      for (let i = 0; i < files.length; i++) {
+        setOcrProgress(`${i + 1}/${files.length}`);
+        const { data } = await worker.recognize(files[i]);
+        const text = data.text || "";
+        texts.push(text);
+        allTxns.push(...parseBankText(text, importYm));
+      }
+      const combined = texts.join("\n\n");
+      const unique = dedupeTxns(allTxns);
+      const periodTxns = unique.filter((txn) => cycleYm(txn.date, config.cycleCutoffDay) === importYm);
+      const target = guessYuchoScreenshotAccount(combined, config.accounts);
+      const guess = target ? { action: "account", target } : null;
+      setRawText(combined);
+      if (periodTxns.length > 0) {
+        setRows(periodTxns.map((txn) => {
+          const auto = classifyRow(txn, guess);
+          return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx: 0 };
+        }));
+        setCsvNotes([{ name: `スクショ ${files.length}枚`, count: periodTxns.length, target, duplicateCount: allTxns.length - unique.length, outsideCount: unique.length - periodTxns.length }]);
+      } else {
+        setOcrError(unique.length > 0 ? "選択した月の取引がありませんでした。" : "取引を読み取れませんでした。下のテキストを確認して解析してください。");
+      }
     } catch {
       setOcrError("画像の読み取りに失敗しました。通信状況を確認するか、下の欄に直接テキストを貼り付けてください。");
     } finally {
-      setOcrBusy(false);
+      if (worker) { try { await worker.terminate(); } catch {} }
+      setOcrBusy(false); setOcrProgress("");
     }
   };
 
@@ -187,11 +204,16 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
 
   const parse = () => {
     // "N日"だけの見出し形式(年月の表記が無い)は、今表示中の月を起点に判定する
-    const txns = parseBankText(rawText, importYm);
+    const parsed = parseBankText(rawText, importYm);
+    const unique = dedupeTxns(parsed);
+    const txns = unique.filter((txn) => cycleYm(txn.date, config.cycleCutoffDay) === importYm);
+    const target = guessYuchoScreenshotAccount(rawText, config.accounts);
+    const guess = target ? { action: "account", target } : null;
     setRows(txns.map((txn) => {
-      const auto = classifyTxn(txn.desc, config.importRules);
-      return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
+      const auto = classifyRow(txn, guess);
+      return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx: 0 };
     }));
+    setCsvNotes([{ name: "スクショ", count: txns.length, target, duplicateCount: parsed.length - unique.length, outsideCount: unique.length - txns.length }]);
   };
 
   const setRow = (i, patch) => setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -205,6 +227,12 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     setCsvNotes((prev) => prev.map((n, i) => (i === fileIdx ? { ...n, target: account } : n)));
     setRows((prev) => prev.map((r) => {
       if (r.fileIdx !== fileIdx) return r;
+      // 自動判定済みの行は、取込元が口座だと確定した時点で再判定する。
+      // これによりカード引落は「取り込まない」、口座振替は選んだ口座へ揃う。
+      if (r.autoMatched) {
+        const auto = classifyRow(r.txn, account ? { action: "account", target: account } : null);
+        return { ...r, cls: auto || { action: "skip" } };
+      }
       // 口座の記録は宛先をこのファイルの口座に揃える
       if (r.cls.action === "account") return { ...r, cls: { ...r.cls, target: account } };
       // ルールに当たらず宙に浮いていた行(給与・送金など)も、この口座の出金/入金として取り込む。
@@ -265,7 +293,13 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const entries = (rows || []).map((r, i) => txnToEntry(r.txn, pairing.pairedRows[i] != null
     ? { ...r.cls, action: "account", negItem: INTERNAL_TRANSFER_ITEM, posItem: INTERNAL_TRANSFER_ITEM }
     : r.cls, config.cycleCutoffDay));
-  const dupFlags = entries.map((e) => !!(e && e.src && existingKeys.has(e.src)));
+  const batchKeys = new Set();
+  const dupFlags = entries.map((e) => {
+    if (!e || !e.src) return false;
+    const duplicate = existingKeys.has(e.src) || batchKeys.has(e.src);
+    batchKeys.add(e.src);
+    return duplicate;
+  });
   const dupCount = dupFlags.filter(Boolean).length;
   const newEntries = entries.filter((e, i) => e && !dupFlags[i]);
   const includedCount = newEntries.length;
@@ -325,14 +359,14 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
               </div>
             )}
             <div style={{ height: 12 }} />
-            <button style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()} disabled={ocrBusy}>
-              {ocrBusy ? "読込中…" : "スクショ"}
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
-              onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) runOcr(f); e.target.value = ""; }} />
-            {ocrError && <div style={{ fontSize: 12.5, color: RED, margin: "8px 2px 0" }}>{ocrError}</div>}
             <label style={styles.fieldLabel}>月</label>
             <input type="month" value={importYm} onChange={(e) => setImportYm(e.target.value)} style={styles.textInput} />
+            <button style={styles.backupBtn} onClick={() => fileRef.current && fileRef.current.click()} disabled={ocrBusy}>
+              {ocrBusy ? `読込中 ${ocrProgress}` : "スクショ"}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+              onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runOcr(f); e.target.value = ""; }} />
+            {ocrError && <div style={{ fontSize: 12.5, color: RED, margin: "8px 2px 0" }}>{ocrError}</div>}
             <label style={styles.fieldLabel}>テキスト</label>
             <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} style={{ ...styles.memoTextarea, minHeight: 160 }} />
             <button style={{ ...styles.saveBtn, opacity: rawText.trim() ? 1 : 0.4 }} disabled={!rawText.trim()} onClick={parse}>解析</button>
@@ -362,7 +396,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             {/* ファイルごとの口座。1ファイル=1口座なので、ここで選べば全行に反映される。 */}
             {csvNotes.filter((n) => !n.error).map((n, i) => (
               <div key={i} style={{ ...styles.detailCard, marginBottom: 8, padding: "10px 12px" }}>
-                <div style={{ fontSize: 11.5, color: MUTED, wordBreak: "break-all", marginBottom: 6 }}>{n.name}（{n.count}件）</div>
+                <div style={{ fontSize: 11.5, color: MUTED, wordBreak: "break-all", marginBottom: 6 }}>{n.name}（{n.count}件{n.duplicateCount ? `・重複${n.duplicateCount}件除外` : ""}{n.outsideCount ? `・期間外${n.outsideCount}件` : ""}）</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12, color: n.target ? MUTED : RED }}>{n.target ? "口座" : "口座未選択"}</span>
                   <select value={n.target || ""} onChange={(e) => setFileAccount(i, e.target.value)} style={{ ...styles.textInput, width: "auto", margin: 0, padding: "6px 8px", fontSize: 13 }}>
