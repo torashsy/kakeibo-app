@@ -699,8 +699,10 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
       if (k < lines.length && !IMPORT_NUM_RE.test(lines[k]) && !IMPORT_MD_RE.test(lines[k]) && !IMPORT_MONTH_RE.test(lines[k])) {
         desc = lines[k].trim(); k++;
       }
-      if (nums.length >= 1 && Number.isFinite(nums[0]) && nums[0] !== 0) {
-        out.push({ date, desc, amount: nums[0], ...(nums.length >= 2 && Number.isFinite(nums[1]) ? { balance: nums[1] } : {}) });
+      // この形式は「金額・残高」が並ぶ。数字が1つしか読めなかった行は、それが金額か残高か
+      // 判別できないので取り込まない(残高を入金として数える方が害が大きい)。
+      if (nums.length >= 2 && Number.isFinite(nums[0]) && Number.isFinite(nums[1]) && nums[0] !== 0) {
+        out.push({ date, desc, amount: nums[0], balance: nums[1] });
         prevDay = Number(mdMatch[2]);
         currentDate = date;
         i = k;

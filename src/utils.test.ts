@@ -1340,3 +1340,16 @@ describe("月度ごとの残高照合", () => {
     expect(verifyCycles(es).map((r) => r.ym)).toEqual(["2026-03", "2026-04", "2026-05"]);
   });
 });
+
+describe("JRE BANK: 数字が1つしか読めない行は取り込まない", () => {
+  it("金額か残高か判別できない行は捨てる(残高を入金にしない)", () => {
+    const text = ["2026年06月", "06/22", "20,399", "カ）ビユーカード"].join("\n");
+    expect(parseBankText(cleanOcrText(text))).toHaveLength(0);
+  });
+  it("金額と残高が揃っていれば取り込む", () => {
+    const text = ["2026年06月", "06/22", "19,760", "20,399", "カ）ビユーカード"].join("\n");
+    const t = parseBankText(cleanOcrText(text));
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ amount: 19760, balance: 20399 });
+  });
+});
