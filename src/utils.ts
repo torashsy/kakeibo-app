@@ -22,6 +22,7 @@ export interface Config {
   csvAccountMap?: Record<string, string>; // CSVの目印→口座。一度選べば次回から自動で振り分ける
   importLinks?: { id: string; name: string; url: string }[]; // 明細CSVを落とす画面へのリンク。取込画面から開く
   importRulesSeeded?: number;     // 既定ルールを追加した版。増やすと一度だけ追加が走る(利用者が消したルールは復活しない)
+  ownTransferKeywordsSeeded?: number; // 自分名義キーワードを追加した版
 }
 
 // スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
@@ -223,7 +224,8 @@ export function migrateEntry(e: any): Entry | null {
 
 
 // 入出金・振替の種類(残高を除く)。口座ごとに表示する種類を絞り込める。
-export const ALL_FLOW_TYPES: string[] = ["預入", "入金", "引出", "出金", "投資振替"];
+export const INTERNAL_TRANSFER_ITEM = "口座振替";
+export const ALL_FLOW_TYPES: string[] = ["預入", "入金", "引出", "出金", "投資振替", INTERNAL_TRANSFER_ITEM];
 
 export const DEFAULT_CONFIG: Config = {
   accounts: ["ゆうちょ", "NEOBANK", "JRE BANK"],
@@ -234,7 +236,7 @@ export const DEFAULT_CONFIG: Config = {
     "JRE BANK": ["入金", "出金", "投資振替"],        // 預入・引出は使わない
   },
   memoCategories: ["交際費"],
-  ownTransferKeywords: [],
+  ownTransferKeywords: ["ハヤシシュンヤ"],
   // スクショ取込の初期ルール例(自払=カード引き落とし、ことら=自分名義の口座間送金なので未計上)
   importRules: [
     // 給与・賞与は給与明細から手入力する(控除などの内訳を残すため)。
@@ -254,7 +256,11 @@ export const DEFAULT_CONFIG: Config = {
 };
 
 // その口座で表示する入出金・振替の種類を返す(未設定なら全種類)
-export const flowTypesFor = (account: string, config: Config) => (config && config.accountFlows && config.accountFlows[account]) || ALL_FLOW_TYPES;
+export const flowTypesFor = (account: string, config: Config) => {
+  const configured = config && config.accountFlows && config.accountFlows[account];
+  if (!configured) return ALL_FLOW_TYPES;
+  return configured.includes(INTERNAL_TRANSFER_ITEM) ? configured : [...configured, INTERNAL_TRANSFER_ITEM];
+};
 
 
 // 口座記録の種類。role: bal=残高記録 / in=収入に算入 / out=支出に算入 / transfer=符号そのまま収支に算入
@@ -265,10 +271,11 @@ export const ACCOUNT_TYPES = [
   { id: "入金", role: "in", hint: "送金などの受け取り。収入に入ります" },
   { id: "出金", role: "out", hint: "他所への送金・支払いなど。支出に入ります" },
   { id: "投資振替", role: "transfer", hint: "投資/ハイブリッド口座への振替。入れた分は支出、戻した分は収入" },
+  { id: INTERNAL_TRANSFER_ITEM, role: "neutral", hint: "自分の口座間の移動。収支には入りません" },
 ];
 
 // 旧称「送金」も後方互換で「out」として扱う(migrateEntry/migrateConfigで「出金」へ改称される)
-export const acctRole = (item: string): "bal" | "in" | "out" | "transfer" => (ACCOUNT_TYPES.find((t) => t.id === item)?.role as any) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" || item === "送金" ? "out" : item === "残高" ? "bal" : "out");
+export const acctRole = (item: string): "bal" | "in" | "out" | "transfer" | "neutral" => (ACCOUNT_TYPES.find((t) => t.id === item)?.role as any) || (item === "入金" || item === "受取" || item === "現金預入" || item === "送金受取" ? "in" : item === "出金" || item === "現金引出" || item === "送金" ? "out" : item === "残高" ? "bal" : "out");
 
 // 設定(config)内の口座フロー種別の旧称「受取」を「入金」、「送金」を「出金」に移行し、
 // memoCategories(計画タブと連携するメモのカテゴリ)が無ければ既定値を補う
@@ -291,6 +298,12 @@ export function migrateConfig(cfg: any): any {
     const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);
     const add = ["給与", "賞与"].filter((m) => !has(m)).map((m) => ({ id: uid(), match: m, action: "skip" as const }));
     out = { ...out, importRules: [...add, ...(out.importRules || [])], importRulesSeeded: 1 };
+  }
+  // 利用者名を一度だけ補う。削除後に復活しないよう版で管理する。
+  if (!(Number(out.ownTransferKeywordsSeeded) >= 1)) {
+    const own = out.ownTransferKeywords || [];
+    const has = own.some((k: string) => normalizeOwnName(k) === normalizeOwnName("ハヤシシュンヤ"));
+    out = { ...out, ownTransferKeywords: has ? own : [...own, "ハヤシシュンヤ"], ownTransferKeywordsSeeded: 1 };
   }
   // 旧「ことら→取り込まない」は他人との送金・受取まで落としてしまうので、口座の出金/入金へ直す。
   // 自分名義ぶんは ownTransferKeywords で除外する。
@@ -678,6 +691,14 @@ export function normalizeForMatch(s: string): string {
   return Array.from(stripped).map((ch) => DAKUTEN_MAP[ch] || ch).join("");
 }
 
+// 銀行CSVでは小書きカナが大きいカナで出ることがあるため、氏名照合時だけ同一視する。
+function normalizeOwnName(s: string): string {
+  return normalizeForMatch(s).replace(/[ァィゥェォッャュョヮ]/g, (ch) => ({
+    "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ",
+    "ッ": "ツ", "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ヮ": "ワ",
+  } as Record<string, string>)[ch] || ch);
+}
+
 // ── CSV取込 ────────────────────────────────────────────────
 // 銀行・カード会社の明細CSVを取り込む。OCRと違い金額・日付が正確で、
 // 多くの銀行CSVは残高列を持つため月末残高まで自動で取れる(入力が不要になる)。
@@ -871,8 +892,8 @@ export function decodeImportPayload(raw: string): string {
 
 // 摘要が自分名義(設定のキーワード)かどうか。表記ゆれ・半角カナはNFKCで吸収する。
 export const matchesOwnName = (desc: string, keywords: string[] | undefined): boolean => {
-  const nd = normalizeForMatch(desc);
-  return (keywords || []).some((k) => { const nk = normalizeForMatch(k); return !!nk && nd.includes(nk); });
+  const nd = normalizeOwnName(desc);
+  return (keywords || []).some((k) => { const nk = normalizeOwnName(k); return !!nk && nd.includes(nk); });
 };
 
 // 口座間振替の候補。group は「どの口座の明細か」(取り込むCSVのファイル単位)。

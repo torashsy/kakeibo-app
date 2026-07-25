@@ -172,7 +172,7 @@ export default function App() {
   // 残高だけは「その月・その口座で1件」が正しいので、追加ではなく既存を差し替える
   // (同じ期間のCSVを取り込み直しても残高が二重にならないように)。
   const addEntries = (list, removeIds) => setEntries((prev0) => {
-    // 取込で「口座間の振替」と判明した過去の記録は収支から外す
+    // 後から口座間振替と判明した過去の片側は、置き換え用の記録を追加する前に外す
     const prev = removeIds && removeIds.length ? prev0.filter((x) => !removeIds.includes(x.id)) : prev0;
     const bals = list.filter((e) => e.cat === "account" && acctRole(e.item) === "bal");
     const kept = bals.length === 0 ? prev
@@ -291,7 +291,7 @@ export default function App() {
         )}
       </header>
 
-      <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px 96px" } : {}) }}>
+      <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(112px + env(safe-area-inset-bottom))" } : {}) }}>
         {tab === "today" && <Summary summary={summary} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenClose={() => setSheet("close")} onImportClipboard={importFromClipboard} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} entries={entries} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} />}
@@ -346,5 +346,5 @@ function SubScreen({ title, onBack, children }) {
 }
 
 function TabBtn({ active, onClick, label, icon }) {
-  return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><Icon name={icon} size={22} strokeWidth={active ? 2.1 : 1.8} /><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
+  return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><Icon name={icon} size={25} strokeWidth={active ? 2.1 : 1.8} /><span style={{ fontSize: 12, marginTop: 4, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
 }
