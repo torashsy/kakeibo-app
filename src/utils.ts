@@ -19,6 +19,7 @@ export interface Config {
   importRules?: ImportRule[]; // スクショ取込で摘要から自動振り分けするルール(先勝ち)
   cycleCutoffDay?: number;    // 家計の月の締め日。0/未設定は暦通り。10なら「10日締め」=11日〜翌月10日を1周期(土日祝は翌営業日)
   ownTransferKeywords?: string[]; // 自分名義の口座間送金とみなす摘要のキーワード(例: 自分の氏名)。該当は収支に計上しない
+  csvAccountMap?: Record<string, string>; // CSVの目印→口座。一度選べば次回から自動で振り分ける
   importRulesSeeded?: number;     // 既定ルールを追加した版。増やすと一度だけ追加が走る(利用者が消したルールは復活しない)
 }
 
@@ -282,6 +283,7 @@ export function migrateConfig(cfg: any): any {
   if (!Array.isArray(out.memoCategories)) out = { ...out, memoCategories: ["交際費"] };
   if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
   if (!Array.isArray(out.ownTransferKeywords)) out = { ...out, ownTransferKeywords: [] };
+  if (!out.csvAccountMap || typeof out.csvAccountMap !== "object") out = { ...out, csvAccountMap: {} };
   // 給与・賞与の除外ルールを一度だけ追加する。版で管理するので、利用者が消したら復活しない。
   if (!(Number(out.importRulesSeeded) >= 1)) {
     const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);
@@ -757,6 +759,7 @@ export interface CsvImportResult {
   balance: { date: string; amount: number } | null;  // CSVに残高列があれば最新日の残高
   balanceCheck?: BalanceCheck | null;                // 残高の連なりによる検算(残高列が無ければnull)
   preamble: string;   // ヘッダー行より前の前書き(口座名などが書かれている。振り分け先の推定に使う)
+  signature?: string; // この明細の出所を表す目印(口座番号、無ければ列構成)。一度選んだ口座を覚えるための鍵
   error?: string;
 }
 
@@ -804,6 +807,10 @@ export function parseBankCsv(text: string): CsvImportResult {
   // 並び順の判定: 先頭の取引日が末尾より新しければ「新しい順」なので先頭が最新の残高。
   const descending = txns.length > 1 && txns[0].date > txns[txns.length - 1].date;
   const latestIdx = descending ? bals.findIndex((b) => b != null) : bals.length - 1 - [...bals].reverse().findIndex((b) => b != null);
+  // この明細の出所を表す目印。口座番号があればそれ(口座ごとに一意)、無ければ列構成(銀行ごとに一意)。
+  const acctNo = (preamble.match(/\d{4,}[-\d]{4,}/) || [])[0];
+  const signature = acctNo || headers.map((h) => headName(h)).filter(Boolean).join("|");
+
   const balance = bals.some((b) => b != null) && latestIdx >= 0 && bals[latestIdx] != null
     ? { date: txns[latestIdx].date, amount: bals[latestIdx] as number } : null;
 
@@ -825,8 +832,8 @@ export function parseBankCsv(text: string): CsvImportResult {
   }
   const balanceCheck: BalanceCheck | null = checked > 0 ? { checked, mismatched, firstMismatch } : null;
 
-  if (txns.length === 0) return { txns: [], balance, balanceCheck, preamble, error: "取引を1件も読み取れませんでした" };
-  return { txns, balance, balanceCheck, preamble };
+  if (txns.length === 0) return { txns: [], balance, balanceCheck, preamble, signature, error: "取引を1件も読み取れませんでした" };
+  return { txns, balance, balanceCheck, preamble, signature };
 }
 
 export interface TxnClassification { action: "card" | "account" | "skip"; target?: string; negItem?: string; posItem?: string; }
@@ -872,6 +879,15 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
 // 取込元の明細を一意に表す指紋。CSVの期間が重なっても同じ取引を二重登録しないために使う。
 // 摘要は表記ゆれ・OCRの揺れを吸収した正規化後の先頭部分だけを使う。
 export const txnKey = (txn: ParsedTxn): string => `${txn.date}|${Math.round(txn.amount)}|${normalizeForMatch(txn.desc).slice(0, 24)}`;
+
+// 指紋(src)から取込元の日付・金額・摘要を取り出す。過去に取り込んだ記録を
+// 振替の相手として突き合わせるために使う(entryは日付を持たないため指紋から復元する)。
+export function parseTxnKey(src: string | undefined): { date: string; amount: number; desc: string } | null {
+  if (!src) return null;
+  const m = String(src).match(/^(\d{4}-\d{2}-\d{2})\|(-?\d+)\|(.*)$/);
+  if (!m) return null;
+  return { date: m[1], amount: Number(m[2]), desc: m[3] };
+}
 
 // 分類結果をentry(id無し)に変換する。skip・未分類・対象未選択はnull。
 // cutoffDay(締め日)を渡すと、取引日をその周期の月バケツへ自動で振り分ける(例: 締め日10で7/5→6月度)。
