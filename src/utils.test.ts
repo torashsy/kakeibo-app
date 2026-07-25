@@ -841,3 +841,21 @@ describe("CSV取込: ゆうちょ形式(摘要が複数列・古い順・列名�
     expect(parseBankCsv(missing).balanceCheck!.mismatched).toBeGreaterThan(0);
   });
 });
+
+describe("給与・賞与は取り込まない(給与系は明細から手入力する)", () => {
+  it("既定ルールで給与・賞与はskipになる", () => {
+    expect(classifyTxn("給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules)).toMatchObject({ action: "skip" });
+    expect(classifyTxn("賞与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules)).toMatchObject({ action: "skip" });
+    expect(txnToEntry({ date: "2026-07-24", desc: "給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", amount: 385850 },
+      classifyTxn("給与 ﾆﾂﾎﾟﾝﾕｳｾｲﾌﾄ", DEFAULT_CONFIG.importRules), 10)).toBeNull();
+  });
+  it("既存の設定にも一度だけ追加され、消したら復活しない", () => {
+    const before = { accounts: ["A"], salaryItems: [], importRules: [{ id: "x", match: "ATM", action: "account", target: "A" }] };
+    const after = migrateConfig(before);
+    expect(after.importRules!.filter((r) => r.action === "skip").map((r) => r.match)).toEqual(["給与", "賞与"]);
+    expect(after.importRulesSeeded).toBe(1);
+    // 利用者が消したあとに読み込み直しても復activしない
+    const removed = { ...after, importRules: after.importRules!.filter((r) => r.match !== "給与") };
+    expect(migrateConfig(removed).importRules!.some((r) => r.match === "給与")).toBe(false);
+  });
+});
