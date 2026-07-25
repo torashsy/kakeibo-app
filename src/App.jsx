@@ -93,10 +93,22 @@ export default function App() {
   useEffect(() => {
     const readHash = () => {
       const h = window.location.hash || "";
-      const m = h.match(/[#&]import=([^&]*)/);
-      if (!m) return;
       let text = "";
-      try { text = decodeURIComponent(m[1].replace(/\+/g, " ")); } catch { return; }
+      // #import64= はCSVをそのままのバイト列(Base64)で受け取る。銀行CSVはShift_JISが多く、
+      // ショートカット側で文字列にすると化けるため、文字コードの判定はこちら側で行う。
+      const m64 = h.match(/[#&]import64=([^&]*)/);
+      const m = h.match(/[#&]import=([^&]*)/);
+      if (m64) {
+        try {
+          const b64 = decodeURIComponent(m64[1]).replace(/\s/g, "");
+          const bin = atob(b64);
+          const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+          text = new TextDecoder("utf-8").decode(bytes);
+          if (text.includes("\uFFFD")) { try { text = new TextDecoder("shift_jis").decode(bytes); } catch {} }
+        } catch { return; }
+      } else if (m) {
+        try { text = decodeURIComponent(m[1].replace(/\+/g, " ")); } catch { return; }
+      } else return;
       history.replaceState(null, "", window.location.pathname + window.location.search);
       if (text.trim()) { setImportText(text); setSheet("import"); }
     };
