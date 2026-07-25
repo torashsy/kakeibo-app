@@ -1261,3 +1261,32 @@ describe("同じ支払先を金額で分ける / 符号を残高から直す", (
     expect(fixed[0].amount).toBe(500);
   });
 });
+
+describe("JRE BANKのスクショ(日付・金額・残高が1行、摘要が次の行)", () => {
+  const text = [
+    "取引日 入出金(円) 残高(円)",
+    "2026年07月",
+    "07/06 -156,750 649",
+    "カ）ビューカード",
+    "07/04 137,000 157,399",
+    "ハヤシ シユンヤ",
+    "2026年06月",
+    "06/22 19,760 20,399",
+    "カ）ビユーカード",
+  ].join("\n");
+  const txns = parseBankText(cleanOcrText(text));
+  it("日付・金額・残高と、次の行の摘要を組にする", () => {
+    expect(txns).toHaveLength(3);
+    expect(txns[0]).toMatchObject({ date: "2026-07-06", amount: -156750, balance: 649 });
+    expect(txns[0].desc).toContain("ビューカード");
+    expect(txns[1]).toMatchObject({ date: "2026-07-04", amount: 137000, balance: 157399 });
+    expect(txns[2]).toMatchObject({ date: "2026-06-22", amount: 19760, balance: 20399 });
+  });
+  it("ビューカードはVIEWの引き落としとして振り分ける", () => {
+    expect(classifyTxn(txns[0].desc, DEFAULT_CONFIG.importRules, txns[0].amount))
+      .toMatchObject({ action: "card", target: "VIEW" });
+  });
+  it("ハヤシ シユンヤは自分名義として口座間振替の対象になる", () => {
+    expect(matchesOwnName(txns[1].desc, ["ハヤシ シユンヤ"])).toBe(true);
+  });
+});
