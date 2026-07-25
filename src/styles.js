@@ -116,6 +116,7 @@ export const styles = {
   mcName: { fontSize: 13.5, width: 92, color: INK, fontWeight: 600, flexShrink: 0, display: "flex", alignItems: "center", gap: 5 },
   mcPrev: { fontSize: 10, color: MUTED, fontWeight: 500, background: "var(--group-bg)", borderRadius: 5, padding: "1px 5px" },
   mcField: { padding: "8px 12px", border: `1px solid ${LINE}` },
+  mcAcct: { flexShrink: 0, maxWidth: 96, border: `1px solid ${LINE}`, borderRadius: 8, padding: "7px 6px", fontSize: 11.5, background: "var(--card-bg)", color: MUTED, fontFamily: "inherit" },
   mcSub: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 2px 2px", fontSize: 13 },
   mcFlow: { background: "var(--group-bg)", borderRadius: 12, padding: "12px 14px", marginTop: 18 },
   mcFlowHead: { fontSize: 12.5, fontWeight: 700, color: INK, marginBottom: 8 },

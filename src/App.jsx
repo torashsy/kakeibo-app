@@ -199,6 +199,19 @@ export default function App() {
         list = list.filter((x) => !(x.ym === targetYm && x.cat === "account" && x.account === b.account && acctRole(x.item) === "bal"));
         list.push({ id: uid(), ym: targetYm, cat: "account", item: "残高", account: b.account, amount: Math.round(v) });
       }
+      // 現金・投資・送金: カードと同じく、変えたときだけ1件の合計へ置き換える(既存明細を不用意に消さない)。
+      // 投資振替は符号で方向を表すため、「投資へ入れた」=負・「投資から戻した」=正 で保存する。
+      for (const f of (data.flows || [])) {
+        const v = evalAmount(f.amount); if (v == null) continue; // 空欄は現状維持
+        const rounded = Math.abs(Math.round(v));
+        if (rounded === (f.baseSum || 0)) continue; // 変更なし
+        const isInvest = f.key === "投資振替" || f.key === "投資戻し";
+        const item = isInvest ? "投資振替" : f.key;
+        // 投資は方向ごとに符号で持つので、同じ向きの記録だけを入れ替える。口座も一致するものだけ。
+        list = list.filter((x) => !(x.ym === targetYm && x.cat === "account" && x.item === item && x.account === f.account
+          && (!isInvest || (f.dir < 0 ? x.amount < 0 : x.amount > 0))));
+        if (rounded > 0) list.push({ id: uid(), ym: targetYm, cat: "account", item, account: f.account, amount: f.dir < 0 ? -rounded : rounded });
+      }
       save("entries", list);
       return list;
     });
