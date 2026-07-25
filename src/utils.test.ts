@@ -735,7 +735,8 @@ describe("CSV取込", () => {
     const r = parseBankCsv(csv);
     expect(r.error).toBeUndefined();
     expect(r.txns.length).toBe(3);
-    expect(r.txns[0]).toEqual({ date: "2026-06-24", desc: "給与 カ)カイシャ", amount: 320000 });
+    // 各行に残高も持たせる(月度ごとの期末残高を取り出すのに使う)
+    expect(r.txns[0]).toEqual({ date: "2026-06-24", desc: "給与 カ)カイシャ", amount: 320000, balance: 500000 });
     expect(r.txns[1].amount).toBe(-45000);
     // 残高は最新日のものを採用
     expect(r.balance).toEqual({ date: "2026-07-02", amount: 425000 });
