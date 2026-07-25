@@ -852,10 +852,11 @@ describe("給与・賞与は取り込まない(給与系は明細から手入力
   it("既存の設定にも一度だけ追加され、消したら復活しない", () => {
     const before = { accounts: ["A"], salaryItems: [], importRules: [{ id: "x", match: "ATM", action: "account", target: "A" }] };
     const after = migrateConfig(before);
-    expect(after.importRules!.filter((r) => r.action === "skip").map((r) => r.match)).toEqual(["給与", "賞与"]);
+    const rules = after.importRules as ImportRule[];
+    expect(rules.filter((r: ImportRule) => r.action === "skip").map((r: ImportRule) => r.match)).toEqual(["給与", "賞与"]);
     expect(after.importRulesSeeded).toBe(1);
-    // 利用者が消したあとに読み込み直しても復activしない
-    const removed = { ...after, importRules: after.importRules!.filter((r) => r.match !== "給与") };
-    expect(migrateConfig(removed).importRules!.some((r) => r.match === "給与")).toBe(false);
+    // 利用者が消したあとに読み込み直しても復活しない
+    const removed = { ...after, importRules: rules.filter((r: ImportRule) => r.match !== "給与") };
+    expect((migrateConfig(removed).importRules as ImportRule[]).some((r: ImportRule) => r.match === "給与")).toBe(false);
   });
 });
