@@ -870,6 +870,27 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined): TxnC
   return null;
 }
 
+// 取込元も考慮した最終分類。口座明細内のカード引落は、カード請求を手入力する運用では二重計上になるため除外する。
+// 口座ルールは取込元の口座へ付け替え、CSV・スクショで同じ挙動に揃える。
+export function classifyTxnForImport(desc: string, rules: ImportRule[] | undefined, source: TxnClassification | null): TxnClassification | null {
+  if (source?.action === "account" && normalizeForMatch(desc).startsWith(normalizeForMatch("自払"))) return { action: "skip" };
+  const byRule = classifyTxn(desc, rules);
+  if (!byRule) return source;
+  if (source?.action === "account" && byRule.action === "card") return { action: "skip" };
+  if (source?.action === "account" && byRule.action === "account") return { ...byRule, target: source.target };
+  return byRule;
+}
+
+// ゆうちょアプリのスクショに繰り返し出る語から口座を推定する。
+// 1語だけでは他行と誤認しやすいため、複数の手掛かりが揃った時だけ確定する。
+export function guessYuchoScreenshotAccount(text: string, accounts: string[] | undefined): string | null {
+  const account = (accounts || []).find((a) => normalizeForMatch(a).includes(normalizeForMatch("ゆうちょ")));
+  if (!account) return null;
+  const n = normalizeForMatch(text);
+  const hits = ["自払", "ことら", "送金支払", "受取利子"].filter((m) => n.includes(normalizeForMatch(m))).length;
+  return hits >= 2 ? account : null;
+}
+
 // 取込で受け取った文字列を実際のCSVへ復元する。ショートカット経由では
 // Base64(バイト列のまま)で渡ってくることがあり、銀行CSVはShift_JISが多いので
 // 文字コードの判定もここで行う。Base64でなければそのまま返す。
@@ -893,7 +914,13 @@ export function decodeImportPayload(raw: string): string {
 // 摘要が自分名義(設定のキーワード)かどうか。表記ゆれ・半角カナはNFKCで吸収する。
 export const matchesOwnName = (desc: string, keywords: string[] | undefined): boolean => {
   const nd = normalizeOwnName(desc);
-  return (keywords || []).some((k) => { const nk = normalizeOwnName(k); return !!nk && nd.includes(nk); });
+  return (keywords || []).some((k) => {
+    const nk = normalizeOwnName(k);
+    if (nk && nd.includes(nk)) return true;
+    // この家計簿で使う氏名について、ゆうちょOCRで確認した「八/ハ」「シュンヤ/シンヤ」の誤読だけを補う。
+    if (nk === normalizeOwnName("ハヤシシュンヤ")) return /[ハ八]ヤシ.*(?:シユンヤ|シンヤ)/.test(nd);
+    return false;
+  });
 };
 
 // 口座間振替の候補。group は「どの口座の明細か」(取り込むCSVのファイル単位)。
@@ -922,6 +949,17 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
 // 取込元の明細を一意に表す指紋。CSVの期間が重なっても同じ取引を二重登録しないために使う。
 // 摘要は表記ゆれ・OCRの揺れを吸収した正規化後の先頭部分だけを使う。
 export const txnKey = (txn: ParsedTxn): string => `${txn.date}|${Math.round(txn.amount)}|${normalizeForMatch(txn.desc).slice(0, 24)}`;
+
+// 重なったスクショや期間の重なるCSVを同時選択した時、同じ明細を1件にまとめる。
+export function dedupeTxns(txns: ParsedTxn[]): ParsedTxn[] {
+  const seen = new Set<string>();
+  return (txns || []).filter((txn) => {
+    const key = txnKey(txn);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 // 指紋(src)から取込元の日付・金額・摘要を取り出す。過去に取り込んだ記録を
 // 振替の相手として突き合わせるために使う(entryは日付を持たないため指紋から復元する)。

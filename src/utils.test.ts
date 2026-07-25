@@ -7,8 +7,8 @@ import {
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
-  parseBankText, classifyTxn, txnToEntry, normalizeForMatch, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, matchesOwnName, pairOwnTransfers, decodeImportPayload,
+  parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, evalAmount,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -796,6 +796,14 @@ describe("取込の重複防止", () => {
     const e = txnToEntry({ date: "2026-07-10", desc: "ATM", amount: -17000 }, cls, 10)!;
     expect(e.src).toBe(txnKey({ date: "2026-07-10", desc: "ATM", amount: -17000 }));
   });
+  it("重なったスクショ内の同じ日付・金額・摘要を1件にまとめる", () => {
+    const txns = [
+      { date: "2026-04-24", desc: "送金 ニッポン シュウセイフドウ", amount: 2102 },
+      { date: "2026-04-24", desc: "送金　ニッポン　シュウセイフドウ", amount: 2102 },
+      { date: "2026-04-22", desc: "送金 富田 翔馬", amount: 3700 },
+    ];
+    expect(dedupeTxns(txns)).toHaveLength(2);
+  });
   it("同じCSVを2回取り込んでも、既存のsrcと一致する分は除外できる", () => {
     const txns = [
       { date: "2026-07-10", desc: "ＡＴＭ　セブン銀行", amount: -17000 },
@@ -811,6 +819,24 @@ describe("取込の重複防止", () => {
       .map((t) => txnToEntry(t, cls, 10)!).filter((e) => !existing.has(e.src));
     expect(withNew).toHaveLength(1);
     expect(withNew[0].amount).toBe(-5000);
+  });
+});
+
+describe("口座スクショの自動判別と振り分け", () => {
+  it("ゆうちょ固有の手掛かりが複数あればゆうちょを選ぶ", () => {
+    expect(guessYuchoScreenshotAccount("明細\n自払 JCBカード\nことら ハヤシ シュンヤ\n受取利子", ["ゆうちょ", "NEOBANK"])).toBe("ゆうちょ");
+    expect(guessYuchoScreenshotAccount("明細\nことら", ["ゆうちょ", "NEOBANK"])).toBeNull();
+  });
+  it("口座明細のカード引落は二重計上を避けて除外する", () => {
+    expect(classifyTxnForImport("自払 JCBカード", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" })).toEqual({ action: "skip" });
+    expect(classifyTxnForImport("自 払 三井 住友 カー ド", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" })).toEqual({ action: "skip" });
+  });
+  it("口座ルールの振り分け先はスクショ元の口座へ揃える", () => {
+    expect(classifyTxnForImport("ことら ハヤシ シュンヤ", DEFAULT_CONFIG.importRules, { action: "account", target: "ゆうちょ" }))
+      .toMatchObject({ action: "account", target: "ゆうちょ" });
+  });
+  it("実画像で誤読されたハヤシ名義も自分の口座として判定する", () => {
+    expect(matchesOwnName("どどちら 八 ヤシ ーー シタ ユン シンヤ", ["ハヤシシュンヤ"])).toBe(true);
   });
 });
 
