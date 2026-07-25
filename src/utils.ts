@@ -264,6 +264,7 @@ export const DEFAULT_CONFIG: Config = {
     { id: uid(), match: "ミツイスミトモ", action: "card", target: "smcc", amount: 294 },
     { id: uid(), match: "三井住友", action: "card", target: "SMCC Gold" },
     { id: uid(), match: "ミツイスミトモ", action: "card", target: "SMCC Gold" },
+    { id: uid(), match: "ビューカード", action: "card", target: "VIEW" },
     { id: uid(), match: "ミツビシ", action: "card", target: "MDC" },
     { id: uid(), match: "JCBカード", action: "card", target: "JAL navi" },
     { id: uid(), match: "セゾン", action: "card", target: "SAISON" },
@@ -641,6 +642,9 @@ export interface ParsedTxn { date: string; desc: string; amount: number; balance
 const IMPORT_DATE_RE = /^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/;
 const IMPORT_MONTH_RE = /^(?:[^\d]*)?(\d{4})\D+(\d{1,2})\s*月(?:\D.*)?$/;
 const IMPORT_DAY_RE = /^(\d{1,2})\s*日$/;
+// JRE BANKの明細: 「07/06  -156,750  649」のように日付・金額・残高が1行に並び、
+// 摘要は次の行に来る。月見出し(2026年07月)から年を補う。
+const IMPORT_ROW_RE = /^(\d{1,2})\s*\/\s*(\d{1,2})\s+(-?[\d,]+)\s+(-?[\d,]+)\s*$/;
 // 符号(-/−/ー/_、または明示的な+) + [円マーク相当(¥/\/Y)+数字 または 3桁区切りの数字(+末尾の単位らしき1〜2文字、何でもよい)]
 const MONEY_TOKEN_RE = /(?:([-−ー_])|\+)?\s*(?:[¥\\Y]\s*(\d(?:[\d,.\s]*\d)?)|(\d{1,3}(?:[,.]\d{3})+)\s*[^\d\s]{0,2})/;
 const parseMoneyToken = (m: RegExpMatchArray): number => {
@@ -672,6 +676,22 @@ export function parseBankText(text: string, contextYm?: string): ParsedTxn[] {
       curYm = `${monthMatch[1]}-${monthMatch[2].padStart(2, "0")}`;
       currentDate = null;
       prevDay = null;
+      i++;
+      continue;
+    }
+    // 1行に日付・金額・残高が揃う形式(摘要は次の行)
+    const rowMatch = line.match(IMPORT_ROW_RE);
+    if (rowMatch && curYm) {
+      const year = curYm.slice(0, 4);
+      const date = `${year}-${rowMatch[1].padStart(2, "0")}-${rowMatch[2].padStart(2, "0")}`;
+      const amount = Number(rowMatch[3].replace(/,/g, ""));
+      const balance = Number(rowMatch[4].replace(/,/g, ""));
+      const desc = (lines[i + 1] || "").trim();
+      if (Number.isFinite(amount) && amount !== 0) {
+        out.push({ date, desc, amount, ...(Number.isFinite(balance) ? { balance } : {}) });
+        i += desc && !IMPORT_ROW_RE.test(desc) && !IMPORT_MONTH_RE.test(desc) ? 2 : 1;
+        continue;
+      }
       i++;
       continue;
     }
