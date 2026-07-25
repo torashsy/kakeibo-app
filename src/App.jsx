@@ -99,13 +99,17 @@ export default function App() {
       const m64 = h.match(/[#&]import64=([^&]*)/);
       const m = h.match(/[#&]import=([^&]*)/);
       if (m64) {
+        const raw = (() => { try { return decodeURIComponent(m64[1]); } catch { return m64[1]; } })();
         try {
-          const b64 = decodeURIComponent(m64[1]).replace(/\s/g, "");
-          const bin = atob(b64);
+          const bin = atob(raw.replace(/\s/g, ""));
           const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
           text = new TextDecoder("utf-8").decode(bytes);
           if (text.includes("\uFFFD")) { try { text = new TextDecoder("shift_jis").decode(bytes); } catch {} }
-        } catch { return; }
+        } catch {
+          // Base64として読めない場合(ショートカットでBase64エンコードを挟み忘れた等)は、
+          // そのままの文字列として扱う。黙って何も起きないより、取込画面で結果を見せる。
+          text = raw;
+        }
       } else if (m) {
         try { text = decodeURIComponent(m[1].replace(/\+/g, " ")); } catch { return; }
       } else return;
