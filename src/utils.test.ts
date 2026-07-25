@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, decodeImportPayload,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1212,5 +1212,23 @@ describe("OCRの字間の空白があっても自払を見分ける", () => {
   it("支払先の名前も空白を落として取り出す", () => {
     expect(payeeFromDebit("自 払 セソ * ン")).toBe("セソン");
     expect(payeeFromDebit("自 払 JCB_ カート *^")).toBe("JCBカート");   // OCRの誤読はそのまま残す(後から直せる)
+  });
+});
+
+describe("OCRの読み取り結果を整える", () => {
+  it("日本語の字間の空白を詰める", () => {
+    expect(cleanOcrText("自 払 セソ ン")).toBe("自払セソン");
+    expect(cleanOcrText("こと ら ハヤ シ シュ ン ヤ")).toBe("ことらハヤシシュンヤ");
+  });
+  it("飾り記号を落とす", () => {
+    // 英数字と日本語の間の空白は語の区切りとして残す
+    expect(cleanOcrText("自 払 JCB_ カート *^")).toBe("自払 JCB カート");
+  });
+  it("数字や日付は壊さない", () => {
+    expect(cleanOcrText("2026/04/10 -2,774")).toBe("2026/04/10 -2,774");
+    expect(cleanOcrText("50000")).toBe("50000");
+  });
+  it("行の構造は保つ", () => {
+    expect(cleanOcrText("自 払 セソ ン\n-68,000")).toBe("自払セソン\n-68,000");
   });
 });

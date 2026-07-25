@@ -1028,6 +1028,26 @@ export const cardMonthTotal = (entries: Entry[], card: string, ym: string): numb
   (entries || []).reduce((a, e) => a + (e.cat === "card" && e.item === card && e.ym === ym ? Math.abs(e.amount) : 0), 0);
 
 // 口座からの引き落としらしい摘要(自払=自動払込、口座振替など)。ほとんどがカードの請求。
+// OCRの読み取り結果を整える。日本語の文字の間に入る余計な空白を詰め、
+// 半角カナや記号を揃える(「自 払 セソ * ン」→「自払 セソン」)。
+// 判定だけでなく画面の表示も読みやすくなる。
+const JP_CHAR = "\\u3040-\\u30ff\\u3400-\\u9fff\\uff66-\\uff9f\\u30fc";
+export function cleanOcrText(text: string): string {
+  return String(text || "")
+    .normalize("NFKC")
+    .split(/\r?\n/)
+    .map((line) => {
+      let t = line;
+      // 日本語の文字どうしに挟まれた空白は繰り返し詰める(1文字ずつ離れて読まれることがある)
+      const re = new RegExp(`([${JP_CHAR}])[ \t]+(?=[${JP_CHAR}])`, "g");
+      let prev = "";
+      while (prev !== t) { prev = t; t = t.replace(re, "$1"); }
+      // OCRが拾いがちな飾り記号を落とす(金額や日付の記号は消さない)
+      return t.replace(/[*＊^｀`_]+/g, "").replace(/[ \t]{2,}/g, " ").trimEnd();
+    })
+    .join("\n");
+}
+
 export const DEBIT_HINT_RE = /自払|自動払込|口座振替|カード|ｶｰﾄﾞ/;
 // OCRは文字の間に空白を入れることがある(「自 払 セソ * ン」)。空白を落としてから判定する。
 export const isDebitDesc = (desc: string): boolean =>

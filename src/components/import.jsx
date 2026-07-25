@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, isDebitDesc, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -138,7 +138,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       for (let i = 0; i < files.length; i++) {
         setOcrProgress(`${i + 1}/${files.length}`);
         const { data } = await worker.recognize(files[i]);
-        const text = data.text || "";
+        // OCRは1文字ずつ離して読むことがあるので、解析の前に整える
+        const text = cleanOcrText(data.text || "");
         texts.push(text);
         allTxns.push(...parseBankText(text, ym));
       }
