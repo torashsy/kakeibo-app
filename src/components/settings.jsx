@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -168,7 +168,7 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
   );
 }
 
-export function Settings({ config, onSave, onConvertTransfers, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
+export function Settings({ config, onSave, onConvertTransfers, onToggleClosedMonth, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
   const [c, setC] = useState(config);
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
@@ -241,6 +241,8 @@ export function Settings({ config, onSave, onConvertTransfers, entries, cards, d
       ))}
       {/* 口座間の振替を後から探す。振替の判定は取込時にしか走らないので、
           機能を入れる前に取り込んだ記録や手入力の記録は入金/出金のまま残る。 */}
+      <CycleVerifier entries={entries} config={c} closedMonths={closedMonths} onClose={onToggleClosedMonth} />
+
       <TransferFinder entries={entries} ownKeywords={c.ownTransferKeywords} onConvert={onConvertTransfers} />
 
       <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
@@ -338,6 +340,51 @@ function TransferFinder({ entries, ownKeywords, onConvert }) {
               {found.length}組を口座振替にする
             </button>
           </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// 月度ごとの残高照合。「期首残高 + その月度の増減 = 期末残高」が合っていれば
+// 取りこぼしが無いと言えるので、その月度を確定(締め)にできる。
+function CycleVerifier({ entries, config, closedMonths, onClose }) {
+  const rows = React.useMemo(() => verifyCycles(entries || []), [entries]);
+  const closed = new Set(closedMonths || []);
+  const fixable = rows.filter((r) => r.ok && !closed.has(r.ym));
+  if (!onClose || rows.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={styles.detailHead}><span>月度の残高照合</span></div>
+      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>
+        期首残高（前の月度末）に その月度の増減 を足した額が、期末残高と合っているかを見ます。合っていれば取りこぼしはありません。
+      </div>
+      <div style={styles.detailCard}>
+        {rows.map((r) => (
+          <div key={r.ym} style={{ ...styles.settingRow, alignItems: "flex-start" }}>
+            <span style={{ overflow: "hidden" }}>
+              <span style={{ display: "block", fontSize: 13 }}>
+                {periodLabel(r.ym, config.cycleCutoffDay)}
+                {closed.has(r.ym) && <span style={{ fontSize: 10.5, color: ACCENT, marginLeft: 6 }}>確定済み</span>}
+              </span>
+              <span style={{ display: "block", fontSize: 11, color: r.diff === 0 ? MUTED : RED }}>
+                {r.closing == null || r.opening == null
+                  ? "残高の記録が足りず照合できません"
+                  : r.ok
+                    ? `✓ ${yen(r.opening)} ＋ 増減${yen(r.net)} ＝ ${yen(r.closing)}`
+                    : `⚠ ${yen(Math.abs(r.diff))} 合いません（計算 ${yen(r.expected)} / 実際 ${yen(r.closing)}）`}
+              </span>
+            </span>
+            {r.ok && !closed.has(r.ym) && (
+              <button style={styles.addBtn} onClick={() => onClose(r.ym)}>確定</button>
+            )}
+          </div>
+        ))}
+        {fixable.length > 0 && (
+          <button style={{ ...styles.saveBtn, marginTop: 10 }} onClick={() => fixable.forEach((r) => onClose(r.ym))}>
+            一致した{fixable.length}ヶ月をまとめて確定
+          </button>
         )}
       </div>
     </div>
