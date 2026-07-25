@@ -1353,3 +1353,39 @@ describe("JRE BANK: 数字が1つしか読めない行は取り込まない", ()
     expect(t[0]).toMatchObject({ amount: 19760, balance: 20399 });
   });
 });
+
+describe("JRE BANK: 実際のOCR出力から読み取る", () => {
+  // 端末で実際に読み取られたテキスト(桁区切りがピリオドになる、小書きカナが大きく出る)
+  const text = [
+    "17:07 5! 4G 札 9",
+    "く入出金明細 XX",
+    "取引日入出金 ( 円 ) 残高 (円 )",
+    "2026 年 07 月",
+    "",
+    "07/06 -156.,750 649",
+    "カ ) ヒ ユーカート >",
+    "07/04 137.000 157.399",
+    "ハヤシシュユンヤ >",
+    "2026 年 06 月",
+    "",
+    "06/22 19,760 20.399",
+    "カ ) ビュユーカード . >",
+    "06/04 -143,560 639",
+    "カ ) ヒ ユーカート >",
+  ].join("\n");
+  const txns = parseBankText(cleanOcrText(text));
+  it("桁区切りがピリオドでも金額として読む", () => {
+    expect(txns.map((t) => t.amount)).toEqual([-156750, 137000, 19760, -143560]);
+  });
+  it("日付と残高も正しく読む", () => {
+    expect(txns.map((t) => t.date)).toEqual(["2026-07-06", "2026-07-04", "2026-06-22", "2026-06-04"]);
+    expect(txns.map((t) => t.balance)).toEqual([649, 157399, 20399, 639]);
+  });
+  it("小書きカナが大きく読まれてもビューカードとして振り分ける", () => {
+    expect(classifyTxn(txns[0].desc, DEFAULT_CONFIG.importRules, txns[0].amount))
+      .toMatchObject({ action: "card", target: "VIEW" });
+  });
+  it("ハヤシ シユンヤは自分名義として扱う", () => {
+    expect(matchesOwnName(txns[1].desc, ["ハヤシ シユンヤ"])).toBe(true);
+  });
+});
