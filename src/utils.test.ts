@@ -1445,3 +1445,15 @@ describe("大文字小文字を区別せずルールに当てる", () => {
     expect(classifyTxn("自払　三井住友カード", DEFAULT_CONFIG.importRules, -97724)).toMatchObject({ target: "SMCC Gold" });
   });
 });
+
+describe("カードのルールは出金にだけ当てる", () => {
+  const src = { action: "account" as const, target: "ゆうちょ" };
+  it("出金ならカード請求として扱う", () => {
+    expect(classifyTxnForImport("自払　ＰＡＹＰＡＹカード", DEFAULT_CONFIG.importRules, src, -61533))
+      .toMatchObject({ action: "card", target: "PayPay" });
+  });
+  it("入金はカードにしない(返金・チャージの戻しなので口座の入金)", () => {
+    expect(classifyTxnForImport("ＰＡＹＰＡＹ", DEFAULT_CONFIG.importRules, src, 5000))
+      .toMatchObject({ action: "account", target: "ゆうちょ" });
+  });
+});
