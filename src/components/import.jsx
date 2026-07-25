@@ -265,6 +265,19 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             </button>
             <input ref={csvRef} type="file" accept=".csv,.txt,text/csv,text/plain" multiple style={{ display: "none" }}
               onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runCsv(f); e.target.value = ""; }} />
+            {(config.importLinks || []).length > 0 && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid var(--line)` }}>
+                <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>明細を取りに行く</div>
+                <div style={styles.optionRow}>
+                  {(config.importLinks || []).map((l) => (
+                    <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" style={{ ...styles.optionChip, textDecoration: "none", display: "inline-block" }}>{l.name} ›</a>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
+                  開いてCSVをダウンロード→「表示」→共有→ショートカット、または保存して上の「CSVを選ぶ」から。
+                </div>
+              </div>
+            )}
             <button style={{ ...styles.backupBtn, marginTop: 8 }} onClick={runClipboard}>クリップボードから取り込む</button>
             <div style={{ fontSize: 11.5, color: MUTED, margin: "6px 2px 0", lineHeight: 1.6 }}>
               CSVの中身をコピーしてからこれを押せば、ファイル保存なしで取り込めます。

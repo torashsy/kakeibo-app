@@ -20,6 +20,7 @@ export interface Config {
   cycleCutoffDay?: number;    // 家計の月の締め日。0/未設定は暦通り。10なら「10日締め」=11日〜翌月10日を1周期(土日祝は翌営業日)
   ownTransferKeywords?: string[]; // 自分名義の口座間送金とみなす摘要のキーワード(例: 自分の氏名)。該当は収支に計上しない
   csvAccountMap?: Record<string, string>; // CSVの目印→口座。一度選べば次回から自動で振り分ける
+  importLinks?: { id: string; name: string; url: string }[]; // 明細CSVを落とす画面へのリンク。取込画面から開く
   importRulesSeeded?: number;     // 既定ルールを追加した版。増やすと一度だけ追加が走る(利用者が消したルールは復活しない)
 }
 
@@ -284,6 +285,7 @@ export function migrateConfig(cfg: any): any {
   if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
   if (!Array.isArray(out.ownTransferKeywords)) out = { ...out, ownTransferKeywords: [] };
   if (!out.csvAccountMap || typeof out.csvAccountMap !== "object") out = { ...out, csvAccountMap: {} };
+  if (!Array.isArray(out.importLinks)) out = { ...out, importLinks: [] };
   // 給与・賞与の除外ルールを一度だけ追加する。版で管理するので、利用者が消したら復活しない。
   if (!(Number(out.importRulesSeeded) >= 1)) {
     const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);

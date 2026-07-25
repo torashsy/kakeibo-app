@@ -252,6 +252,36 @@ export function Settings({ config, onSave, entries, cards, debt, memos, subs, pl
           <div style={styles.detailCard}>{(c[g.key] || []).map((name, i) => <div key={i} style={styles.settingRow}><span>{name}</span><button style={styles.removeBtn} onClick={() => removeItem(g.key, i)}>削除</button></div>)}</div>
         </div>
       ))}
+      {/* 明細CSVを落とす画面へのリンク。セッション依存で直接飛べない銀行もあるため、
+          実際に使えるURLを利用者にコピーして登録してもらう。 */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={styles.detailHead}>
+          <span>明細を取りに行くリンク</span>
+          <button style={styles.addBtn} onClick={() => {
+            const name = (prompt("表示名（例：ゆうちょ）") || "").trim(); if (!name) return;
+            const url = (prompt("URL（Safariでその画面を開いてURLをコピーして貼り付け）") || "").trim();
+            if (!/^https?:\/\//.test(url)) { if (url) alert("http(s) で始まるURLを入れてください"); return; }
+            const next = { ...c, importLinks: [...(c.importLinks || []), { id: uid(), name, url }] };
+            setC(next); onSave(next);
+          }}>＋ 追加</button>
+        </div>
+        <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>
+          取込画面から1タップで開けます。銀行によっては明細画面へ直接飛べないので、その場合はログイン画面のURLを登録してください。
+        </div>
+        <div style={styles.detailCard}>
+          {(c.importLinks || []).length === 0 && <div style={{ color: MUTED, fontSize: 12.5, padding: "6px 2px" }}>まだありません</div>}
+          {(c.importLinks || []).map((l, i) => (
+            <div key={l.id} style={styles.settingRow}>
+              <span style={{ overflow: "hidden" }}>
+                <span style={{ display: "block" }}>{l.name}</span>
+                <span style={{ display: "block", fontSize: 11, color: MUTED, wordBreak: "break-all" }}>{l.url}</span>
+              </span>
+              <button style={styles.removeBtn} onClick={() => { const next = { ...c, importLinks: (c.importLinks || []).filter((_, j) => j !== i) }; setC(next); onSave(next); }}>削除</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
       <SyncSection />
 
