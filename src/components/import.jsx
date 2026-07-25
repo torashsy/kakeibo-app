@@ -56,6 +56,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   const [ocrMode, setOcrMode] = useState(false);
   const [openingBalance, setOpeningBalance] = useState("");
   const [openingYm, setOpeningYm] = useState("");   // 開始残高がどの月度末のものか
+  // スクショは銀行ごとに明細の並びが違うため、読み取る前にどの口座かを選んでもらう
+  const [pendingShots, setPendingShots] = useState(null);
   const ocrStartDate = cycleStartDate(ym, config.cycleCutoffDay);
   const initialPickerOpened = useRef(false);
 
@@ -130,7 +132,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     setCsvBusy(false);
   };
 
-  const runOcr = async (files) => {
+  const runOcr = async (files, account) => {
     setOcrBusy(true); setOcrError("");
     setCsvNotes([]); setBalances([]);
     let worker = null;
@@ -151,7 +153,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       // 表示中の月度で切り捨てない(以前は開始日より前を捨てていて、前月分が取り込めなかった)。
       const periodTxns = dedupeTxns(allTxns);
       const unique = periodTxns;
-      const target = guessYuchoScreenshotAccount(combined, config.accounts);
+      // 利用者が選んだ口座を使う(選ばれていなければ従来どおり中身から推測)
+      const target = account || guessYuchoScreenshotAccount(combined, config.accounts);
       const guess = target ? { action: "account", target } : null;
       if (periodTxns.length > 0) {
         setOcrMode(true);
@@ -379,7 +382,21 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
       <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>取込</div>
-        {!rows && (
+        {!rows && pendingShots && (
+          <>
+            <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.6 }}>
+              スクショ{pendingShots.length}枚。どの口座の明細ですか？（銀行ごとに明細の並びが違うため、先に選んでもらいます）
+            </div>
+            <div style={styles.optionRow}>
+              {(config.accounts || []).map((a) => (
+                <button key={a} style={styles.optionChip}
+                  onClick={() => { const f = pendingShots; setPendingShots(null); runOcr(f, a); }}>{a}</button>
+              ))}
+            </div>
+            <button style={styles.cancelBtn} onClick={() => setPendingShots(null)}>やめる</button>
+          </>
+        )}
+        {!rows && !pendingShots && (
           <>
             <button data-testid="csv-upload" style={{ ...styles.saveBtn, marginTop: 0 }} onClick={() => csvRef.current && csvRef.current.click()} disabled={csvBusy}>
               {csvBusy ? "読込中…" : "CSVを選ぶ"}
@@ -400,7 +417,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
               {ocrBusy ? `読込中 ${ocrProgress}` : "スクショ"}
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-              onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) runOcr(f); e.target.value = ""; }} />
+              onChange={(e) => { const f = Array.from(e.target.files || []); if (f.length) setPendingShots(f); e.target.value = ""; }} />
             {ocrError && <div style={{ fontSize: 12.5, color: RED, margin: "8px 2px 0" }}>{ocrError}</div>}
             <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
           </>
