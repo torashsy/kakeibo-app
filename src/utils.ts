@@ -34,6 +34,7 @@ export interface ImportRule {
   id: string; match: string; action: "card" | "account" | "salary" | "skip"; target?: string;
   negItem?: string; posItem?: string;
   amount?: number;   // 指定すると、その額(絶対値)のときだけ当たる。同じ支払先を額で分けるのに使う
+  exact?: boolean;   // 摘要がこの語だけのときに当たる(「カード」= ゆうちょのキャッシュカード取引 等)
 }
 
 export interface Card {
@@ -267,6 +268,9 @@ export const DEFAULT_CONFIG: Config = {
     // 既に入力済みなら取り込まず、金額が合っているかの照合だけ行う(取込側で判定)。
     { id: uid(), match: "給与", action: "salary", target: "給与" },
     { id: uid(), match: "賞与", action: "salary", target: "賞与" },
+    // ゆうちょの「カード」はキャッシュカードでのATM入出金(クレジットカードの請求ではない)。
+    // 摘要がこの語だけのときに当たるので、「自払 三井住友カード」には当たらない。
+    { id: uid(), match: "カード", action: "account", target: "", negItem: "引出", posItem: "預入", exact: true },
     // 同じ支払先でもカードが違うことがある。額で見分ける方を先に置く(先に当たった方が使われる)
     { id: uid(), match: "三井住友", action: "card", target: "smcc", amount: 294 },
     { id: uid(), match: "ミツイスミトモ", action: "card", target: "smcc", amount: 294 },
@@ -341,6 +345,15 @@ export function migrateConfig(cfg: any): any {
       out = { ...out, importRules: (cur).map((r) => (r && r.action === "skip" && (r.match === "給与" || r.match === "賞与") ? { ...r, action: "salary", target: r.match } : r)) };
     }
     out = { ...out, importRulesSeeded: 3, importRules: [...add, ...((out.importRules || []) as any[])] };
+  }
+  // 版4で足したのは「カード」(ゆうちょのキャッシュカード取引)だけ。
+  // ここで既定ルール全体を入れ直すと、利用者が消したルールまで復活してしまう。
+  if (Number(out.importRulesSeeded) < 4) {
+    const cur = (out.importRules || []) as any[];
+    const add = (DEFAULT_CONFIG.importRules || [])
+      .filter((r) => r.exact && r.match === "カード" && !cur.some((x) => x && x.match === r.match && !!x.exact))
+      .map((r) => ({ ...r, id: uid() }));
+    out = { ...out, importRulesSeeded: 4, importRules: [...add, ...cur] };
   }
   // 利用者名を一度だけ補う。削除後に復活しないよう版で管理する。
   if (!(Number(out.ownTransferKeywordsSeeded) >= 1)) {
@@ -1049,10 +1062,16 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined, amoun
   const usable = (rules || []).filter((r) =>
     r.match && !(r.amount != null && (amount == null || Math.abs(Math.round(amount)) !== Math.abs(Math.round(r.amount)))));
   const hit = (r: ImportRule) => ({ action: r.action, target: r.target, negItem: r.negItem, posItem: r.posItem });
+  // exactのルールは「摘要がその語だけ」のときに当たる。
+  // ゆうちょの「カード」はキャッシュカードでのATM取引で、「自払 三井住友カード」のような
+  // カード請求とは別物。含む判定にすると後者まで巻き込むため、語全体で照合する。
+  const matched = (r: ImportRule, kw: string) => (r.exact ? nd === kw : nd.includes(kw));
+  const matchedLoose = (r: ImportRule, kw: string) =>
+    (r.exact ? editDistanceAtMost(nd, kw, fuzzyTolerance(kw.length)) : fuzzyIncludes(nd, kw));
   // まず完全一致(正規化後)。当たるものがあればそれを使う。
-  for (const r of usable) if (nd.includes(normalizeForMatch(r.match))) return hit(r);
+  for (const r of usable) if (matched(r, normalizeForMatch(r.match))) return hit(r);
   // 外れたときだけ、OCRの読み違いを見越して少しの違いを許す
-  for (const r of usable) if (fuzzyIncludes(nd, normalizeForMatch(r.match))) return hit(r);
+  for (const r of usable) if (matchedLoose(r, normalizeForMatch(r.match))) return hit(r);
   return null;
 }
 

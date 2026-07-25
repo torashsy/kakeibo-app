@@ -201,13 +201,24 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     if (!String(text || "").trim()) { setOcrError("中身が空でした。"); return false; }
     const res = parseBankCsv(text);
     if (res.txns.length > 0) {
-      const guess = guessCsvTarget("", res.preamble, cards, config.accounts, !!res.balance);
+      // 一度選んだ口座を覚えているCSVは、それを使う(2回目からは選び直し不要)
+      const remembered = res.signature && (config.csvAccountMap || {})[res.signature];
+      const guess = (remembered ? { action: "account", target: remembered } : null)
+        || guessCsvTarget("", res.preamble, cards, config.accounts, !!res.balance);
+      // fileIdxが無いと、あとから口座を選んでも「このファイルの行」を絞り込めず
+      // 1行も反映されない(ショートカット取込で口座を選んでも何も起きなかった原因)。
       setRows(res.txns.map((txn) => {
         const auto = classifyRow(txn, guess);
-        return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto };
+        return { txn, cls: auto || { action: "skip" }, matchDraft: txn.desc, autoMatched: !!auto, fileIdx: 0,
+          own: matchesOwnName(txn.desc, config.ownTransferKeywords) };
       }));
-      setCsvNotes([{ name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck }]);
-      setBalances(res.balance && guess && guess.action === "account" ? [{ account: guess.target, ...res.balance }] : []);
+      setCsvNotes([{ name: label, count: res.txns.length, target: guess ? guess.target : null, balance: res.balance, check: res.balanceCheck, signature: res.signature }]);
+      // 月度ごとの期末残高を採る(期間をまたぐCSVでも前の月度の残高が記録されるように)
+      const acct = guess && guess.action === "account" ? guess.target : "";
+      const perCycle = cycleEndBalances(res.txns, config.cycleCutoffDay);
+      setBalances(perCycle.size
+        ? [...perCycle.values()].map((v) => ({ account: acct, fileIdx: 0, date: v.date, amount: v.balance }))
+        : (res.balance ? [{ account: acct, fileIdx: 0, ...res.balance }] : []));
       setOcrError("");
       return true;
     }
