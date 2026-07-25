@@ -43,7 +43,7 @@ const styleOf = (cls) => ACCOUNT_ITEM_STYLES.find((s) => s.neg === (cls.negItem 
 // スクショ取込。銀行アプリなどの明細スクショをOCR(tesseract.js、取込時のみ動的読込・要通信)で
 // 文字起こしし、登録済みルール(config.importRules)で自動的にentryへ振り分ける。
 // OCRが誤読してもテキスト欄で修正・貼り付け直しができ、最後は必ずレビュー画面で内容を確認してから追加する。
-export function ImportSheet({ cards, config, ym, initialText, onAddEntries, onSaveImportRules, onClose }) {
+export function ImportSheet({ cards, config, ym, entries: existing, initialText, onAddEntries, onSaveImportRules, onClose }) {
   const fileRef = useRef(null);
   const csvRef = useRef(null);
   const [rawText, setRawText] = useState("");
@@ -175,12 +175,19 @@ export function ImportSheet({ cards, config, ym, initialText, onAddEntries, onSa
     onSaveImportRules([...(config.importRules || []), rule]);
   };
 
+  // 取込済みの明細の指紋。CSVの期間が重なっても同じ取引を二重に登録しないため、
+  // 既に同じ指紋の記録があるものは取り込み対象から外す。
+  const existingKeys = React.useMemo(() => new Set((existing || []).map((e) => e.src).filter(Boolean)), [existing]);
   const entries = (rows || []).map((r) => txnToEntry(r.txn, r.cls, config.cycleCutoffDay));
-  const includedCount = entries.filter(Boolean).length;
-  // CSVの残高列から拾った月末残高も一緒に登録する(残高の手入力が不要になる)
+  const dupFlags = entries.map((e) => !!(e && e.src && existingKeys.has(e.src)));
+  const dupCount = dupFlags.filter(Boolean).length;
+  const newEntries = entries.filter((e, i) => e && !dupFlags[i]);
+  const includedCount = newEntries.length;
+  // CSVの残高列から拾った月末残高も一緒に登録する(残高の手入力が不要になる)。
+  // 残高は同じ月・口座で1件だけ持つべきなので、追加ではなく置き換える(App側で差し替え)。
   const balEntries = balances.map((b) => ({ ym: cycleYm(b.date, config.cycleCutoffDay), cat: "account", item: "残高", account: b.account, amount: Math.round(b.amount) }));
   const commit = () => {
-    const list = [...entries.filter(Boolean), ...balEntries];
+    const list = [...newEntries, ...balEntries];
     if (list.length) onAddEntries(list);
     onClose();
   };
@@ -237,6 +244,11 @@ export function ImportSheet({ cards, config, ym, initialText, onAddEntries, onSa
         {rows && (
           <>
             <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 12px" }}>{rows.length}件を検出しました。内容を確認して「追加する」を押してください。</div>
+            {dupCount > 0 && (
+              <div style={{ ...styles.flash, background: "var(--group-bg)", color: MUTED }}>
+                取込済みの{dupCount}件は除きます（同じ明細を二重に登録しません）
+              </div>
+            )}
             {balEntries.length > 0 && (
               <div style={{ ...styles.detailCard, marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, padding: "8px 2px 4px" }}>CSVから読み取った残高（一緒に登録します）</div>
@@ -251,9 +263,11 @@ export function ImportSheet({ cards, config, ym, initialText, onAddEntries, onSa
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {rows.map((r, i) => {
                 const entry = entries[i];
+                const isDup = dupFlags[i];
                 const needsTarget = r.cls.action !== "skip" && !r.cls.target;
                 return (
-                  <div key={i} style={{ ...styles.detailCard, opacity: entry ? 1 : 0.55 }}>
+                  <div key={i} style={{ ...styles.detailCard, opacity: entry && !isDup ? 1 : 0.55 }}>
+                    {isDup && <div style={{ fontSize: 11, color: MUTED, padding: "6px 2px 0" }}>取込済み（重複のため登録しません）</div>}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0 2px", gap: 8 }}>
                       <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>{r.txn.date}</span>
                       <input type="number" inputMode="numeric" value={r.txn.amount}

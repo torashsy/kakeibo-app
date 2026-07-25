@@ -8,6 +8,7 @@ export interface Entry {
   item: string;
   account?: string;
   amount: number;
+  src?: string;        // 取込元の指紋(日付|金額|摘要)。同じ明細を二重に取り込まないための目印
 }
 
 export interface Config {
@@ -797,15 +798,20 @@ export function classifyTxn(desc: string, rules: ImportRule[] | undefined, ownKe
   return null;
 }
 
+// 取込元の明細を一意に表す指紋。CSVの期間が重なっても同じ取引を二重登録しないために使う。
+// 摘要は表記ゆれ・OCRの揺れを吸収した正規化後の先頭部分だけを使う。
+export const txnKey = (txn: ParsedTxn): string => `${txn.date}|${Math.round(txn.amount)}|${normalizeForMatch(txn.desc).slice(0, 24)}`;
+
 // 分類結果をentry(id無し)に変換する。skip・未分類・対象未選択はnull。
 // cutoffDay(締め日)を渡すと、取引日をその周期の月バケツへ自動で振り分ける(例: 締め日10で7/5→6月度)。
 export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, cutoffDay: number = 0): Omit<Entry, "id"> | null {
   if (!cls || cls.action === "skip") return null;
   if ((cls.action === "card" || cls.action === "account") && !cls.target) return null;
   const ym = cycleYm(txn.date, cutoffDay);
-  if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount) };
+  const src = txnKey(txn);
+  if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount), src };
   const item = txn.amount < 0 ? (cls.negItem || "出金") : (cls.posItem || "入金");
-  return { ym, cat: "account", item, account: cls.target!, amount: txn.amount };
+  return { ym, cat: "account", item, account: cls.target!, amount: txn.amount, src };
 }
 
 // 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。

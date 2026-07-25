@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, txnToEntry, normalizeForMatch, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -403,13 +403,13 @@ describe("スクショ取込(OCR明細インポート)", () => {
 
   it("txnToEntry: cardアクションはカード請求のentryへ(金額は絶対値)", () => {
     const e = txnToEntry({ date: "2026-07-10", desc: "自払　ミツビシ", amount: -548 }, { action: "card", target: "MDC" });
-    expect(e).toEqual({ ym: "2026-07", cat: "card", item: "MDC", account: "", amount: 548 });
+    expect(e).toMatchObject({ ym: "2026-07", cat: "card", item: "MDC", account: "", amount: 548 });
   });
   it("txnToEntry: accountアクションは符号で出金/入金を判定", () => {
     const out = txnToEntry({ date: "2026-07-06", desc: "x", amount: -3600 }, { action: "account", target: "ゆうちょ" });
-    expect(out).toEqual({ ym: "2026-07", cat: "account", item: "出金", account: "ゆうちょ", amount: -3600 });
+    expect(out).toMatchObject({ ym: "2026-07", cat: "account", item: "出金", account: "ゆうちょ", amount: -3600 });
     const inn = txnToEntry({ date: "2026-07-08", desc: "x", amount: 95000 }, { action: "account", target: "ゆうちょ" });
-    expect(inn).toEqual({ ym: "2026-07", cat: "account", item: "入金", account: "ゆうちょ", amount: 95000 });
+    expect(inn).toMatchObject({ ym: "2026-07", cat: "account", item: "入金", account: "ゆうちょ", amount: 95000 });
   });
   it("txnToEntry: skip・未分類(null)・対象未選択はnull", () => {
     expect(txnToEntry({ date: "2026-07-08", desc: "x", amount: 95000 }, { action: "skip" })).toBeNull();
@@ -543,12 +543,12 @@ describe("スクショ取込(OCR明細インポート)", () => {
     const rules = DEFAULT_CONFIG.importRules;
     const hybridIn = classifyTxn("ＳＢＩハイブリッド預...", rules);
     expect(hybridIn).toMatchObject({ action: "account", target: "NEOBANK", negItem: "投資振替", posItem: "投資振替" });
-    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: 10000 }, hybridIn)).toEqual({ ym: "2026-08", cat: "account", item: "投資振替", account: "NEOBANK", amount: 10000 });
-    expect(txnToEntry({ date: "2026-07-30", desc: "x", amount: -4000 }, hybridIn)).toEqual({ ym: "2026-07", cat: "account", item: "投資振替", account: "NEOBANK", amount: -4000 });
+    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: 10000 }, hybridIn)).toMatchObject({ ym: "2026-08", cat: "account", item: "投資振替", account: "NEOBANK", amount: 10000 });
+    expect(txnToEntry({ date: "2026-07-30", desc: "x", amount: -4000 }, hybridIn)).toMatchObject({ ym: "2026-07", cat: "account", item: "投資振替", account: "NEOBANK", amount: -4000 });
 
     const atm = classifyTxn("ATM　セブン銀行", rules);
-    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: -17000 }, atm)).toEqual({ ym: "2026-08", cat: "account", item: "引出", account: "NEOBANK", amount: -17000 });
-    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: 17000 }, atm)).toEqual({ ym: "2026-08", cat: "account", item: "預入", account: "NEOBANK", amount: 17000 });
+    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: -17000 }, atm)).toMatchObject({ ym: "2026-08", cat: "account", item: "引出", account: "NEOBANK", amount: -17000 });
+    expect(txnToEntry({ date: "2026-08-10", desc: "x", amount: 17000 }, atm)).toMatchObject({ ym: "2026-08", cat: "account", item: "預入", account: "NEOBANK", amount: 17000 });
   });
 
   it("classifyTxn: エポス/PayPayの口座振替はカード請求として仕分けられる(末尾が切れていても)", () => {
@@ -766,5 +766,39 @@ describe("CSV取込: 実データ形式(NEOBANK)", () => {
     ];
     expect(classifyTxn(r.txns[0].desc, rules)).toMatchObject({ action: "account", negItem: "投資振替" });
     expect(classifyTxn(r.txns[4].desc, rules)).toMatchObject({ action: "account", negItem: "引出" });
+  });
+});
+
+describe("取込の重複防止", () => {
+  const cls = { action: "account" as const, target: "NEOBANK", negItem: "引出", posItem: "預入" };
+  it("txnKey: 日付・金額・摘要が同じなら同じ指紋", () => {
+    const a = { date: "2026-07-10", desc: "ＡＴＭ　セブン銀行", amount: -17000 };
+    const b = { date: "2026-07-10", desc: "ATM セブン銀行", amount: -17000 }; // 全角/半角・空白の違い
+    expect(txnKey(a)).toBe(txnKey(b));
+  });
+  it("txnKey: 日付か金額が違えば別の指紋(同じ日の同額でない限り別物として残る)", () => {
+    const base = { date: "2026-07-10", desc: "ATM", amount: -17000 };
+    expect(txnKey(base)).not.toBe(txnKey({ ...base, date: "2026-07-11" }));
+    expect(txnKey(base)).not.toBe(txnKey({ ...base, amount: -16000 }));
+  });
+  it("txnToEntry: 指紋(src)を持たせる", () => {
+    const e = txnToEntry({ date: "2026-07-10", desc: "ATM", amount: -17000 }, cls, 10)!;
+    expect(e.src).toBe(txnKey({ date: "2026-07-10", desc: "ATM", amount: -17000 }));
+  });
+  it("同じCSVを2回取り込んでも、既存のsrcと一致する分は除外できる", () => {
+    const txns = [
+      { date: "2026-07-10", desc: "ＡＴＭ　セブン銀行", amount: -17000 },
+      { date: "2026-07-18", desc: "ことら送金　タケナカ", amount: 4100 },
+    ];
+    const first = txns.map((t) => txnToEntry(t, cls, 10)!);
+    const existing = new Set(first.map((e) => e.src));
+    // 2回目: 全件が既存と一致するので取り込む対象は0件
+    const second = txns.map((t) => txnToEntry(t, cls, 10)!).filter((e) => !existing.has(e.src));
+    expect(second).toHaveLength(0);
+    // 新しい取引が1件増えた場合はその1件だけ通る
+    const withNew = [...txns, { date: "2026-07-20", desc: "ＡＴＭ　ゆうちょ", amount: -5000 }]
+      .map((t) => txnToEntry(t, cls, 10)!).filter((e) => !existing.has(e.src));
+    expect(withNew).toHaveLength(1);
+    expect(withNew[0].amount).toBe(-5000);
   });
 });
