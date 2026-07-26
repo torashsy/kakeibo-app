@@ -12,6 +12,7 @@ export interface Entry {
   asOf?: string;       // 残高がいつ時点のものか。周期末まで届いているかの確認に使う
   srcBalance?: number; // OCR明細に表示された取引後残高。摘要が揺れても同じ取引を判別する
   imp?: string;        // どの取込で入ったか。1つの明細に同じ行は2回出ないので、重複判定の拠り所になる
+  date?: string;       // 取引日(YYYY-MM-DD)。手入力でも日付を持てるようにする。無ければ指紋(src)から拾う
 }
 
 export interface Config {
@@ -19,6 +20,7 @@ export interface Config {
   salaryItems: string[];
   accountFlows?: Record<string, string[]>;
   memoCategories?: string[]; // メモのカテゴリのうち、計画タブで目安/実績を追跡するもの
+  dupIgnored?: string[];     // 「両方残す」と決めた重複候補の組。次から出さない
   importRules?: ImportRule[]; // スクショ取込で摘要から自動振り分けするルール(先勝ち)
   cycleCutoffDay?: number;    // 家計の月の締め日。0/未設定は暦通り。10なら「10日締め」=11日〜翌月10日を1周期(土日祝は翌営業日)
   ownTransferKeywords?: string[]; // 自分名義の口座間送金とみなす摘要のキーワード(例: 自分の氏名)。該当は収支に計上しない
@@ -1359,7 +1361,11 @@ export interface DuplicateGroup {
   certain: boolean;      // 同じ明細の行を二重に取り込んでいる(指紋が一致)
   keepId: string;        // 残す1件
   removeIds: string[];   // 消す候補
+  key: string;           // この組を表す目印。「そのままにする」と覚えて次から出さない
 }
+// 組の目印。記録のidから作るので、取り込み直して別の記録になれば また出る。
+export const duplicateGroupKey = (keepId: string, removeIds: string[]): string =>
+  [keepId, ...removeIds].sort().join(",");
 export function findDuplicateEntries(entries: Entry[]): DuplicateGroup[] {
   const groups = new Map<string, Entry[]>();
   for (const e of entries || []) {
@@ -1393,7 +1399,8 @@ export function findDuplicateEntries(entries: Entry[]): DuplicateGroup[] {
     const sameRow = (r: Entry) => !!r.src && keep.some((k) => k.src === r.src);
     for (const [part, certain] of [[remove.filter(sameRow), true], [remove.filter((r) => !sameRow(r)), false]] as [Entry[], boolean][]) {
       if (!part.length) continue;
-      out.push({ entries: [...keep, ...part], certain, keepId: keep[0].id as string, removeIds: part.map((e) => e.id as string) });
+      const keepId = keep[0].id as string, removeIds = part.map((e) => e.id as string);
+      out.push({ entries: [...keep, ...part], certain, keepId, removeIds, key: duplicateGroupKey(keepId, removeIds) });
     }
   }
   // 確実なものを先に、次に額の大きいものから
@@ -1567,8 +1574,8 @@ export const entrySignature = (e: Pick<Entry, "ym" | "cat" | "item" | "account" 
 // 取り込んだ記録は指紋(src)に取引日を持っている(CSVもスクショも同じ)。
 // 月度だけで見ると「同じ月の別の日の同額の取引」まで重複扱いになるので、
 // 日付が分かるものは日付まで一致したときだけ同じ取引とみなす。
-export const entryDate = (e: Pick<Entry, "src">): string | undefined => parseTxnKey(e.src)?.date;
-export const entryDaySignature = (e: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount" | "src">): string | null => {
+export const entryDate = (e: Pick<Entry, "src" | "date">): string | undefined => e.date || parseTxnKey(e.src)?.date;
+export const entryDaySignature = (e: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount" | "src" | "date">): string | null => {
   const d = entryDate(e);
   return d ? `${d}|${e.cat}|${e.item}|${e.account || ""}|${Math.round(e.amount)}` : null;
 };
@@ -1576,7 +1583,7 @@ export const entryDaySignature = (e: Pick<Entry, "ym" | "cat" | "item" | "accoun
 // 目印ごとの件数。同じ内容の取引が本当に複数あることもあるので、
 // 重複の判定では「既にある件数の分だけ」を取込済みとみなす。
 // 日付が分かる記録は日付ごとに、分からない記録(手入力)は月度ごとに数える。
-export function countBySignature(entries: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount" | "src">[]): Map<string, number> {
+export function countBySignature(entries: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount" | "src" | "date">[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const e of entries || []) {
     const s = entryDaySignature(e) || entrySignature(e);
@@ -1592,7 +1599,7 @@ export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, cutoff
   if ((cls.action === "card" || cls.action === "account") && !cls.target) return null;
   const ym = cycleYm(txn.date, cutoffDay);
   const src = txnKey(txn);
-  const source = Number.isFinite(txn.balance) ? { src, srcBalance: Math.round(txn.balance as number) } : { src };
+  const source = Number.isFinite(txn.balance) ? { src, date: txn.date, srcBalance: Math.round(txn.balance as number) } : { src, date: txn.date };
   // 給与の入金は手取り額としてそのまま給与へ(額面・控除の内訳はあとで給与フォームから入れられる)
   if (cls.action === "salary") return { ym, cat: "salary", item: cls.target || "給与", account: "", amount: Math.abs(txn.amount), ...source };
   if (cls.action === "card") return { ym, cat: "card", item: cls.target!, account: "", amount: Math.abs(txn.amount), ...source };

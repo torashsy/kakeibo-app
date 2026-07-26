@@ -108,6 +108,9 @@ export const styles = {
   optionChip: { border: `1px solid ${LINE}`, background: "var(--card-bg)", borderRadius: 20, padding: "6px 13px", fontSize: 13, cursor: "pointer", color: INK, fontFamily: "inherit" },
   optionChipActive: { background: ACCENT, color: "#fff", border: `1px solid ${ACCENT}` },
   textInput: { width: "100%", border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, outline: "none", background: "var(--card-bg)", color: INK, boxSizing: "border-box", fontFamily: "inherit" },
+  // iOSのdate/month入力は固有の最小幅を持ち、width:100%を無視して右にはみ出す。
+  // ネイティブの見た目を外し、最小幅を0にして親の幅に収める。
+  dateInput: { width: "100%", maxWidth: "100%", minWidth: 0, display: "block", WebkitAppearance: "none", appearance: "none", border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, outline: "none", background: "var(--card-bg)", color: INK, boxSizing: "border-box", fontFamily: "inherit" },
   flash: { background: ACCENT_SOFT, color: ACCENT, borderRadius: 10, padding: "9px 12px", fontSize: 13, fontWeight: 600, marginBottom: 10 },
   closeCta: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", border: "none", background: ACCENT, color: "#fff", borderRadius: 14, padding: "13px", cursor: "pointer", fontFamily: "inherit", marginBottom: 14, textAlign: "center" },
   // まとめ入力(MonthlyClose)

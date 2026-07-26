@@ -79,7 +79,7 @@ export function MemoList({ memos, onSave, cards, config, ym }) {
             <label style={styles.fieldLabel}>金額（円・任意）</label>
             <AmountField value={edit.amount ?? ""} onChange={(v) => setEdit({ ...edit, amount: v })} />
             <label style={styles.fieldLabel}>月（任意・計画との比較に使用）</label>
-            <input type="month" value={edit.ym ?? ""} onChange={(e) => setEdit({ ...edit, ym: e.target.value })} style={styles.textInput} />
+            <input type="month" value={edit.ym ?? ""} onChange={(e) => setEdit({ ...edit, ym: e.target.value })} style={styles.dateInput} />
             {cards && cards.length > 0 && (
               <>
                 <label style={styles.fieldLabel}>内訳（任意・紐づくカードのサマリ展開に表示）</label>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth, explainCycleGap, cycleGapDirection, findDuplicateEntries, parseTxnKey } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth, explainCycleGap, cycleGapDirection, findDuplicateEntries, parseTxnKey, entryDate } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -252,7 +252,8 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
       <CycleVerifier entries={entries} config={c} closedMonths={closedMonths} onClose={onToggleClosedMonth} />
 
       <TransferFinder entries={entries} ownKeywords={c.ownTransferKeywords} onConvert={onConvertTransfers} />
-      <DuplicateFinder entries={entries} onRemove={onRemoveEntries} />
+      <DuplicateFinder entries={entries} onRemove={onRemoveEntries} ignored={c.dupIgnored}
+        onIgnore={(keys) => { const next = { ...c, dupIgnored: keys }; setC(next); onSave(next); }} />
 
       <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
       <SyncSection />
@@ -377,11 +378,17 @@ function TransferFinder({ entries, ownKeywords, onConvert }) {
 // 二重に入っている記録を後から探して消す。取込時の重複判定を入れる前に取り込んだ記録は
 // 二重のまま残るため、既にあるデータを掃除する手段が要る。
 // 同じ額の振替・投資振替は見た目で区別できないので、指紋が一致するものを「確実」として分ける。
-function DuplicateFinder({ entries, onRemove }) {
+function DuplicateFinder({ entries, onRemove, ignored, onIgnore }) {
   const [found, setFound] = useState(null);
-  const scan = () => setFound(findDuplicateEntries(entries || []));
+  // 「そのままにする」と決めた組は次から出さない(同じ額の取引が本当に2件あるとき用)
+  const skip = new Set(ignored || []);
+  const scan = () => setFound(findDuplicateEntries(entries || []).filter((g) => !skip.has(g.key)));
   if (!onRemove) return null;
   const certain = (found || []).filter((g) => g.certain);
+  const keepBoth = (g) => {
+    onIgnore([...(ignored || []), g.key]);
+    setFound((prev) => (prev || []).filter((x) => x !== g));
+  };
   const where = (e) => (e.cat === "card" ? e.item : `${e.account || "口座"}・${e.item}`);
   const drop = (gs) => {
     const ids = gs.flatMap((g) => g.removeIds);
@@ -416,15 +423,18 @@ function DuplicateFinder({ entries, onRemove }) {
                     {g.certain ? "・同じ明細の行なので確実に二重" : "・同じ額の取引が本当に複数ないか確認してください"}
                   </span>
                   {g.entries.map((x, k) => {
-                    const t = parseTxnKey(x.src);
+                    const d = entryDate(x), t = parseTxnKey(x.src);
                     return (
                       <span key={x.id} style={{ display: "block", fontSize: 10.5, color: MUTED, lineHeight: 1.6 }}>
-                        {k === 0 ? "残す" : "消す"}　{t ? t.date : periodLabel(x.ym)}　{t ? t.desc : "（日付なし・手入力）"}
+                        {k < g.entries.length - g.removeIds.length ? "残す" : "消す"}　{d || periodLabel(x.ym)}　{t ? t.desc : "（手入力）"}
                       </span>
                     );
                   })}
                 </span>
-                <button style={styles.addBtn} onClick={() => drop([g])}>1件だけ残す</button>
+                <span style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                  <button style={styles.addBtn} onClick={() => drop([g])}>1件だけ残す</button>
+                  <button style={{ ...styles.optionChip, fontSize: 11.5, padding: "4px 10px" }} onClick={() => keepBoth(g)}>両方残す</button>
+                </span>
               </div>
             ))}
             {certain.length > 0 && (
