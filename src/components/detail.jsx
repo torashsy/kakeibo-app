@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, num, buildStructure, computeSummary, flowTypesFor, parseTxnKey } from '../utils';
+import { yen, num, buildStructure, computeSummary, flowTypesFor, parseTxnKey, entryDate } from '../utils';
 import { styles } from '../styles.js';
 import { MemoList } from './memos.jsx';
 
@@ -33,26 +33,26 @@ export function DetailList({ monthEntries, onEdit }) {
   // 取り込んだ記録は指紋(src)に取引日を持っているので、日付の新しい順に並べる。
   // 日付を持たない記録(手入力)は日付順に混ぜられないので、末尾に入力の新しい順で置く。
   const list = useMemo(() => monthEntries
-    .map((e, i) => ({ e, i, k: parseTxnKey(e.src) }))
+    .map((e, i) => ({ e, i, d: entryDate(e), desc: parseTxnKey(e.src)?.desc }))
     .sort((a, b) => {
-      if (a.k && b.k) return a.k.date === b.k.date ? b.i - a.i : (a.k.date < b.k.date ? 1 : -1);
-      if (a.k) return -1;   // 日付のある記録を先に
-      if (b.k) return 1;
+      if (a.d && b.d) return a.d === b.d ? b.i - a.i : (a.d < b.d ? 1 : -1);
+      if (a.d) return -1;   // 日付のある記録を先に
+      if (b.d) return 1;
       return b.i - a.i;
     }), [monthEntries]);
   if (!list.length) return <div style={{ color: MUTED, fontSize: 13, padding: 12 }}>記録なし</div>;
   return (
     <div>
       <div style={styles.detailCard}>
-        {list.map(({ e, k }) => (
+        {list.map(({ e, d, desc }) => (
           <button key={e.id} style={styles.listRow} onClick={() => onEdit(e)}>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, overflow: "hidden" }}>
               <span style={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</span>
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
-                <span style={{ fontSize: 11, color: MUTED }}>{k ? k.date : "日付なし"}</span>
+                <span style={{ fontSize: 11, color: MUTED }}>{d || "日付なし"}</span>
               </span>
-              {k && k.desc && <span style={{ fontSize: 11, color: MUTED, wordBreak: "break-all", textAlign: "left" }}>{k.desc}</span>}
+              {desc && <span style={{ fontSize: 11, color: MUTED, wordBreak: "break-all", textAlign: "left" }}>{desc}</span>}
             </span>
             <span style={styles.editRowRight}>
               <span

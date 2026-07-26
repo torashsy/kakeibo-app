@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, addMonth, evalAmount, ACCOUNT_TYPES, acctRole } from '../utils';
+import { yen, ymLabel, addMonth, evalAmount, ACCOUNT_TYPES, acctRole, entryDate, cycleYm, periodLabel } from '../utils';
 import { styles } from '../styles.js';
 import { Icon } from '../icons.jsx';
 import { AmountField } from './amount.jsx';
@@ -88,11 +88,34 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
   );
 }
 
-export function CardForm({ ym, cards, entries, editing, onClose, onAdd, onUpdate, onDelete }) {
+
+// 手入力でも取引日を持てるようにする。日付を入れると、その日が属する月度へ自動で振り分ける。
+// 日付を入れない(または元から持っていない)記録は、これまでどおり月度を直接選ぶ。
+function DateField({ date, setDate, entryYm, setEntryYm, cutoffDay }) {
+  return (
+    <>
+      <label style={styles.fieldLabel}>日付</label>
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...styles.dateInput, marginBottom: 4 }} />
+      <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+        {date ? `${periodLabel(cycleYm(date, cutoffDay), cutoffDay)} に入ります` : "日付を入れると、その日の月度へ自動で振り分けます"}
+      </div>
+      {!date && (
+        <>
+          <label style={styles.fieldLabel}>月度</label>
+          <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.dateInput} />
+        </>
+      )}
+    </>
+  );
+}
+
+export function CardForm({ ym, config, cards, entries, editing, onClose, onAdd, onUpdate, onDelete }) {
   const [item, setItem] = useState(editing ? editing.item : "");
   const [amount, setAmount] = useState(editing ? Math.abs(editing.amount).toString() : "");
   const [entryYm, setEntryYm] = useState(editing ? editing.ym : ym);
+  const [date, setDate] = useState(editing ? (entryDate(editing) || "") : "");
   const [flash, setFlash] = useState("");
+  const cutoffDay = config.cycleCutoffDay;
   const canSave = item && evalAmount(amount) != null;
   const prevAmt = useMemo(() => {
     if (!item || editing) return null;
@@ -100,7 +123,9 @@ export function CardForm({ ym, cards, entries, editing, onClose, onAdd, onUpdate
     const f = (entries || []).find((e) => e.cat === "card" && e.item === item && e.ym === prevYm);
     return f ? Math.abs(f.amount) : null;
   }, [item, entryYm, entries, editing]);
-  const build = () => ({ id: editing ? editing.id : undefined, ym: entryYm, cat: "card", item, account: "", amount: Math.abs(Math.round(evalAmount(amount) || 0)) });
+  const build = () => ({ ...(editing || {}), id: editing ? editing.id : undefined,
+    ym: date ? cycleYm(date, cutoffDay) : entryYm, cat: "card", item, account: "",
+    amount: Math.abs(Math.round(evalAmount(amount) || 0)), ...(date ? { date } : {}) });
   const saveOne = (cont) => {
     if (!canSave) return;
     if (editing) { onUpdate({ ...build(), id: editing.id }); onClose(); return; }
@@ -120,8 +145,7 @@ export function CardForm({ ym, cards, entries, editing, onClose, onAdd, onUpdate
           {prevAmt != null && <button style={styles.chipGhost} onClick={() => setAmount(String(prevAmt))}>前月 {yen(prevAmt)} をコピー</button>}
         </div>
         <AmountField value={amount} onChange={setAmount} autoFocus />
-        <label style={styles.fieldLabel}>月</label>
-        <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />
+        <DateField date={date} setDate={setDate} entryYm={entryYm} setEntryYm={setEntryYm} cutoffDay={cutoffDay} />
         {editing ? (
           <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button></>
         ) : (
@@ -142,7 +166,9 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
   const [amount, setAmount] = useState(editing ? Math.abs(editing.amount).toString() : "");
   const [dir, setDir] = useState(editing && editing.amount < 0 ? "out" : "in"); // 投資振替の方向
   const [entryYm, setEntryYm] = useState(editing ? editing.ym : ym);
+  const [date, setDate] = useState(editing ? (entryDate(editing) || "") : "");
   const [flash, setFlash] = useState("");
+  const cutoffDay = config.cycleCutoffDay;
   const isTransfer = acctRole(type) === "transfer";
   const canSave = account && evalAmount(amount) != null;
   const prevEntry = useMemo(() => {
@@ -156,7 +182,9 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
     if (isTransfer) return dir === "out" ? -v : v;   // 入れる=−(支出方向) / 戻す=＋(収入方向)
     return acctRole(type) === "out" ? -v : v;
   };
-  const build = () => ({ id: editing ? editing.id : undefined, ym: entryYm, cat: "account", item: type, account, amount: signed() });
+  const build = () => ({ ...(editing || {}), id: editing ? editing.id : undefined,
+    ym: date ? cycleYm(date, cutoffDay) : entryYm, cat: "account", item: type, account,
+    amount: signed(), ...(date ? { date } : {}) });
   const saveOne = (cont) => {
     if (!canSave) return;
     if (editing) { onUpdate({ ...build(), id: editing.id }); onClose(); return; }
@@ -187,8 +215,7 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
           {prevEntry && <button style={styles.chipGhost} onClick={usePrev}>前月 {yen(Math.abs(prevEntry.amount))} をコピー</button>}
         </div>
         <AmountField value={amount} onChange={setAmount} autoFocus />
-        <label style={styles.fieldLabel}>月</label>
-        <input type="month" value={entryYm} onChange={(e) => setEntryYm(e.target.value)} style={styles.textInput} />
+        <DateField date={date} setDate={setDate} entryYm={entryYm} setEntryYm={setEntryYm} cutoffDay={cutoffDay} />
         {editing ? (
           <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button></>
         ) : (
