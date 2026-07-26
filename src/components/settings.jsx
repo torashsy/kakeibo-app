@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth, explainCycleGap, cycleGapDirection } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth, explainCycleGap, cycleGapDirection, findDuplicateEntries } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -176,7 +176,7 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
   );
 }
 
-export function Settings({ config, onSave, onConvertTransfers, onToggleClosedMonth, onClearEntries, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
+export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, onToggleClosedMonth, onClearEntries, entries, cards, debt, memos, subs, plans, closedMonths, theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
   const [c, setC] = useState(config);
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
@@ -252,6 +252,7 @@ export function Settings({ config, onSave, onConvertTransfers, onToggleClosedMon
       <CycleVerifier entries={entries} config={c} closedMonths={closedMonths} onClose={onToggleClosedMonth} />
 
       <TransferFinder entries={entries} ownKeywords={c.ownTransferKeywords} onConvert={onConvertTransfers} />
+      <DuplicateFinder entries={entries} onRemove={onRemoveEntries} />
 
       <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
       <SyncSection />
@@ -372,6 +373,61 @@ function TransferFinder({ entries, ownKeywords, onConvert }) {
   );
 }
 
+
+// 二重に入っている記録を後から探して消す。取込時の重複判定を入れる前に取り込んだ記録は
+// 二重のまま残るため、既にあるデータを掃除する手段が要る。
+// 同じ額の振替・投資振替は見た目で区別できないので、指紋が一致するものを「確実」として分ける。
+function DuplicateFinder({ entries, onRemove }) {
+  const [found, setFound] = useState(null);
+  const scan = () => setFound(findDuplicateEntries(entries || []));
+  if (!onRemove) return null;
+  const certain = (found || []).filter((g) => g.certain);
+  const where = (e) => (e.cat === "card" ? e.item : `${e.account || "口座"}・${e.item}`);
+  const drop = (gs) => {
+    const ids = gs.flatMap((g) => g.removeIds);
+    if (!ids.length) return;
+    if (!window.confirm(`${ids.length}件の記録を削除します。よろしいですか？`)) return;
+    onRemove(ids);
+    setFound((prev) => (prev || []).filter((g) => !gs.includes(g)));
+  };
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={styles.detailHead}><span>二重に入っている記録を探す</span></div>
+      <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>
+        同じ月度・同じ口座・同じ項目・同じ金額の記録をまとめます。同じ明細の行から取り込んだと分かるものは「確実」と出します。
+        同じ額の取引が本当に複数あることもあるので、消す前に確認してください。
+      </div>
+      <div style={styles.detailCard}>
+        <button style={{ ...styles.backupBtn, marginTop: 6 }} onClick={scan}>記録を調べる</button>
+        {found && found.length === 0 && <div style={{ color: MUTED, fontSize: 12.5, padding: "8px 2px" }}>二重らしい記録は見つかりませんでした</div>}
+        {found && found.length > 0 && (
+          <>
+            {found.map((g) => (
+              <div key={g.keepId} style={{ ...styles.settingRow, alignItems: "flex-start" }}>
+                <span style={{ overflow: "hidden" }}>
+                  <span style={{ display: "block", fontSize: 13 }}>
+                    {yen(g.entries[0].amount)}
+                    <span style={{ color: MUTED, marginLeft: 6 }}>{where(g.entries[0])}</span>
+                  </span>
+                  <span style={{ display: "block", fontSize: 11, color: g.certain ? RED : MUTED }}>
+                    {periodLabel(g.entries[0].ym)}・{g.entries.length}件
+                    {g.certain ? "（同じ明細の行なので確実に二重）" : "（同じ額の取引が本当に複数ないか確認してください）"}
+                  </span>
+                </span>
+                <button style={styles.addBtn} onClick={() => drop([g])}>1件だけ残す</button>
+              </div>
+            ))}
+            {certain.length > 0 && (
+              <button style={{ ...styles.saveBtn, marginTop: 10 }} onClick={() => drop(certain)}>
+                確実な{certain.length}組をまとめて1件にする
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // 月度ごとの残高照合。「期首残高 + その月度の増減 = 期末残高」が合っていれば
 // 取りこぼしが無いと言えるので、その月度を確定(締め)にできる。
