@@ -47,6 +47,8 @@ export interface Card {
   brand?: string;
   note?: string;
   annualFee?: number;
+  cutoffDay?: number;  // 利用締日。31は月末扱い
+  paymentDay?: number; // 口座引き落とし日。休日は翌営業日へ送る
 }
 
 export interface Memo {
@@ -168,6 +170,14 @@ function jpHolidaySet(year: number): Set<string> {
       set.add(md(nx.getMonth() + 1, nx.getDate()));
     }
   }
+  // 国民の休日: 祝日に挟まれた平日は休日（例: 2026-09-22）
+  for (let month = 1; month <= 12; month++) {
+    const last = new Date(year, month, 0).getDate();
+    for (let day = 2; day < last; day++) {
+      const cur = md(month, day);
+      if (!set.has(cur) && set.has(md(month, day - 1)) && set.has(md(month, day + 1))) set.add(cur);
+    }
+  }
   _holidayCache[year] = set;
   return set;
 }
@@ -178,6 +188,26 @@ export function isBankHoliday(dateStr: string): boolean {
   const mmdd = `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   if (mmdd === "12-31" || mmdd === "01-02" || mmdd === "01-03") return true;
   return jpHolidaySet(y).has(mmdd);
+}
+export function nextBankBusinessDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  let dt = new Date(y, m - 1, d);
+  const format = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  while (isBankHoliday(format(dt))) dt = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + 1);
+  return format(dt);
+}
+
+// 利用日→カードの実際の引き落とし日。締日以前は当月締め、超過分は翌月締め、
+// その翌月の支払日に引き落とす。31日は各月の末日として扱う。
+export function cardPaymentDate(chargeDate: string, card: Card | null | undefined): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(chargeDate) || !card?.cutoffDay || !card?.paymentDay) return "";
+  const chargeYm = chargeDate.slice(0, 7);
+  const chargeDay = Number(chargeDate.slice(8, 10));
+  const cutoff = Math.min(Math.max(1, Math.round(Number(card.cutoffDay))), daysInMonth(chargeYm));
+  const closingYm = chargeDay <= cutoff ? chargeYm : addMonth(chargeYm, 1);
+  const paymentYm = addMonth(closingYm, 1);
+  const paymentDay = Math.min(Math.max(1, Math.round(Number(card.paymentDay))), daysInMonth(paymentYm));
+  return nextBankBusinessDay(`${paymentYm}-${String(paymentDay).padStart(2, "0")}`);
 }
 // 締め日(day)を、その月で銀行営業日になるまで後ろへ送った「実際の締め日(日)」を返す
 function businessCutoffDay(year: number, month: number, day: number): number {
@@ -535,16 +565,29 @@ export const subActiveForMonth = (s: Sub, ym: string): boolean => {
   return (!validDate(s.startDate) || occurrence >= s.startDate) && (!validDate(s.endDate) || occurrence <= s.endDate);
 };
 
+const subPaymentYm = (s: Sub, serviceYm: string, cards?: Card[] | null): string => {
+  if (!s.card) return serviceYm;
+  const card = (cards || []).find((c) => c.name === s.card);
+  const exact = cardPaymentDate(recurringDate(s, serviceYm), card);
+  return exact ? exact.slice(0, 7) : addMonth(serviceYm, 1); // 未設定カードは従来の翌月概算
+};
+
 // 計画上の固定費。月額は毎月、年払いは更新月に一括計上する。
-// カード払いは請求を1か月後として扱う概算。開始前・終了後の利用月は除外する。
+// カード払いは締日・引き落とし日から計上月を求め、休日なら翌営業日に送る。
+// 開始前・終了後の利用月は除外する。
 // 年払いで更新日が無い旧データだけは従来どおり1/12で残す。
-export const fixedForMonth = (subs: Sub[] | null | undefined, ym: string): number => (subs || []).reduce((sum, s) => {
+export const fixedForMonth = (subs: Sub[] | null | undefined, ym: string, cards?: Card[] | null): number => (subs || []).reduce((sum, s) => {
   const amount = Number(s && s.amount) || 0;
-  const serviceYm = s.card ? addMonth(ym, -1) : ym;
-  if (!subActiveForMonth(s, serviceYm)) return sum;
-  if (s.cycle !== "yearly") return sum + amount;
-  if (!validDate(s.renewal)) return sum + amount / 12;
-  return s.renewal.slice(5, 7) === serviceYm.slice(5, 7) ? sum + amount : sum;
+  let subtotal = 0;
+  // 支払月は通常利用月+1、締日後なら+2、休日跨ぎならさらに翌月になり得る。
+  for (let offset = 0; offset <= 3; offset++) {
+    const serviceYm = addMonth(ym, -offset);
+    if (!subActiveForMonth(s, serviceYm) || subPaymentYm(s, serviceYm, cards) !== ym) continue;
+    if (s.cycle !== "yearly") subtotal += amount;
+    else if (!validDate(s.renewal)) subtotal += amount / 12;
+    else if (s.renewal.slice(5, 7) === serviceYm.slice(5, 7)) subtotal += amount;
+  }
+  return sum + subtotal;
 }, 0);
 
 const salaryCycleYear = (ym: string): string => {
@@ -684,10 +727,10 @@ export const plannedDebt = (debt: Record<string, Record<string, unknown>> | null
   return annual / 12;
 };
 
-export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null): number =>
-  fixedForMonth(subs, ym) + plannedVariable(plan, ym) + plannedDebt(debt, ym);
+export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): number =>
+  fixedForMonth(subs, ym, cards) + plannedVariable(plan, ym) + plannedDebt(debt, ym);
 // 計画の収支 = 収入 − 支出 + 投資振替(符号のまま)
-export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt) + plannedInvest(plan, ym);
+export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt, cards) + plannedInvest(plan, ym);
 
 // 旧形式(カード別・口座フロー別に行を持つ計画)かどうか。旧キーは "salary|給与" のように "|" を含む。
 const isLegacyPlan = (plan: any): boolean => !!(plan && plan.lines && Object.keys(plan.lines).some((k) => /^(salary|card|flow|memo)\|/.test(k)));
@@ -816,11 +859,11 @@ export const toggleMonthClosed = (closedMonths: string[] | null | undefined, ym:
 
 // 1か月分の 計画/実績(収入・支出・収支)と差を算出(今月タブの使いすぎ判定・計画対比に使う)。
 // 実績はその月の記録から computeSummary で集計、計画は簡素化モデル(収入/固定費+変動費/投資)から。
-export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, debt?: Record<string, Record<string, unknown>> | null): PlanVsActual {
+export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): PlanVsActual {
   const s = computeSummary(monthEntries);
   const planIncome = plannedIncome(plan, ym);
-  const planSpending = plannedSpending(plan, subs, ym, debt);
-  const planNet = plannedNet(plan, subs, ym, debt);
+  const planSpending = plannedSpending(plan, subs, ym, debt, cards);
+  const planNet = plannedNet(plan, subs, ym, debt, cards);
   const actualIncome = s.income;
   const actualSpending = s.expense;   // カード請求＋現金出金(正の額)
   const actualNet = s.net;
@@ -837,7 +880,7 @@ export interface AnnualOutlook {
 
 // 今の月(ym)が属する年度について、年度末の収支(累計)と残高の見込みを算出する。
 // 入力が始まった/締めた月は実績、未入力の月は計画。残高は実績記録があればアンカーし、無ければ収支で試算。
-export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null): AnnualOutlook {
+export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): AnnualOutlook {
   const fyStart = fyStartOf(ym);
   const months = planMonths(fyStart);
   const byMonth: Record<string, Entry[]> = {}; for (const m of months) byMonth[m] = [];
@@ -848,7 +891,7 @@ export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entrie
   for (const mo of months) {
     const es = byMonth[mo];
     const isActual = isMonthClosed(closedMonths, mo) || es.length > 0;
-    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo, debt);
+    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo, debt, cards);
     netForecast += net;
     if (isActual) actualNet += net;
     if (hasBalRecord(es)) bal = balTotalOf(es); else bal += net;

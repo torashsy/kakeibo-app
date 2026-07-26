@@ -15,7 +15,7 @@ import { AmountField } from './amount.jsx';
 //  - 見通し: 入力が始まった/締めた月は実績、それ以外は計画。残高は実績を引き継いで先へ試算。
 //  - 計画: セルをタップして収入・変動費・投資を編集(この月/毎月の標準)。固定費は定期費から自動表示。
 //  - 差異: 実績−計画。
-export function PlanView({ plans, onSave, subs, debt, entries, config, ym, closedMonths, onToggleClosedMonth, onOpenRecurring }) {
+export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym, closedMonths, onToggleClosedMonth, onOpenRecurring }) {
   const [mode, setMode] = useState("forecast"); // forecast | plan | diff
   const [edit, setEdit] = useState(null);
   const [salaryEdit, setSalaryEdit] = useState(null);
@@ -44,12 +44,12 @@ export function PlanView({ plans, onSave, subs, debt, entries, config, ym, close
       : k === "salaryIncome" ? plannedSalaryIncome(plans, mo)
         : k === "otherIncome" ? plannedOtherIncome(plans, mo)
           : k === "income" ? plannedIncome(plans, mo)
-        : k === "spending" ? plannedSpending(plans, subs, mo, debt)
+        : k === "spending" ? plannedSpending(plans, subs, mo, debt, cards)
           : k === "variable" ? plannedVariable(plans, mo)
-            : k === "fixed" ? fixedForMonth(subs, mo)
+            : k === "fixed" ? fixedForMonth(subs, mo, cards)
               : k === "debt" ? plannedDebt(debt, mo)
                 : k === "invest" ? plannedInvest(plans, mo)
-                  : k === "net" ? plannedNet(plans, subs, mo, debt) : 0
+                  : k === "net" ? plannedNet(plans, subs, mo, debt, cards) : 0
   );
   const isActualMonth = (mo) => isMonthClosed(closedMonths, mo) || (entriesByMonth[mo] || []).length > 0;
   const forecastOf = (k, mo) => (isActualMonth(mo) ? actualOf(k, mo) : planOf(k, mo));
@@ -67,7 +67,7 @@ export function PlanView({ plans, onSave, subs, debt, entries, config, ym, close
       res[mo] = { bal, anchored: hasBalRecord(es) };
     }
     return res;
-  }, [entries, months, entriesByMonth, plans, subs, debt, mode]);
+  }, [entries, months, entriesByMonth, plans, subs, cards, debt, mode]);
 
   const diffColor = (k, v) => (v === 0 ? MUTED : k === "spending" ? (v > 0 ? RED : GREEN) : k === "invest" ? MUTED : (v > 0 ? GREEN : RED));
   const cellText = (v) => (v === 0 ? "" : (mode === "diff" && v > 0 ? "+" + num(v) : num(v)));

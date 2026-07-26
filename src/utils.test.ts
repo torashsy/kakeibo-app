@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday,
+  yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday, nextBankBusinessDay, cardPaymentDate,
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
@@ -227,6 +227,15 @@ describe("計画", () => {
     expect(fixedForMonth(subs, "2026-06")).toBe(1000);
     expect(fixedForMonth(subs, "2026-07")).toBe(1000 + 2000);
     expect(fixedForMonth(subs, "2026-08")).toBe(0);
+  });
+
+  it("fixedForMonth: カードの締日後なら翌々月、引落休日なら翌営業日の月に計上する", () => {
+    const cards: Card[] = [{ id: "c", name: "JCB", cutoffDay: 15, paymentDay: 10 }];
+    const before: Sub[] = [{ id: "s1", name: "締日前", amount: 1000, cycle: "monthly", card: "JCB", renewal: "2026-06-14" }];
+    const after: Sub[] = [{ id: "s2", name: "締日後", amount: 2000, cycle: "monthly", card: "JCB", renewal: "2026-06-20", startDate: "2026-06-01" }];
+    expect(fixedForMonth(before, "2026-07", cards)).toBe(1000);
+    expect(fixedForMonth(after, "2026-07", cards)).toBe(0);
+    expect(fixedForMonth(after, "2026-08", cards)).toBe(2000);
   });
 
   it("estimateSalaryTakeHome: 標準月シートの例と一致する", () => {
@@ -756,6 +765,14 @@ describe("cycleYm / periodLabel / periodRange", () => {
     expect(isBankHoliday("2026-01-03")).toBe(true);  // 銀行の年末年始
     expect(isBankHoliday("2026-06-10")).toBe(false); // 平日(水)
     expect(isBankHoliday("2026-06-13")).toBe(true);  // 土曜
+    expect(isBankHoliday("2026-09-22")).toBe(true);  // 祝日に挟まれた「国民の休日」
+  });
+  it("cardPaymentDate: 締日と翌営業日を反映する", () => {
+    const card: Card = { id: "c", name: "JCB", cutoffDay: 15, paymentDay: 10 };
+    expect(cardPaymentDate("2026-06-14", card)).toBe("2026-07-10");
+    expect(cardPaymentDate("2026-06-16", card)).toBe("2026-08-10");
+    expect(cardPaymentDate("2026-04-20", { ...card, cutoffDay: 31 })).toBe("2026-05-11"); // 5/10(日)
+    expect(nextBankBusinessDay("2026-01-10")).toBe("2026-01-13"); // 土日+成人の日
   });
   it("cycleYm: 締め日が土日祝なら翌営業日まで同じ周期に含める", () => {
     // 2026-01は 1/10(土)・1/11(日)・1/12(成人の日) と続き、締め日10は営業日1/13へ送られる

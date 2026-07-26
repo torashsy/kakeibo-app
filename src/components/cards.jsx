@@ -95,10 +95,12 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
   const [edit, setEdit] = useState(null);
   const commit = () => {
     if (!edit.name.trim()) return;
-    const card = { ...edit, annualFee: Math.round(evalAmount(edit.annualFee) || 0) };
+    const day = (value) => { const n = Math.round(Number(value) || 0); return n >= 1 && n <= 31 ? n : undefined; };
+    const card = { ...edit, annualFee: Math.round(evalAmount(edit.annualFee) || 0), cutoffDay: day(edit.cutoffDay), paymentDay: day(edit.paymentDay) };
     const next = edit.id ? cards.map((c) => (c.id === edit.id ? card : c)) : [...cards, { ...card, id: uid() }];
     onSaveCards(next); setEdit(null);
   };
+  const dayText = (value) => Number(value) === 31 ? "末" : Number(value) || "—";
   return (
     <div>
       <div style={styles.detailHead}><span>所有カード（{cards.length}枚）</span><button style={styles.addBtn} onClick={() => setEdit({ name: "", brand: "", note: "", annualFee: "" })}>＋ 追加</button></div>
@@ -114,6 +116,7 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
               <span style={{ fontSize: 11.5, color: Number(c.annualFee) > 0 ? MUTED : "var(--income)", fontVariantNumeric: "tabular-nums" }}>
                 {Number(c.annualFee) > 0 ? `年会費 ${yen(c.annualFee)}` : "年会費 無料"}
               </span>
+              {(c.cutoffDay || c.paymentDay) && <span style={{ fontSize: 11, color: MUTED }}>{[c.cutoffDay && `${dayText(c.cutoffDay)}日締`, c.paymentDay && `翌月${dayText(c.paymentDay)}日引落`].filter(Boolean).join("・")}</span>}
             </span>
           </button>
         ))}
@@ -130,6 +133,11 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
             <div style={styles.optionRow}>{["VISA", "Master", "JCB", "AMEX", "Diners"].map((b) => <button key={b} style={{ ...styles.optionChip, ...(edit.brand === b ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, brand: b })}>{b}</button>)}</div>
             <label style={styles.fieldLabel}>年会費（円・任意）</label>
             <AmountField value={edit.annualFee ?? ""} onChange={(v) => setEdit({ ...edit, annualFee: v })} placeholder="0（無料）" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <label style={styles.fieldLabel}><span>締日</span><input type="number" inputMode="numeric" min="1" max="31" value={edit.cutoffDay ?? ""} onChange={(e) => setEdit({ ...edit, cutoffDay: e.target.value })} placeholder="例 15" style={{ ...styles.textInput, marginTop: 6, textAlign: "right" }} /></label>
+              <label style={styles.fieldLabel}><span>引き落とし日</span><input type="number" inputMode="numeric" min="1" max="31" value={edit.paymentDay ?? ""} onChange={(e) => setEdit({ ...edit, paymentDay: e.target.value })} placeholder="例 10" style={{ ...styles.textInput, marginTop: 6, textAlign: "right" }} /></label>
+            </div>
+            <div style={{ fontSize: 11, color: MUTED, marginTop: 5 }}>31＝月末・休日は翌営業日</div>
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="正式名称や用途など" style={styles.textInput} />
             <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新" : "追加"}</button>
