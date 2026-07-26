@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth, explainCycleGap, cycleGapDirection } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -375,8 +375,40 @@ function TransferFinder({ entries, ownKeywords, onConvert }) {
 
 // 月度ごとの残高照合。「期首残高 + その月度の増減 = 期末残高」が合っていれば
 // 取りこぼしが無いと言えるので、その月度を確定(締め)にできる。
+// 残高が合わないときの原因候補。差額と同じ額・差額の半分の額の記録を挙げ、
+// 何を直せば合うのかを具体的に示す(全件を目で追わなくて済むように)。
+function GapHints({ entries, ym, diff, cutoffDay, covered, nextYm }) {
+  const monthEntries = (entries || []).filter((e) => e.ym === ym);
+  const hints = explainCycleGap(monthEntries, diff);
+  const label = {
+    dup: "二重かもしれません（消すと合います）",
+    missing: "同じ額がもう1件あるはずです（取りこぼし）",
+    sign: "符号が逆かもしれません（出金/入金を入れ替えると合います）",
+  };
+  const where = (e) => (e.cat === "card" ? e.item : `${e.account || "口座"}・${e.item}`);
+  return (
+    <span style={{ display: "block", marginTop: 4, paddingLeft: 8, borderLeft: `2px solid ${RED}` }}>
+      <span style={{ display: "block", fontSize: 10.5, color: MUTED, lineHeight: 1.6 }}>{cycleGapDirection(diff)}</span>
+      {!covered && (
+        <span style={{ display: "block", fontSize: 10.5, color: RED, marginTop: 3, lineHeight: 1.6 }}>
+          まず残高が締め日まで届いていません。{ymLabel(nextYm)}の明細を取り込んでから見直してください
+        </span>
+      )}
+      {hints.length === 0
+        ? <span style={{ display: "block", fontSize: 10.5, color: MUTED, marginTop: 3 }}>差額と同じ額の記録は見つかりませんでした（複数の取りこぼしが重なっている可能性があります）</span>
+        : hints.map((h, i) => (
+          <span key={i} style={{ display: "block", fontSize: 10.5, marginTop: 3, lineHeight: 1.6 }}>
+            <span style={{ color: RED, fontWeight: 600 }}>{yen(h.entry.amount)}</span>
+            <span style={{ color: MUTED }}>　{where(h.entry)} — {label[h.kind]}</span>
+          </span>
+        ))}
+    </span>
+  );
+}
+
 function CycleVerifier({ entries, config, closedMonths, onClose }) {
   const rows = React.useMemo(() => verifyCycles(entries || [], config.cycleCutoffDay), [entries, config.cycleCutoffDay]);
+  const [openYm, setOpenYm] = useState("");
   const closed = new Set(closedMonths || []);
   const fixable = rows.filter((r) => r.ok && !closed.has(r.ym));
   if (!onClose || rows.length === 0) return null;
@@ -406,6 +438,15 @@ function CycleVerifier({ entries, config, closedMonths, onClose }) {
                   ? (r.covered ? `残高は ${r.asOf} 時点` : `残高は ${r.asOf} 時点で、締め日 ${r.endDate} まで届いていません。${ymLabel(addMonth(r.ym, 1))}の明細も取り込むと直ります`)
                   : "残高がいつ時点か分かりません（取り込み直すと記録されます）"}
               </span>
+              {/* 合わないときは、差額の原因になりそうな記録をその場で挙げる */}
+              {r.diff != null && r.diff !== 0 && (
+                <button style={{ ...styles.chipGhost, marginTop: 4, fontSize: 11 }}
+                  onClick={() => setOpenYm(openYm === r.ym ? "" : r.ym)}>
+                  原因を{openYm === r.ym ? "閉じる" : "探す"}
+                  <span style={{ ...styles.chev, transform: openYm === r.ym ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform .15s", verticalAlign: -2, marginLeft: 3 }}>›</span>
+                </button>
+              )}
+              {openYm === r.ym && <GapHints entries={entries} ym={r.ym} diff={r.diff} cutoffDay={config.cycleCutoffDay} covered={r.covered} nextYm={addMonth(r.ym, 1)} />}
             </span>
             {r.ok && !closed.has(r.ym) && (
               <button style={styles.addBtn} onClick={() => onClose(r.ym)}>確定</button>

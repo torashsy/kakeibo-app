@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1732,5 +1732,41 @@ describe("残高の置き換え(取り込む順番)", () => {
     expect(shouldReplaceBalance(null, partial, 10)).toBe(true);
     expect(shouldReplaceBalance({ ym: "2026-05" }, partial, 10)).toBe(false);  // 手入力を部分残高で消さない
     expect(shouldReplaceBalance(partial, { ym: "2026-05" }, 10)).toBe(true);
+  });
+});
+
+describe("残高が合わないときの原因候補", () => {
+  const e = (o: any) => ({ id: o.id || "x", ym: "2026-05", cat: "account" as const, item: "出金", account: "ゆうちょ", amount: -1000, ...o });
+
+  it("差額と同じ額の記録は「二重」か「取りこぼし」", () => {
+    const rows = [e({ id: "a", amount: -7755 }), e({ id: "b", amount: -1000 })];
+    // 実際の残高が計算より7,755多い → この出金が二重に入っている
+    expect(explainCycleGap(rows, 7755)).toEqual([{ kind: "dup", entry: rows[0] }]);
+    // 実際の残高が計算より7,755少ない → 同じ出金がもう1件あるはず
+    expect(explainCycleGap(rows, -7755)).toEqual([{ kind: "missing", entry: rows[0] }]);
+  });
+
+  it("差額が記録の2倍なら符号違い(OCRがマイナスを読み落とした)", () => {
+    // +7,755と読まれたが本当は-7,755。増減が15,510多いので、残高は15,510少なく見える
+    const rows = [e({ id: "a", amount: 7755 })];
+    expect(explainCycleGap(rows, -15510)).toEqual([{ kind: "sign", entry: rows[0] }]);
+  });
+
+  it("残高の記録そのものは増減ではないので候補に入れない", () => {
+    const rows = [e({ id: "a", item: "残高", amount: -7755 })];
+    expect(explainCycleGap(rows, 7755)).toEqual([]);
+  });
+
+  it("合っているとき・候補が無いときは何も挙げない", () => {
+    const rows = [e({ amount: -1000 })];
+    expect(explainCycleGap(rows, 0)).toEqual([]);
+    expect(explainCycleGap(rows, null)).toEqual([]);
+    expect(explainCycleGap(rows, 12345)).toEqual([]);
+  });
+
+  it("どちら向きにずれているかを言葉で示す", () => {
+    expect(cycleGapDirection(500)).toContain("入金の記録が抜けている");
+    expect(cycleGapDirection(-500)).toContain("出金の記録が抜けている");
+    expect(cycleGapDirection(0)).toBe("");
   });
 });

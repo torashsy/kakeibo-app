@@ -1340,6 +1340,36 @@ export function verifyCycles(entries: Entry[], cutoffDay: number = 0): CycleChec
   });
 }
 
+// 残高が合わないときの原因候補。差額そのものから、どの記録が怪しいかを絞る。
+//   dup     … その記録を消せば差額が埋まる(同じ取引を二重に取り込んだ)
+//   missing … 同じ額の記録がもう1件あるはず(取りこぼし)
+//   sign    … 符号が逆(出金を入金として読んだ)。符号を直すと増減が額の2倍動くので見分けられる
+export type GapHintKind = "dup" | "missing" | "sign";
+export interface GapHint { kind: GapHintKind; entry: Entry; }
+export function explainCycleGap(monthEntries: Entry[], diff: number | null | undefined): GapHint[] {
+  if (!diff) return [];
+  const d = Math.round(diff);
+  const out: GapHint[] = [];
+  for (const e of monthEntries || []) {
+    if (e.cat === "account" && acctRole(e.item) === "bal") continue; // 残高そのものは増減ではない
+    const a = Math.round(e.amount);
+    if (a === 0) continue;
+    if (d === -a) out.push({ kind: "dup", entry: e });
+    else if (d === a) out.push({ kind: "missing", entry: e });
+    else if (d === -2 * a) out.push({ kind: "sign", entry: e });
+  }
+  return out;
+}
+
+// 差額がどちら向きにずれているかの説明。候補が挙がらないときでも、
+// 「何を探せばよいか」が分かるようにする。
+export function cycleGapDirection(diff: number | null | undefined): string {
+  if (!diff) return "";
+  return diff > 0
+    ? "実際の残高の方が多いので、入金の記録が抜けているか、出金を多く記録しています"
+    : "実際の残高の方が少ないので、出金の記録が抜けているか、入金を多く記録しています";
+}
+
 // 既存の記録から「自分の口座間の振替」を後から探す。
 // 振替の判定は取込時にしか走らないため、機能を入れる前に取り込んだ記録や手入力の記録は
 // 入金/出金のまま残る。それを後から見つけて「口座振替」に直せるようにする。
