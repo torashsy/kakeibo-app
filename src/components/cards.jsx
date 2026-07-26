@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { MUTED, RED } from '../theme.js';
 import { yen, num, ymLabel, uid, addMonth, debtValueTotal, evalAmount } from '../utils';
 import { styles } from '../styles.js';
@@ -33,6 +33,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
     .reduce((sum, [, value]) => sum + debtValueTotal(value), 0);
   const totalRemaining = cards.reduce((a, c) => a + remaining(c.name), 0);
   const [edit, setEdit] = useState(null);
+  const amountRefs = useRef([]);
   const fiscalYearOf = (key) => key.startsWith("FY:") ? Number(key.slice(3)) : /^\d{4}$/.test(key) ? Number(key) : null;
   const fiscalAggregateEntries = (name, period) => {
     const fromYear = Number(period.slice(4));
@@ -46,10 +47,20 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
     const loadedItems = values.flatMap((current) => current && typeof current === "object" && Array.isArray(current.items)
       ? current.items.map((item) => ({ id: item.id || uid(), label: item.label || "", amount: String(item.amount ?? "") }))
       : current == null ? [] : [{ id: uid(), label: "", amount: String(current) }]);
-    const items = loadedItems.length ? loadedItems : [{ id: uid(), label: "", amount: "" }];
+    const items = [...loadedItems, { id: uid(), label: "", amount: "" }];
     setEdit({ name, period, items });
   };
   const setItem = (id, patch) => setEdit((prev) => ({ ...prev, items: prev.items.map((item) => item.id === id ? { ...item, ...patch } : item) }));
+  const setAmount = (id, amount) => setEdit((prev) => {
+    const items = prev.items.map((item) => item.id === id ? { ...item, amount } : item);
+    const isLast = items[items.length - 1]?.id === id;
+    return { ...prev, items: isLast && amount !== "" ? [...items, { id: uid(), label: "", amount: "" }] : items };
+  });
+  const removeItem = (id) => setEdit((prev) => {
+    const items = prev.items.filter((item) => item.id !== id);
+    return { ...prev, items: items.length ? items : [{ id: uid(), label: "", amount: "" }] };
+  });
+  const focusNextAmount = (index) => requestAnimationFrame(() => amountRefs.current[index + 1]?.focus());
   const commitEdit = () => {
     const items = edit.items
       .map((item) => ({ id: item.id, label: item.label.trim(), amount: Number(item.amount) || 0 }))
@@ -90,13 +101,12 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetTitle}>{edit.name}・{edit.period.startsWith("FY+:") ? `${edit.period.slice(4)}年度以降` : edit.period.startsWith("FY:") ? `${edit.period.slice(3)}年度` : edit.period.includes("-") ? ymLabel(edit.period) : `${edit.period}年`}の残債内訳</div>
             {edit.items.map((item, index) => (
-              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 120px 28px", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                <input value={item.label} onChange={(e) => setItem(item.id, { label: e.target.value })} placeholder={`内訳 ${index + 1}`} style={{ ...styles.textInput, margin: 0 }} autoFocus={index === 0} />
-                <input type="number" inputMode="numeric" value={item.amount} onChange={(e) => setItem(item.id, { amount: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} />
-                <button style={styles.removeBtn} aria-label="内訳を削除" onClick={() => setEdit((prev) => ({ ...prev, items: prev.items.filter((x) => x.id !== item.id) }))}>×</button>
+              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(112px, 0.8fr) minmax(0, 1.2fr) 28px", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                <input ref={(node) => { amountRefs.current[index] = node; }} type="number" inputMode="numeric" enterKeyHint="next" value={item.amount} onChange={(e) => setAmount(item.id, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusNextAmount(index); } }} placeholder="金額" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} autoFocus={index === 0} />
+                <input value={item.label} onChange={(e) => setItem(item.id, { label: e.target.value })} placeholder="メモ（任意）" tabIndex={-1} style={{ ...styles.textInput, margin: 0 }} />
+                <button tabIndex={-1} style={styles.removeBtn} aria-label="内訳を削除" onClick={() => removeItem(item.id)}>×</button>
               </div>
             ))}
-            <button style={styles.backupBtn} onClick={() => setEdit((prev) => ({ ...prev, items: [...prev.items, { id: uid(), label: "", amount: "" }] }))}>＋ 内訳</button>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13 }}><span>合計</span><strong>{yen(edit.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0))}</strong></div>
             <button style={styles.saveBtn} onClick={commitEdit}>保存</button>
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
