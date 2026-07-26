@@ -3,7 +3,7 @@ import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
   num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
   plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
-  plannedDebt, estimateSalaryTakeHome,
+  plannedDebt, estimateSalaryTakeHome, plannedSalaryBreakdown,
   hasBalRecord, balTotalOf, monthHasInput, isMonthClosed,
   PLAN_OTHER_INCOME, PLAN_VARIABLE, PLAN_INVEST,
 } from '../utils';
@@ -15,10 +15,12 @@ import { AmountField } from './amount.jsx';
 //  - 見通し: 入力が始まった/締めた月は実績、それ以外は計画。残高は実績を引き継いで先へ試算。
 //  - 計画: セルをタップして収入・変動費・投資を編集(この月/毎月の標準)。固定費は定期費から自動表示。
 //  - 差異: 実績−計画。
-export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths, onToggleClosedMonth }) {
+export function PlanView({ plans, onSave, subs, debt, entries, config, ym, closedMonths, onToggleClosedMonth }) {
   const [mode, setMode] = useState("forecast"); // forecast | plan | diff
   const [edit, setEdit] = useState(null);
   const [salaryEdit, setSalaryEdit] = useState(null);
+  const [salaryExpanded, setSalaryExpanded] = useState(false);
+  const [newBucket, setNewBucket] = useState(null);
   const [fyOffset, setFyOffset] = useState(0);
 
   const fyStart = fyStartOf(ym) + fyOffset;
@@ -30,10 +32,15 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
   }, [entries, months]);
   const actualOf = (k, mo) => {
     const s = computeSummary(entriesByMonth[mo] || []);
+    if (k.startsWith("salaryItem|")) {
+      const item = k.slice(11);
+      return (entriesByMonth[mo] || []).reduce((sum, e) => sum + (e.cat === "salary" && e.item === item ? Number(e.amount) || 0 : 0), 0);
+    }
     return k === "salaryIncome" ? s.salaryIncome : k === "otherIncome" ? s.otherIncome : k === "income" ? s.income : k === "spending" ? s.expense : k === "invest" ? s.invest : k === "net" ? s.net : 0;
   };
   const planOf = (k, mo) => (
-    k.startsWith("var|") ? planValue(plans, k, mo)
+    k.startsWith("salaryItem|") ? (plannedSalaryBreakdown(plans, mo)[k.slice(11)] || 0)
+      : k.startsWith("var|") ? planValue(plans, k, mo)
       : k === "salaryIncome" ? plannedSalaryIncome(plans, mo)
         : k === "otherIncome" ? plannedOtherIncome(plans, mo)
           : k === "income" ? plannedIncome(plans, mo)
@@ -69,9 +76,12 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
   const variableRows = buckets.length
     ? [...buckets.map((name) => ({ k: "var|" + name, label: "・" + name, editable: "var|" + name })), { k: "variable", label: "変動費計", sub: true }]
     : [{ k: "variable", label: "変動費", editable: PLAN_VARIABLE }];
+  const salaryItems = (config && config.salaryItems && config.salaryItems.length) ? config.salaryItems : ["給与", "手当", "交通費手当", "賞与", "控除"];
+  const salaryDetailRows = salaryExpanded ? salaryItems.map((item) => ({ k: "salaryItem|" + item, label: "・" + item, salaryDetail: true })) : [];
   const rows = mode === "plan"
     ? [
-      { k: "salaryIncome", label: "給与", salary: true },
+      { k: "salaryIncome", label: "給与", salary: true, expandable: true },
+      ...salaryDetailRows,
       { k: "otherIncome", label: "その他", editable: PLAN_OTHER_INCOME },
       { k: "income", label: "収入計", sub: true },
       { k: "fixed", label: "固定費", muted: true },
@@ -82,7 +92,8 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
       { k: "net", label: "収支", net: true },
     ]
     : [
-      { k: "salaryIncome", label: "給与" },
+      { k: "salaryIncome", label: "給与", expandable: true },
+      ...salaryDetailRows,
       { k: "otherIncome", label: "その他" },
       { k: "income", label: "収入計", sub: true },
       { k: "spending", label: "支出" },
@@ -153,16 +164,21 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
   };
 
   // 変動費の予算枠(旅費・交際費など)を追加/削除する。枠を作ると変動費を内訳で管理できる。
-  const addBucket = () => {
-    const name = (window.prompt("変動費の枠の名前（例：旅費／交際費／交通費）") || "").trim();
+  const addBucket = () => setNewBucket({
+    name: "",
+    // 旧形式の変動費総額が残っている場合は、最初の項目へ引き継ぐ。
+    amount: buckets.length === 0 && plans.lines && plans.lines.variable && plans.lines.variable.std
+      ? String(plans.lines.variable.std) : "",
+  });
+  const commitBucket = () => {
+    const name = (newBucket.name || "").trim();
     if (!name || name.includes("|")) return;
     const key = "var|" + name;
     if (plans.lines && plans.lines[key]) return;
     const next = { ...plans, lines: { ...(plans.lines || {}) } };
-    // 最初の枠は既存の単一「変動費」の標準額を引き継いで、支出総額が急に変わらないようにする
-    const seedStd = buckets.length === 0 ? (Number(plans.lines && plans.lines.variable && plans.lines.variable.std) || 0) : 0;
-    next.lines[key] = { std: seedStd, over: {} };
+    next.lines[key] = { std: Math.max(0, Math.round(evalAmount(newBucket.amount) || 0)), over: {} };
     onSave(next);
+    setNewBucket(null);
   };
   const deleteBucket = (name) => {
     if (!window.confirm(`変動費の枠「${name}」を削除しますか？`)) return;
@@ -208,7 +224,9 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
               const isSub = !!(r.sub || r.net);
               return (
                 <tr key={r.k}>
-                  <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.muted ? { color: MUTED } : {}) }}>{r.label}</td>
+                  <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.salaryDetail ? { color: MUTED, fontWeight: 400 } : {}), ...(r.muted ? { color: MUTED } : {}) }}>
+                    {r.expandable ? <button aria-expanded={salaryExpanded} style={{ ...styles.cellBtn, width: "100%", textAlign: "left", fontWeight: 600 }} onClick={() => setSalaryExpanded((v) => !v)}>{salaryExpanded ? "⌄" : "›"} {r.label}</button> : r.label}
+                  </td>
                   {months.map((mo) => {
                     const v = cellOf(r.k, mo);
                     const projected = mode === "forecast" && !isActualMonth(mo);
@@ -258,6 +276,17 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
               <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}` }} onClick={commitStd}>毎月の標準に</button>
             </div>
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
+          </div>
+        </div>
+      )}
+      {newBucket && (
+        <div style={styles.sheetBackdrop} onClick={() => setNewBucket(null)}>
+          <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetTitle}>項目を追加</div>
+            <input value={newBucket.name} onChange={(e) => setNewBucket({ ...newBucket, name: e.target.value })} placeholder="項目名" style={styles.textInput} autoFocus />
+            <div style={{ marginTop: 8 }}><AmountField value={newBucket.amount} onChange={(v) => setNewBucket({ ...newBucket, amount: v })} placeholder="毎月の金額" /></div>
+            <button style={{ ...styles.saveBtn, ...(!newBucket.name.trim() ? { opacity: 0.45 } : {}) }} disabled={!newBucket.name.trim()} onClick={commitBucket}>追加</button>
+            <button style={styles.cancelBtn} onClick={() => setNewBucket(null)}>閉じる</button>
           </div>
         </div>
       )}

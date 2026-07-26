@@ -638,6 +638,30 @@ export const plannedSalaryEstimate = (plan: Plan | null | undefined, ym: string)
   return transportAllowance ? { ...estimate, gross: estimate.gross + transportAllowance, takeHome: estimate.takeHome + transportAllowance } : estimate;
 };
 
+// 実績の給与明細と同じ行名で、計画給与の内訳を返す。
+// A/B額面は給与、6・7・12月の加算は賞与、社会保険料と税金は控除として表示する。
+export const plannedSalaryBreakdown = (plan: Plan | null | undefined, ym: string): Record<string, number> => {
+  const salary = plan && plan.salary;
+  const cycle = salary && salary.cycles && salary.cycles[salaryCycleYear(ym)];
+  if (!cycle) return {};
+  const fy = fyStartOf(ym);
+  const rule = salary.rules && salary.rules[String(fy)];
+  const month = Number(ym.slice(5, 7));
+  let bonus = Number(salary.bonuses && salary.bonuses[ym]) || 0;
+  if (rule) {
+    const a = Number(salary.cycles[String(fy - 1)]?.gross) || 0;
+    const b = Number(salary.cycles[String(fy)]?.gross) || 0;
+    if (month === 6) bonus = a * (Number(rule.juneMultiplier) || 0);
+    else if (month === 7) bonus = Math.max(0, b - a) * 3;
+    else if (month === 12) bonus = b * (Number(rule.decemberMultiplier) || 0);
+    else bonus = 0;
+  }
+  const salaryAmount = Number(cycle.gross) || 0;
+  const estimate = estimateSalaryWithAdditionalPay(salaryAmount, Number(cycle.standardMonthly) || salaryAmount, bonus);
+  const transport = month === 4 || month === 10 ? Math.max(0, Math.round(Number(rule?.transportAllowance) || 0)) : 0;
+  return { "給与": salaryAmount, "手当": 0, "交通費手当": transport, "賞与": bonus, "控除": -estimate.deduction };
+};
+
 export const plannedSalaryIncome = (plan: Plan, ym: string): number => plannedSalaryEstimate(plan, ym)?.takeHome ?? planValue(plan, PLAN_INCOME, ym);
 export const plannedOtherIncome = (plan: Plan, ym: string): number => planValue(plan, PLAN_OTHER_INCOME, ym);
 export const plannedIncome = (plan: Plan, ym: string): number => plannedSalaryIncome(plan, ym) + plannedOtherIncome(plan, ym);

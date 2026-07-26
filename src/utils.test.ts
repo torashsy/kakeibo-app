@@ -6,7 +6,7 @@ import {
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, fixedForMonth, subActiveForMonth, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
-  estimateSalaryTakeHome, estimateSalaryWithAdditionalPay, plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedDebt,
+  estimateSalaryTakeHome, estimateSalaryWithAdditionalPay, plannedIncome, plannedSalaryIncome, plannedSalaryBreakdown, plannedOtherIncome, plannedDebt,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
   parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries, entryDaySignature, entryDate,
@@ -282,6 +282,20 @@ describe("計画", () => {
     expect(plannedSalaryIncome(plan, "2026-10")).toBe(estimateSalaryTakeHome(320000, 300000).takeHome + 60000);
     expect(plannedOtherIncome(plan, "2026-10")).toBe(5000);
     expect(plannedIncome(plan, "2026-10")).toBe(plannedSalaryIncome(plan, "2026-10") + 5000);
+  });
+
+  it("plannedSalaryBreakdown: 実績と同じ給与項目へ計画額を分ける", () => {
+    const plan: Plan = { lines: {}, salary: {
+      cycles: { "2025": { gross: 300000, standardMonthly: 300000 }, "2026": { gross: 320000, standardMonthly: 300000 } },
+      bonuses: {}, rules: { "2026": { juneMultiplier: 2, decemberMultiplier: 2.5, transportAllowance: 60000 } },
+    } };
+    const april = plannedSalaryBreakdown(plan, "2026-04");
+    expect(april).toMatchObject({ "給与": 300000, "手当": 0, "交通費手当": 60000, "賞与": 0 });
+    expect(Object.values(april).reduce((a, v) => a + v, 0)).toBe(plannedSalaryIncome(plan, "2026-04"));
+    const june = plannedSalaryBreakdown(plan, "2026-06");
+    expect(june["賞与"]).toBe(600000);
+    expect(june["控除"]).toBeLessThan(0);
+    expect(Object.values(june).reduce((a, v) => a + v, 0)).toBe(plannedSalaryIncome(plan, "2026-06"));
   });
 
   it("plannedDebt: 当年度は月別、次年度以降は年度額を12分割する", () => {
