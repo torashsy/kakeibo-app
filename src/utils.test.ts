@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries, entryDaySignature, entryDate,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1790,9 +1790,9 @@ describe("二重に入っている記録を探す", () => {
   });
 
   it("確実な分だけを「確実」にする(残りは要確認に分ける)", () => {
-    // 同じ明細の行が2件 + 摘要違いが1件。確実に消せるのは1件だけ
+    // 同じ日に、同じ明細の行が2件 + 摘要違いが1件。確実に消せるのは1件だけ
     const src = "2026-06-15|20000|ハイフリツト";
-    const rows = [e({ id: "a", src }), e({ id: "b", src }), e({ id: "c", src: "2026-06-20|20000|sbi" })];
+    const rows = [e({ id: "a", src }), e({ id: "b", src }), e({ id: "c", src: "2026-06-15|20000|sbi" })];
     const g = findDuplicateEntries(rows);
     expect(g).toHaveLength(2);
     expect(g[0]).toMatchObject({ certain: true, keepId: "a", removeIds: ["b"] });
@@ -1821,5 +1821,38 @@ describe("二重に入っている記録を探す", () => {
     const g = findDuplicateEntries(rows);
     expect(g[0]).toMatchObject({ certain: true, removeIds: ["d"] });
     expect(g.map((x) => x.certain)).toEqual([true, false]);
+  });
+});
+
+describe("重複の判定は日付まで見る", () => {
+  const e = (o: any) => ({ ym: "2026-06", cat: "account" as const, item: "投資振替", account: "NEOBANK", amount: 20000, ...o });
+
+  it("同じ月でも日が違えば別の取引(重複にしない)", () => {
+    const rows = [e({ id: "a", src: "2026-06-15|20000|ハイフリツト" }), e({ id: "b", src: "2026-06-20|20000|ハイフリツト" })];
+    expect(findDuplicateEntries(rows)).toEqual([]);
+  });
+
+  it("同じ日・同じ額なら重複を疑う", () => {
+    const rows = [e({ id: "a", src: "2026-06-15|20000|ハイフリツト" }), e({ id: "b", src: "2026-06-15|20000|sbiハイフリツト" })];
+    const g = findDuplicateEntries(rows);
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ certain: false, keepId: "a", removeIds: ["b"] });
+  });
+
+  it("日付を持たない記録(手入力)どうしは月度でまとめる", () => {
+    const rows = [e({ id: "a" }), e({ id: "b" })];
+    expect(findDuplicateEntries(rows)[0]).toMatchObject({ keepId: "a", removeIds: ["b"] });
+  });
+
+  it("日付のある記録と、日付の無い記録は分けて数える", () => {
+    const dated = e({ id: "a", src: "2026-06-15|20000|x" });
+    const m = countBySignature([dated, e({ id: "b" })]);
+    expect(m.get(entryDaySignature(dated)!)).toBe(1);
+    expect(m.get(entrySignature(e({})))).toBe(1);
+  });
+
+  it("日付が読めない指紋は月度あつかいにする", () => {
+    expect(entryDaySignature(e({ src: "こわれた指紋" }))).toBeNull();
+    expect(entryDate(e({ src: "2026-06-15|20000|x" }))).toBe("2026-06-15");
   });
 });

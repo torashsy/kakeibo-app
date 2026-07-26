@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
-import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cycleEndBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, entrySignature, countBySignature, INTERNAL_TRANSFER_ITEM } from '../utils';
+import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cycleEndBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, entrySignature, entryDaySignature, countBySignature, INTERNAL_TRANSFER_ITEM } from '../utils';
 import { styles } from '../styles.js';
 
 // CSVは銀行によってUTF-8とShift_JISが混在する。置換文字(U+FFFD)が出たらShift_JISで読み直す。
@@ -361,7 +361,8 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     : r.cls, config.cycleCutoffDay)));
   // 指紋(日付・金額・摘要)は、同じ取引でも摘要の読み取り方が違うと一致しない。
   // CSVとスクショを別々に取り込むと同じ取引が二重に入っていた(実例: 投資振替)。
-  // そこで摘要に頼らず「同じ月度・同じ行き先・同じ金額」の記録があるかでも重複を見る。
+  // そこで摘要に頼らず「同じ日・同じ行き先・同じ金額」の記録があるかでも重複を見る。
+  // 日付を持たない記録(手入力)だけは月度で見る。
   // ただし同じ内容の取引が本当に複数あることもあるので、既にある件数の分だけを
   // 重複とみなし、行ごとに「別の取引として取り込む」で取り消せるようにする。
   const sigCounts = React.useMemo(() => countBySignature(existing || []), [existing]);
@@ -372,7 +373,9 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     if (!e || !e.src) return null;
     const strong = txnBalanceKey(rows[i].txn);
     const key = strong || e.src;
-    const sig = entrySignature(e);
+    // まず同じ日で照らす。無ければ、日付を持たない記録(手入力)と月度で照らす。
+    const daySig = entryDaySignature(e);
+    const sig = daySig && (sigLeft.get(daySig) || 0) > 0 ? daySig : entrySignature(e);
     const left = sigLeft.get(sig) || 0;
     if (isExistingTxn(rows[i].txn)) {
       if (left > 0) sigLeft.set(sig, left - 1); // 既存の1件と対応が付いた
