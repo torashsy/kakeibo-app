@@ -41,7 +41,8 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
       <SpendingMeter plans={plans} subs={subs} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
       <AnnualOutlookCard plans={plans} subs={subs} debt={debt} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={onOpenPlan} />
       <div style={styles.sumGrid}>
-        <SumCell label="給与(手取り)" value={summary.gross + summary.deduction} color={GREEN} />
+        <SumCell label="給与" value={summary.salaryIncome} color={GREEN} />
+        <SumCell label="その他" value={summary.otherIncome} color={GREEN} />
         <button
           style={{ ...styles.sumCell, width: "100%", textAlign: "left", fontFamily: "inherit", cursor: hasBreakdown ? "pointer" : "default" }}
           onClick={() => hasBreakdown && setCardOpen((o) => !o)}
@@ -52,7 +53,6 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
           </div>
           <div style={{ ...styles.sumCellValue, color: RED }}>{yen(-summary.cardTotal)}</div>
         </button>
-        <SumCell label="入金(預入・入金)" value={summary.cashIn} color={GREEN} />
         <SumCell label="出金(引出・出金)" value={-summary.cashOut} color={RED} />
       </div>
       {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} />}

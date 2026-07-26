@@ -6,7 +6,7 @@ import {
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, fixedForMonth, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
-  estimateSalaryTakeHome, estimateSalaryWithAdditionalPay, plannedIncome, plannedDebt,
+  estimateSalaryTakeHome, estimateSalaryWithAdditionalPay, plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedDebt,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
   parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries, entryDaySignature, entryDate,
@@ -129,6 +129,10 @@ describe("computeSummary", () => {
     { ym: "2026-06", cat: "account", item: "残高", account: "B", amount: 222222 },
   ];
   const s = computeSummary(entries);
+  it("収入を給与とその他に分ける", () => {
+    expect(s.salaryIncome).toBe(300000 - 50000);
+    expect(s.otherIncome).toBe(10000);
+  });
   it("収入=給与+控除+入金系", () => expect(s.income).toBe(300000 - 50000 + 10000));
   it("支出=カード+出金系", () => expect(s.expense).toBe(40000 + 20000));
   it("収支=収入-支出+投資振替(符号のまま)", () => expect(s.net).toBe(s.income - s.expense - 30000));
@@ -254,6 +258,18 @@ describe("計画", () => {
     expect(plannedIncome(plan, "2026-12")).toBe(estimateSalaryWithAdditionalPay(320000, 320000, 800000).takeHome);
   });
 
+  it("plannedIncome: 交通費手当は4月と10月だけ給与へ加える", () => {
+    const plan: Plan = { lines: { otherIncome: { std: 5000, over: {} } }, salary: {
+      cycles: { "2025": { gross: 300000, standardMonthly: 300000 }, "2026": { gross: 320000, standardMonthly: 300000 } },
+      bonuses: {}, rules: { "2026": { juneMultiplier: 0, decemberMultiplier: 0, transportAllowance: 60000 } },
+    } };
+    expect(plannedSalaryIncome(plan, "2026-04")).toBe(estimateSalaryTakeHome(300000, 300000).takeHome + 60000);
+    expect(plannedSalaryIncome(plan, "2026-05")).toBe(estimateSalaryTakeHome(300000, 300000).takeHome);
+    expect(plannedSalaryIncome(plan, "2026-10")).toBe(estimateSalaryTakeHome(320000, 300000).takeHome + 60000);
+    expect(plannedOtherIncome(plan, "2026-10")).toBe(5000);
+    expect(plannedIncome(plan, "2026-10")).toBe(plannedSalaryIncome(plan, "2026-10") + 5000);
+  });
+
   it("plannedDebt: 当年度は月別、次年度以降は年度額を12分割する", () => {
     const debt = { JCB: { "2026-06": 24000, "FY:2027": { items: [{ amount: 120000 }] } } };
     expect(plannedDebt(debt, "2026-06")).toBe(24000);
@@ -275,10 +291,12 @@ describe("計画", () => {
       },
     };
     const p = migratePlan(legacy, subs);
-    expect(Object.keys(p.lines).sort()).toEqual(["income", "invest", "var|その他", "var|交通費", "var|食費"]);
+    expect(Object.keys(p.lines).sort()).toEqual(["income", "invest", "otherIncome", "var|その他", "var|交通費", "var|食費"]);
     expect(p.lines.income.std).toBe(300000 - 60000);
     expect(p.lines.income.over["2026-06"]).toBe(286000 - 60000);
-    expect(p.lines.income.over["2026-11"]).toBe(300000 - 60000 + 100000);
+    expect(p.lines.income.over["2026-11"]).toBeUndefined();
+    expect(p.lines.otherIncome.over["2026-11"]).toBe(100000);
+    expect(plannedIncome(p, "2026-11")).toBe(300000 - 60000 + 100000);
     // 変動費 = (カード計 100000) − 固定費(2000)。総額=固定費+変動費=カード計 を保つ
     expect(plannedVariable(p, "2026-05")).toBe(100000 - 2000);
     expect(plannedSpending(p, subs, "2026-05")).toBe(100000);
@@ -996,6 +1014,13 @@ describe("給与ルールの既定と移行", () => {
     // 利用者が消したあとに読み込み直しても復活しない
     const removed = { ...after, importRules: rules.filter((r: ImportRule) => r.match !== "給与") };
     expect((migrateConfig(removed).importRules as ImportRule[]).some((r: ImportRule) => r.match === "給与")).toBe(false);
+  });
+
+  it("交通費手当を給与項目へ一度だけ追加する", () => {
+    const after = migrateConfig({ accounts: [], salaryItems: ["給与", "控除"] });
+    expect(after.salaryItems).toEqual(["給与", "控除", "交通費手当"]);
+    const removed = { ...after, salaryItems: after.salaryItems.filter((x: string) => x !== "交通費手当") };
+    expect(migrateConfig(removed).salaryItems).toEqual(["給与", "控除"]);
   });
 });
 

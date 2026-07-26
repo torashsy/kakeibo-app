@@ -27,6 +27,7 @@ export interface Config {
   csvAccountMap?: Record<string, string>; // CSVの目印→口座。一度選べば次回から自動で振り分ける
   importRulesSeeded?: number;     // 既定ルールを追加した版。増やすと一度だけ追加が走る(利用者が消したルールは復活しない)
   ownTransferKeywordsSeeded?: number; // 自分名義キーワードを追加した版
+  salaryItemsSeeded?: number;
 }
 
 // スクショ取込(OCR)の振り分けルール。matchは摘要に含まれるキーワード(部分一致)。
@@ -72,7 +73,7 @@ export interface Sub {
 
 export interface PlanLineData { std: number; over: Record<string, number>; }
 export interface SalaryCyclePlan { gross: number; standardMonthly: number; }
-export interface SalaryRule { juneMultiplier: number; decemberMultiplier: number; }
+export interface SalaryRule { juneMultiplier: number; decemberMultiplier: number; transportAllowance?: number; }
 export interface SalaryPlan {
   cycles: Record<string, SalaryCyclePlan>; // 7月開始年 -> 翌6月まで
   bonuses: Record<string, number>;         // YYYY-MM -> 額面
@@ -82,6 +83,7 @@ export interface Plan { version?: number; fyStart?: number; lines: Record<string
 
 export interface Summary {
   gross: number; deduction: number; cardTotal: number; cashIn: number; cashOut: number; invest: number;
+  salaryIncome: number; otherIncome: number;
   income: number; expense: number; net: number; balances: Record<string, number>; balTotal: number;
 }
 
@@ -264,7 +266,7 @@ export const ALL_FLOW_TYPES: string[] = ["預入", "入金", "引出", "出金",
 
 export const DEFAULT_CONFIG: Config = {
   accounts: ["ゆうちょ", "NEOBANK", "JRE BANK"],
-  salaryItems: ["給与", "手当", "賞与", "控除"],
+  salaryItems: ["給与", "手当", "交通費手当", "賞与", "控除"],
   // 口座ごとに表示する入出金・振替の種類(未指定の口座は全種類を表示)
   accountFlows: {
     "ゆうちょ": ["預入", "入金", "引出", "出金"],   // 投資振替は使わない
@@ -336,6 +338,10 @@ export function migrateConfig(cfg: any): any {
   if (!Array.isArray(out.importRules)) out = { ...out, importRules: [] };
   if (!Array.isArray(out.ownTransferKeywords)) out = { ...out, ownTransferKeywords: [] };
   if (!out.csvAccountMap || typeof out.csvAccountMap !== "object") out = { ...out, csvAccountMap: {} };
+  if (!(Number(out.salaryItemsSeeded) >= 1)) {
+    const items = Array.isArray(out.salaryItems) ? out.salaryItems : [];
+    out = { ...out, salaryItems: items.includes("交通費手当") ? items : [...items, "交通費手当"], salaryItemsSeeded: 1 };
+  }
   // 給与・賞与の除外ルールを一度だけ追加する。版で管理するので、利用者が消したら復活しない。
   if (!(Number(out.importRulesSeeded) >= 1)) {
     const has = (m: string) => (out.importRules || []).some((r: any) => r && r.match === m);
@@ -400,10 +406,11 @@ export function computeSummary(monthEntries: Entry[]): Summary {
       else if (role === "out") cashOut += Math.abs(e.amount);
     }
   }
-  const income = gross + deduction + cashIn, expense = cardTotal + cashOut;
+  const salaryIncome = gross + deduction, otherIncome = cashIn;
+  const income = salaryIncome + otherIncome, expense = cardTotal + cashOut;
   const net = income - expense + invest;   // 投資振替は符号のまま加算(−なら支出方向、＋なら収入方向)
   const balTotal = Object.values(balances).reduce((a, b) => a + b, 0);
-  return { gross, deduction, cardTotal, cashIn, cashOut, invest, income, expense, net, balances, balTotal };
+  return { gross, deduction, cardTotal, cashIn, cashOut, invest, salaryIncome, otherIncome, income, expense, net, balances, balTotal };
 }
 
 
@@ -501,6 +508,7 @@ export const planValue = (plan: Plan | null | undefined, key: string, ym: string
 // 計画は「収入見込み」「変動費見込み」「投資振替見込み」の3本だけを持つ(いずれも標準月std＋例外月over)。
 // 支出見込みの総額 = 固定費(定期費=subsから自動集計) + 変動費。固定費は計画に保存せず毎回算出する。
 export const PLAN_INCOME = "income";
+export const PLAN_OTHER_INCOME = "otherIncome";
 export const PLAN_VARIABLE = "variable";
 export const PLAN_INVEST = "invest";
 
@@ -606,10 +614,15 @@ export const plannedSalaryEstimate = (plan: Plan | null | undefined, ym: string)
     else bonus = 0;
   }
   const baseGross = Number(cycle.gross) || 0;
-  return estimateSalaryWithAdditionalPay(baseGross, Number(cycle.standardMonthly) || baseGross, bonus);
+  const estimate = estimateSalaryWithAdditionalPay(baseGross, Number(cycle.standardMonthly) || baseGross, bonus);
+  const month = Number(ym.slice(5, 7));
+  const transportAllowance = month === 4 || month === 10 ? Math.max(0, Math.round(Number(rule?.transportAllowance) || 0)) : 0;
+  return transportAllowance ? { ...estimate, gross: estimate.gross + transportAllowance, takeHome: estimate.takeHome + transportAllowance } : estimate;
 };
 
-export const plannedIncome = (plan: Plan, ym: string): number => plannedSalaryEstimate(plan, ym)?.takeHome ?? planValue(plan, PLAN_INCOME, ym);
+export const plannedSalaryIncome = (plan: Plan, ym: string): number => plannedSalaryEstimate(plan, ym)?.takeHome ?? planValue(plan, PLAN_INCOME, ym);
+export const plannedOtherIncome = (plan: Plan, ym: string): number => planValue(plan, PLAN_OTHER_INCOME, ym);
+export const plannedIncome = (plan: Plan, ym: string): number => plannedSalaryIncome(plan, ym) + plannedOtherIncome(plan, ym);
 // 変動費の予算枠(旅費/交際費など)。計画に "var|<名前>" 行があればそれらが枠、無ければ単一の変動費。
 export const variableBuckets = (plan: Plan | null | undefined): string[] =>
   plan && plan.lines ? Object.keys(plan.lines).filter((k) => k.startsWith("var|")).map((k) => k.slice(4)) : [];
@@ -656,21 +669,24 @@ export function migratePlan(plan: any, subs: Sub[] | null | undefined): Plan {
   const sumAt = (keys: string[], m: string) => keys.reduce((a, k) => a + planValue(plan, k, m), 0);
   const months = new Set<string>();
   for (const k of Object.keys(lines)) for (const m of Object.keys(lines[k].over || {})) months.add(m);
-  const income: PlanLineData = { std: sumStd(salaryKeys) + sumStd(incomeFlowKeys), over: {} };
+  const income: PlanLineData = { std: sumStd(salaryKeys), over: {} };
+  const otherIncome: PlanLineData = { std: sumStd(incomeFlowKeys), over: {} };
   const variable: PlanLineData = { std: Math.max(0, sumStd(cardKeys) + sumStd(outFlowKeys) - fixed), over: {} };
   const invest: PlanLineData = { std: sumStd(investKeys), over: {} };
   for (const m of months) {
-    const iv = sumAt(salaryKeys.concat(incomeFlowKeys), m); if (iv !== income.std) income.over[m] = iv;
+    const iv = sumAt(salaryKeys, m); if (iv !== income.std) income.over[m] = iv;
+    const oi = sumAt(incomeFlowKeys, m); if (oi !== otherIncome.std) otherIncome.over[m] = oi;
     const vv = Math.max(0, sumAt(cardKeys.concat(outFlowKeys), m) - fixed); if (vv !== variable.std) variable.over[m] = vv;
     const nv = sumAt(investKeys, m); if (nv !== invest.std) invest.over[m] = nv;
   }
-  return migrateSimplePlan({ fyStart: plan.fyStart, lines: { [PLAN_INCOME]: income, [PLAN_VARIABLE]: variable, [PLAN_INVEST]: invest } });
+  return migrateSimplePlan({ fyStart: plan.fyStart, lines: { [PLAN_INCOME]: income, [PLAN_OTHER_INCOME]: otherIncome, [PLAN_VARIABLE]: variable, [PLAN_INVEST]: invest } });
 }
 
 function migrateSimplePlan(plan: Plan): Plan {
   const lines = { ...(plan.lines || {}) };
   const needsVariableSplit = !Object.keys(lines).some((k) => k.startsWith("var|"));
-  if (!needsVariableSplit && plan.version && plan.version >= 3) return plan;
+  if (!needsVariableSplit && plan.version && plan.version >= 4 && lines[PLAN_OTHER_INCOME]) return plan;
+  if (!lines[PLAN_OTHER_INCOME]) lines[PLAN_OTHER_INCOME] = { std: 0, over: {} };
   if (needsVariableSplit) {
     const source = lines[PLAN_VARIABLE] || { std: 60000, over: {} };
     const split = (totalValue: number) => {
@@ -694,7 +710,7 @@ function migrateSimplePlan(plan: Plan): Plan {
     lines["var|交通費"] = transport;
     lines["var|その他"] = other;
   }
-  return { ...plan, version: 3, lines };
+  return { ...plan, version: 4, lines };
 }
 
 // その月に何らかの入力(記録またはその月のメモ)があるか。
@@ -1782,6 +1798,7 @@ export const SEED_PLAN: Plan = {
   fyStart: 2026,
   lines: {
     income: { std: 248000, over: { "2026-06": 357000, "2026-07": 306000, "2026-11": 1348000, "2027-01": 868000 } },
+    otherIncome: { std: 0, over: {} },
     variable: { std: 149000, over: { "2026-06": 139000 } },
     invest: { std: -46000, over: {} },
   },

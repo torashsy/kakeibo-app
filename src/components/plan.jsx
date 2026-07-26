@@ -2,10 +2,10 @@ import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
   num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
-  plannedIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
+  plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
   plannedDebt, estimateSalaryTakeHome,
   hasBalRecord, balTotalOf, monthHasInput, isMonthClosed,
-  PLAN_INCOME, PLAN_VARIABLE, PLAN_INVEST,
+  PLAN_OTHER_INCOME, PLAN_VARIABLE, PLAN_INVEST,
 } from '../utils';
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
@@ -30,11 +30,13 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
   }, [entries, months]);
   const actualOf = (k, mo) => {
     const s = computeSummary(entriesByMonth[mo] || []);
-    return k === "income" ? s.income : k === "spending" ? s.expense : k === "invest" ? s.invest : k === "net" ? s.net : 0;
+    return k === "salaryIncome" ? s.salaryIncome : k === "otherIncome" ? s.otherIncome : k === "income" ? s.income : k === "spending" ? s.expense : k === "invest" ? s.invest : k === "net" ? s.net : 0;
   };
   const planOf = (k, mo) => (
     k.startsWith("var|") ? planValue(plans, k, mo)
-      : k === "income" ? plannedIncome(plans, mo)
+      : k === "salaryIncome" ? plannedSalaryIncome(plans, mo)
+        : k === "otherIncome" ? plannedOtherIncome(plans, mo)
+          : k === "income" ? plannedIncome(plans, mo)
         : k === "spending" ? plannedSpending(plans, subs, mo, debt)
           : k === "variable" ? plannedVariable(plans, mo)
             : k === "fixed" ? fixedForMonth(subs, mo)
@@ -69,7 +71,9 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
     : [{ k: "variable", label: "変動費", editable: PLAN_VARIABLE }];
   const rows = mode === "plan"
     ? [
-      { k: "income", label: "収入", salary: true },
+      { k: "salaryIncome", label: "給与", salary: true },
+      { k: "otherIncome", label: "その他", editable: PLAN_OTHER_INCOME },
+      { k: "income", label: "収入計", sub: true },
       { k: "fixed", label: "固定費", muted: true },
       ...variableRows,
       { k: "debt", label: "残債", muted: true },
@@ -78,7 +82,9 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
       { k: "net", label: "収支", net: true },
     ]
     : [
-      { k: "income", label: "収入" },
+      { k: "salaryIncome", label: "給与" },
+      { k: "otherIncome", label: "その他" },
+      { k: "income", label: "収入計", sub: true },
       { k: "spending", label: "支出" },
       { k: "invest", label: "投資振替" },
       { k: "net", label: "収支", net: true },
@@ -108,6 +114,7 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
       standard: current.standardMonthly ? String(current.standardMonthly) : (prev.standardMonthly ? String(prev.standardMonthly) : ""),
       x: rule.juneMultiplier != null ? String(rule.juneMultiplier) : (bonuses[`${fyStart}-06`] && prev.gross ? String(Number(bonuses[`${fyStart}-06`]) / Number(prev.gross)) : ""),
       y: rule.decemberMultiplier != null ? String(rule.decemberMultiplier) : (bonuses[`${fyStart}-12`] && current.gross ? String(Number(bonuses[`${fyStart}-12`]) / Number(current.gross)) : ""),
+      transport: rule.transportAllowance ? String(rule.transportAllowance) : "",
     });
   };
 
@@ -126,6 +133,7 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
     next.salary.rules[String(fyStart)] = {
       juneMultiplier: Math.max(0, Number(salaryEdit.x) || 0),
       decemberMultiplier: Math.max(0, Number(salaryEdit.y) || 0),
+      transportAllowance: amount(salaryEdit.transport),
     };
     for (const month of [`${fyStart}-06`, `${fyStart}-07`, `${fyStart}-12`]) delete next.salary.bonuses[month];
     onSave(next); setSalaryEdit(null);
@@ -264,6 +272,7 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
               <label style={{ fontSize: 12, color: MUTED, gridColumn: "1 / -1" }}><span>標準報酬月額</span><AmountField value={salaryEdit.standard} onChange={(v) => setSalaryEdit({ ...salaryEdit, standard: v })} placeholder="0" /></label>
               <label style={{ fontSize: 12, color: MUTED }}><span>6月（xか月）</span><input type="number" inputMode="decimal" step="0.1" value={salaryEdit.x} onChange={(e) => setSalaryEdit({ ...salaryEdit, x: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} /></label>
               <label style={{ fontSize: 12, color: MUTED }}><span>12月（yか月）</span><input type="number" inputMode="decimal" step="0.1" value={salaryEdit.y} onChange={(e) => setSalaryEdit({ ...salaryEdit, y: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} /></label>
+              <label style={{ fontSize: 12, color: MUTED, gridColumn: "1 / -1" }}><span>交通費手当（4・10月）</span><AmountField value={salaryEdit.transport} onChange={(v) => setSalaryEdit({ ...salaryEdit, transport: v })} placeholder="0" /></label>
             </div>
             <SalaryRulePreview edit={salaryEdit} />
             <button style={{ ...styles.saveBtn, ...(!evalAmount(salaryEdit.standard) ? { opacity: 0.45 } : {}) }} disabled={!evalAmount(salaryEdit.standard)} onClick={commitSalary}>保存</button>
@@ -282,12 +291,14 @@ function SalaryRulePreview({ edit }) {
   const june = a * Math.max(0, Number(edit.x) || 0);
   const july = Math.max(0, b - a) * 3;
   const december = b * Math.max(0, Number(edit.y) || 0);
+  const transport = Math.max(0, evalAmount(edit.transport) || 0);
   const aNet = standard ? estimateSalaryTakeHome(a, standard).takeHome : 0;
   const bNet = standard ? estimateSalaryTakeHome(b, standard).takeHome : 0;
   return (
     <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.8, marginTop: 10 }}>
       <div>手取り　A {num(aNet)} ／ B {num(bNet)}</div>
       <div>賞与等　6月 {num(june)} ／ 7月 {num(july)} ／ 12月 {num(december)}</div>
+      <div>交通費　4月・10月 {num(transport)}</div>
     </div>
   );
 }
