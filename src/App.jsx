@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -181,9 +181,17 @@ export default function App() {
     // 後から口座間振替と判明した過去の片側は、置き換え用の記録を追加する前に外す
     const prev = removeIds && removeIds.length ? prev0.filter((x) => !removeIds.includes(x.id)) : prev0;
     const bals = list.filter((e) => e.cat === "account" && acctRole(e.item) === "bal");
-    const kept = bals.length === 0 ? prev
-      : prev.filter((x) => !bals.some((b) => x.ym === b.ym && x.cat === "account" && x.account === b.account && acctRole(x.item) === "bal"));
-    const n = [...kept, ...list.map((e) => ({ ...e, id: uid() }))];
+    // 締め日まで届いた残高を、届いていない残高で塗り潰さない
+    // (銀行アプリは暦月単位なので、取り込む順番が「翌月→当月」だと起きる)
+    const skipped = new Set();
+    const kept = bals.length === 0 ? prev : prev.filter((x) => {
+      if (!(x.cat === "account" && acctRole(x.item) === "bal")) return true;
+      const b = bals.find((b) => x.ym === b.ym && x.account === b.account);
+      if (!b) return true;
+      if (shouldReplaceBalance(x, b, config.cycleCutoffDay)) return false;
+      skipped.add(b); return true;
+    });
+    const n = [...kept, ...list.filter((e) => !skipped.has(e)).map((e) => ({ ...e, id: uid() }))];
     save("entries", n); return n;
   });
   const commitImportRules = (rules) => commitConfig({ ...config, importRules: rules });

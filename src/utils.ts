@@ -571,6 +571,24 @@ export function balancesAsOf(entries: Entry[], ym: string): Record<string, { amo
 // 抜けたまま「月末残高」として表示されてしまうので、画面で断る必要がある。
 export const balanceReachesCycleEnd = (b: { ym: string; asOf?: string }, cutoffDay: number = 0): boolean =>
   !b || !b.asOf || b.asOf >= cycleEndDate(b.ym, cutoffDay);
+
+// 同じ月度・同じ口座の残高を取り込んだとき、既存を置き換えてよいか。
+// 銀行アプリは暦月単位なので、5月度(5/11〜6/10)の残高は6月の明細から得られる。
+// 取り込む順番が「6月→5月」だと、締め日まで届いた残高を5/31時点の残高が
+// 塗り潰してしまうため、届いている方を残す。
+export function shouldReplaceBalance(
+  existing: { ym: string; asOf?: string } | null | undefined,
+  incoming: { ym: string; asOf?: string },
+  cutoffDay: number = 0,
+): boolean {
+  if (!existing) return true;
+  const hasEnd = balanceReachesCycleEnd(existing, cutoffDay);
+  const getsEnd = balanceReachesCycleEnd(incoming, cutoffDay);
+  if (hasEnd !== getsEnd) return getsEnd;          // 締め日まで届く方を採る
+  // 同じ程度なら、より新しい時点のものを採る(同じ時点なら取り込んだ方で上書き)
+  if (existing.asOf && incoming.asOf) return incoming.asOf >= existing.asOf;
+  return true;
+}
 export const balTotalAsOf = (entries: Entry[], ym: string): number | null => {
   const b = balancesAsOf(entries, ym);
   const ks = Object.keys(b);
@@ -1320,6 +1338,36 @@ export function verifyCycles(entries: Entry[], cutoffDay: number = 0): CycleChec
     const covered = !endDate || !asOf ? !endDate : asOf >= endDate;
     return { ym, opening, net: Math.round(net), expected, closing, diff, ok: diff === 0, asOf, endDate, covered };
   });
+}
+
+// 残高が合わないときの原因候補。差額そのものから、どの記録が怪しいかを絞る。
+//   dup     … その記録を消せば差額が埋まる(同じ取引を二重に取り込んだ)
+//   missing … 同じ額の記録がもう1件あるはず(取りこぼし)
+//   sign    … 符号が逆(出金を入金として読んだ)。符号を直すと増減が額の2倍動くので見分けられる
+export type GapHintKind = "dup" | "missing" | "sign";
+export interface GapHint { kind: GapHintKind; entry: Entry; }
+export function explainCycleGap(monthEntries: Entry[], diff: number | null | undefined): GapHint[] {
+  if (!diff) return [];
+  const d = Math.round(diff);
+  const out: GapHint[] = [];
+  for (const e of monthEntries || []) {
+    if (e.cat === "account" && acctRole(e.item) === "bal") continue; // 残高そのものは増減ではない
+    const a = Math.round(e.amount);
+    if (a === 0) continue;
+    if (d === -a) out.push({ kind: "dup", entry: e });
+    else if (d === a) out.push({ kind: "missing", entry: e });
+    else if (d === -2 * a) out.push({ kind: "sign", entry: e });
+  }
+  return out;
+}
+
+// 差額がどちら向きにずれているかの説明。候補が挙がらないときでも、
+// 「何を探せばよいか」が分かるようにする。
+export function cycleGapDirection(diff: number | null | undefined): string {
+  if (!diff) return "";
+  return diff > 0
+    ? "実際の残高の方が多いので、入金の記録が抜けているか、出金を多く記録しています"
+    : "実際の残高の方が少ないので、出金の記録が抜けているか、入金を多く記録しています";
 }
 
 // 既存の記録から「自分の口座間の振替」を後から探す。
