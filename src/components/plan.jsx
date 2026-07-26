@@ -10,17 +10,6 @@ import {
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
 
-// iOSのHiraginoでは tabular-nums が効かない場合があるため、計画表の数字は
-// 明示的な等幅フォントにする。符号・カンマ・太字を含めて桁位置を揃える。
-const PLAN_NUMBER_STYLE = {
-  textAlign: "right",
-  fontFamily: 'ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace',
-  fontVariantNumeric: "tabular-nums",
-  fontFeatureSettings: '"tnum" 1, "lnum" 1',
-  fontKerning: "none",
-  letterSpacing: 0,
-};
-
 // 簡素化した計画ビュー。計画は「収入」「変動費」「投資振替」の3本だけを持ち、
 // 支出見込み総額 = 固定費(定期費から自動) + 変動費。年度(4月開始)の月×項目で見る。
 //  - 見通し: 入力が始まった/締めた月は実績、それ以外は計画。残高は実績を引き継いで先へ試算。
@@ -114,7 +103,8 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
     ];
 
   const rowTotal = (r) => months.reduce((a, mo) => a + cellOf(r.k, mo), 0);
-  const tableWidth = 112 + (months.length + 1) * 92;
+  // 実績の年間表と同じ列幅にする。異なる列幅だとiOSで数値の右端がずれて見える。
+  const tableWidth = 132 + (months.length + 1) * 96;
   const showBal = mode === "forecast";
 
   const openEdit = (r, mo) => {
@@ -230,7 +220,7 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
       )}
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: tableWidth }}>
-          <colgroup><col style={{ width: 112 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 92 }} />)}<col style={{ width: 92 }} /></colgroup>
+          <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th key={mo} style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>通期</th></tr></thead>
           <tbody>
             {rows.map((r) => {
@@ -251,19 +241,19 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
                     if (mode === "diff") color = diffColor(r.k, v);
                     else if (r.net) color = v === 0 ? undefined : v > 0 ? GREEN : RED;
                     else if (r.muted || projected) color = MUTED;
-                    const base = { ...styles.tdNum, ...PLAN_NUMBER_STYLE, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 600 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
+                    const base = { ...styles.tdNum, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 600 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
                     const canOpen = r.salary || r.salaryDetail || r.destination || (r.editable && mode === "plan");
-                    if (canOpen) return <td key={mo} style={base}><button aria-label={`${r.label}・${ymLabel(mo)}`} style={{ ...styles.cellBtn, display: "block", width: "100%", minHeight: 20, textAlign: "right", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
+                    if (canOpen) return <td key={mo} style={base}><button aria-label={`${r.label}・${ymLabel(mo)}`} style={{ ...styles.cellBtn, display: "block", width: "100%", minHeight: 20, textAlign: "inherit", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
                     return <td key={mo} style={base}>{cellText(v)}</td>;
                   })}
-                  {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...PLAN_NUMBER_STYLE, ...(isSub ? { fontWeight: 700 } : {}), ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
+                  {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? { fontWeight: 700 } : {}), ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
                 </tr>
               );
             })}
             {showBal && (
               <tr>
                 <td style={{ ...styles.td, ...styles.tdSticky, ...styles.tdSubLabel }}>残高見通し</td>
-                {months.map((mo) => { const b = balByMonth[mo]; return <td key={mo} style={{ ...styles.tdNum, ...styles.tdSubTotal, ...PLAN_NUMBER_STYLE, fontWeight: 600, ...(mo === ym ? { background: "var(--col-hl)" } : {}), color: b.anchored ? INK : MUTED }}>{b.bal ? num(b.bal) : ""}</td>; })}
+                {months.map((mo) => { const b = balByMonth[mo]; return <td key={mo} style={{ ...styles.tdNum, ...styles.tdSubTotal, fontWeight: 600, ...(mo === ym ? { background: "var(--col-hl)" } : {}), color: b.anchored ? INK : MUTED }}>{b.bal ? num(b.bal) : ""}</td>; })}
                 <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}></td>
               </tr>
             )}
