@@ -7,8 +7,8 @@ import { DebtTable } from './cards.jsx';
 //  - サブスク/通信費などの定期支払い(Subs): 解約検討・月/年換算・更新日の管理
 //  - 分割払い(残債 DebtTable): 決まった将来の出費という点でサブスクと同じ性質なのでここに同居
 // いずれも計画タブの「固定費」の土台になる参照情報で、収支の実績集計そのものには影響しない。
-export function Recurring({ subs, onSaveSubs, cards, debt, ym, onSaveDebt }) {
-  const [view, setView] = useState("subs");
+export function Recurring({ subs, onSaveSubs, cards, debt, ym, onSaveDebt, initialView = "subs" }) {
+  const [view, setView] = useState(initialView);
   return (
     <div style={{ padding: "4px 2px 8px" }}>
       <div style={styles.viewToggle}>

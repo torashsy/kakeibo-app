@@ -15,7 +15,7 @@ import { AmountField } from './amount.jsx';
 //  - 見通し: 入力が始まった/締めた月は実績、それ以外は計画。残高は実績を引き継いで先へ試算。
 //  - 計画: セルをタップして収入・変動費・投資を編集(この月/毎月の標準)。固定費は定期費から自動表示。
 //  - 差異: 実績−計画。
-export function PlanView({ plans, onSave, subs, debt, entries, config, ym, closedMonths, onToggleClosedMonth }) {
+export function PlanView({ plans, onSave, subs, debt, entries, config, ym, closedMonths, onToggleClosedMonth, onOpenRecurring }) {
   const [mode, setMode] = useState("forecast"); // forecast | plan | diff
   const [edit, setEdit] = useState(null);
   const [salaryEdit, setSalaryEdit] = useState(null);
@@ -84,9 +84,9 @@ export function PlanView({ plans, onSave, subs, debt, entries, config, ym, close
       ...salaryDetailRows,
       { k: "otherIncome", label: "その他", editable: PLAN_OTHER_INCOME },
       { k: "income", label: "収入計", sub: true },
-      { k: "fixed", label: "固定費", muted: true },
+      { k: "fixed", label: "固定費", muted: true, destination: "subs" },
       ...variableRows,
-      { k: "debt", label: "残債", muted: true },
+      { k: "debt", label: "残債", muted: true, destination: "debt" },
       { k: "spending", label: "支出計", sub: true },
       { k: "invest", label: "投資振替", editable: PLAN_INVEST },
       { k: "net", label: "収支", net: true },
@@ -106,7 +106,8 @@ export function PlanView({ plans, onSave, subs, debt, entries, config, ym, close
   const showBal = mode === "forecast";
 
   const openEdit = (r, mo) => {
-    if (r.salary) { openSalary(); return; }
+    if (r.salary || r.salaryDetail) { openSalary(); return; }
+    if (r.destination) { onOpenRecurring && onOpenRecurring(r.destination); return; }
     if (mode !== "plan" || !r.editable) return;
     const l = plans && plans.lines && plans.lines[r.editable];
     const ov = l && l.over && l.over[mo] != null ? String(l.over[mo]) : "";
@@ -225,7 +226,11 @@ export function PlanView({ plans, onSave, subs, debt, entries, config, ym, close
               return (
                 <tr key={r.k}>
                   <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.salaryDetail ? { color: MUTED, fontWeight: 400 } : {}), ...(r.muted ? { color: MUTED } : {}) }}>
-                    {r.expandable ? <button aria-expanded={salaryExpanded} style={{ ...styles.cellBtn, width: "100%", textAlign: "left", fontWeight: 600 }} onClick={() => setSalaryExpanded((v) => !v)}>{salaryExpanded ? "⌄" : "›"} {r.label}</button> : r.label}
+                    {r.expandable
+                      ? <button aria-expanded={salaryExpanded} style={{ ...styles.cellBtn, width: "100%", textAlign: "left", fontWeight: 600 }} onClick={() => setSalaryExpanded((v) => !v)}>{salaryExpanded ? "⌄" : "›"} {r.label}</button>
+                      : (r.editable || r.salaryDetail || r.destination)
+                        ? <button style={{ ...styles.cellBtn, width: "100%", textAlign: "left", color: "inherit", fontWeight: "inherit" }} onClick={() => openEdit(r, months.includes(ym) ? ym : months[0])}>{r.label}</button>
+                        : r.label}
                   </td>
                   {months.map((mo) => {
                     const v = cellOf(r.k, mo);
@@ -235,7 +240,8 @@ export function PlanView({ plans, onSave, subs, debt, entries, config, ym, close
                     else if (r.net) color = v === 0 ? undefined : v > 0 ? GREEN : RED;
                     else if (r.muted || projected) color = MUTED;
                     const base = { ...styles.tdNum, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 600 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
-                    if ((r.editable || r.salary) && mode === "plan") return <td key={mo} style={base}><button style={{ ...styles.cellBtn, display: "block", width: "100%", textAlign: "right", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
+                    const canOpen = r.salary || r.salaryDetail || r.destination || (r.editable && mode === "plan");
+                    if (canOpen) return <td key={mo} style={base}><button aria-label={`${r.label}・${ymLabel(mo)}`} style={{ ...styles.cellBtn, display: "block", width: "100%", minHeight: 20, textAlign: "right", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
                     return <td key={mo} style={base}>{cellText(v)}</td>;
                   })}
                   {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? { fontWeight: 700 } : {}), ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
