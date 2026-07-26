@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1768,5 +1768,58 @@ describe("残高が合わないときの原因候補", () => {
     expect(cycleGapDirection(500)).toContain("入金の記録が抜けている");
     expect(cycleGapDirection(-500)).toContain("出金の記録が抜けている");
     expect(cycleGapDirection(0)).toBe("");
+  });
+});
+
+describe("二重に入っている記録を探す", () => {
+  const e = (o: any) => ({ ym: "2026-06", cat: "account" as const, item: "投資振替", account: "NEOBANK", amount: 20000, ...o });
+
+  it("同じ内容の記録をまとめ、1件だけ残す候補を返す", () => {
+    const rows = [e({ id: "a" }), e({ id: "b" }), e({ id: "c", amount: -20000 })];
+    const g = findDuplicateEntries(rows);
+    expect(g).toHaveLength(1);
+    expect(g[0].keepId).toBe("a");
+    expect(g[0].removeIds).toEqual(["b"]);
+  });
+
+  it("同じ明細の行から取り込んだものは「確実」", () => {
+    const src = "2026-06-05|20000|ハイフリツト";
+    expect(findDuplicateEntries([e({ id: "a", src }), e({ id: "b", src })])[0]).toMatchObject({ certain: true, removeIds: ["b"] });
+    // 摘要違い(CSVとスクショ)は同じ内容だが、同じ額の取引が2件ある可能性も残る
+    expect(findDuplicateEntries([e({ id: "a", src }), e({ id: "b", src: "2026-06-05|20000|sbi" })])[0].certain).toBe(false);
+  });
+
+  it("確実な分だけを「確実」にする(残りは要確認に分ける)", () => {
+    // 同じ明細の行が2件 + 摘要違いが1件。確実に消せるのは1件だけ
+    const src = "2026-06-15|20000|ハイフリツト";
+    const rows = [e({ id: "a", src }), e({ id: "b", src }), e({ id: "c", src: "2026-06-20|20000|sbi" })];
+    const g = findDuplicateEntries(rows);
+    expect(g).toHaveLength(2);
+    expect(g[0]).toMatchObject({ certain: true, keepId: "a", removeIds: ["b"] });
+    expect(g[1]).toMatchObject({ certain: false, keepId: "a", removeIds: ["c"] });
+  });
+
+  it("符号が逆なら別物(振替の相手側を消さない)", () => {
+    expect(findDuplicateEntries([e({ id: "a" }), e({ id: "b", amount: -20000 })])).toEqual([]);
+  });
+
+  it("口座や項目が違えば別物", () => {
+    expect(findDuplicateEntries([e({ id: "a" }), e({ id: "b", account: "ゆうちょ" })])).toEqual([]);
+    expect(findDuplicateEntries([e({ id: "a" }), e({ id: "b", item: "口座振替" })])).toEqual([]);
+  });
+
+  it("残高は対象外(月度・口座で1件に保たれている)", () => {
+    expect(findDuplicateEntries([e({ id: "a", item: "残高" }), e({ id: "b", item: "残高" })])).toEqual([]);
+  });
+
+  it("確実なものを先に並べる", () => {
+    const src = "2026-06-05|500|x";
+    const rows = [
+      e({ id: "a", amount: 90000 }), e({ id: "b", amount: 90000 }),          // 指紋なし・要確認
+      e({ id: "c", amount: 500, item: "出金", src }), e({ id: "d", amount: 500, item: "出金", src }),
+    ];
+    const g = findDuplicateEntries(rows);
+    expect(g[0]).toMatchObject({ certain: true, removeIds: ["d"] });
+    expect(g.map((x) => x.certain)).toEqual([true, false]);
   });
 });

@@ -1340,6 +1340,58 @@ export function verifyCycles(entries: Entry[], cutoffDay: number = 0): CycleChec
   });
 }
 
+// 同じ取引が二重に入っている記録を後から探す。
+// 取込時の重複判定は取り込む瞬間にしか働かないので、それを入れる前に取り込んだ記録は
+// 二重のまま残る(振替や投資振替は同じ額が何度も出るので特に気付きにくい)。
+// 目印(月度・種類・項目・口座・金額)が同じものをまとめ、同じ明細の行から
+// 取り込んだと分かるもの(指紋が同じ)は「確実」として先に出す。
+export interface DuplicateGroup {
+  entries: Entry[];      // 同じ内容の記録(2件以上)
+  certain: boolean;      // 同じ明細の行を二重に取り込んでいる(指紋が一致)
+  keepId: string;        // 残す1件
+  removeIds: string[];   // 消す候補
+}
+export function findDuplicateEntries(entries: Entry[]): DuplicateGroup[] {
+  const groups = new Map<string, Entry[]>();
+  for (const e of entries || []) {
+    if (!e.id) continue;
+    // 残高は月度・口座で1件に保たれているので対象外
+    if (e.cat === "account" && acctRole(e.item) === "bal") continue;
+    const k = entrySignature(e);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(e);
+  }
+  const out: DuplicateGroup[] = [];
+  const group = (list: Entry[], certain: boolean) => {
+    if (list.length < 2) return;
+    out.push({ entries: list, certain, keepId: list[0].id as string, removeIds: list.slice(1).map((e) => e.id as string) });
+  };
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    // 同じ明細の行(指紋が同じ)を二重に取り込んだものは確実。まずそれだけを「確実」にする。
+    const bySrc = new Map<string, Entry[]>();
+    for (const e of list) {
+      if (!e.src) continue;
+      if (!bySrc.has(e.src)) bySrc.set(e.src, []);
+      bySrc.get(e.src)!.push(e);
+    }
+    for (const same of bySrc.values()) group(same, true);
+    // 各明細行から1件ずつ残したものと、指紋を持たない記録。
+    // 摘要の読み取り方が違うだけの同じ取引かもしれないが、
+    // 同じ額の取引が本当に複数あることもあるので「要確認」に留める。
+    const seen = new Set<string>();
+    group(list.filter((e) => {
+      if (!e.src) return true;
+      if (seen.has(e.src)) return false;
+      seen.add(e.src); return true;
+    }), false);
+  }
+  // 確実なものを先に、次に額の大きいものから
+  return out.sort((a, b) =>
+    (a.certain === b.certain ? 0 : a.certain ? -1 : 1)
+    || Math.abs(b.entries[0].amount) - Math.abs(a.entries[0].amount));
+}
+
 // 残高が合わないときの原因候補。差額そのものから、どの記録が怪しいかを絞る。
 //   dup     … その記録を消せば差額が埋まる(同じ取引を二重に取り込んだ)
 //   missing … 同じ額の記録がもう1件あるはず(取りこぼし)
