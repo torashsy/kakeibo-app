@@ -571,6 +571,24 @@ export function balancesAsOf(entries: Entry[], ym: string): Record<string, { amo
 // 抜けたまま「月末残高」として表示されてしまうので、画面で断る必要がある。
 export const balanceReachesCycleEnd = (b: { ym: string; asOf?: string }, cutoffDay: number = 0): boolean =>
   !b || !b.asOf || b.asOf >= cycleEndDate(b.ym, cutoffDay);
+
+// 同じ月度・同じ口座の残高を取り込んだとき、既存を置き換えてよいか。
+// 銀行アプリは暦月単位なので、5月度(5/11〜6/10)の残高は6月の明細から得られる。
+// 取り込む順番が「6月→5月」だと、締め日まで届いた残高を5/31時点の残高が
+// 塗り潰してしまうため、届いている方を残す。
+export function shouldReplaceBalance(
+  existing: { ym: string; asOf?: string } | null | undefined,
+  incoming: { ym: string; asOf?: string },
+  cutoffDay: number = 0,
+): boolean {
+  if (!existing) return true;
+  const hasEnd = balanceReachesCycleEnd(existing, cutoffDay);
+  const getsEnd = balanceReachesCycleEnd(incoming, cutoffDay);
+  if (hasEnd !== getsEnd) return getsEnd;          // 締め日まで届く方を採る
+  // 同じ程度なら、より新しい時点のものを採る(同じ時点なら取り込んだ方で上書き)
+  if (existing.asOf && incoming.asOf) return incoming.asOf >= existing.asOf;
+  return true;
+}
 export const balTotalAsOf = (entries: Entry[], ym: string): number | null => {
   const b = balancesAsOf(entries, ym);
   const ks = Object.keys(b);

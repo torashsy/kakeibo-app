@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -403,7 +403,7 @@ function CycleVerifier({ entries, config, closedMonths, onClose }) {
               </span>
               <span style={{ display: "block", fontSize: 10.5, color: r.covered ? MUTED : RED, marginTop: 2 }}>
                 {r.asOf
-                  ? (r.covered ? `残高は ${r.asOf} 時点` : `残高は ${r.asOf} 時点で、締め日 ${r.endDate} まで届いていません（その後の取引が抜けたまま合ってしまいます）`)
+                  ? (r.covered ? `残高は ${r.asOf} 時点` : `残高は ${r.asOf} 時点で、締め日 ${r.endDate} まで届いていません。${ymLabel(addMonth(r.ym, 1))}の明細も取り込むと直ります`)
                   : "残高がいつ時点か分かりません（取り込み直すと記録されます）"}
               </span>
             </span>
