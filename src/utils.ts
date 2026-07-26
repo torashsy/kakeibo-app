@@ -67,6 +67,8 @@ export interface Sub {
   category?: string;    // サブスク/通信/光熱/保険など。定期費の分類・小計・解約検討に使う
   card?: string;
   renewal?: string;     // "YYYY-MM-DD"
+  startDate?: string;   // 利用開始日。これより前の計画には含めない
+  endDate?: string;     // 終了予定日/解約日。これより後の計画には含めない
   plan?: string;
   note?: string;
 }
@@ -518,15 +520,31 @@ export const subYearly = (s: Sub): number => (s && s.cycle === "yearly" ? (Numbe
 // 定期費(subs)の月あたり固定費合計。計画の「固定費」はこれを土台にする。
 export const fixedMonthly = (subs: Sub[] | null | undefined): number => (subs || []).reduce((a, s) => a + subMonthly(s), 0);
 
+const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+const daysInMonth = (ym: string): number => {
+  const [year, month] = ym.split("-").map(Number);
+  return new Date(year, month, 0).getDate();
+};
+const recurringDate = (s: Sub, serviceYm: string): string => {
+  const source = validDate(s.renewal) ? s.renewal : validDate(s.startDate) ? s.startDate : "";
+  const day = source ? Number(source.slice(8, 10)) : 1;
+  return `${serviceYm}-${String(Math.min(day, daysInMonth(serviceYm))).padStart(2, "0")}`;
+};
+export const subActiveForMonth = (s: Sub, ym: string): boolean => {
+  const occurrence = recurringDate(s, ym);
+  return (!validDate(s.startDate) || occurrence >= s.startDate) && (!validDate(s.endDate) || occurrence <= s.endDate);
+};
+
 // 計画上の固定費。月額は毎月、年払いは更新月に一括計上する。
-// カード払いは請求を1か月後として扱う。更新月が無い旧データだけは従来どおり1/12で残す。
+// カード払いは請求を1か月後として扱う概算。開始前・終了後の利用月は除外する。
+// 年払いで更新日が無い旧データだけは従来どおり1/12で残す。
 export const fixedForMonth = (subs: Sub[] | null | undefined, ym: string): number => (subs || []).reduce((sum, s) => {
   const amount = Number(s && s.amount) || 0;
+  const serviceYm = s.card ? addMonth(ym, -1) : ym;
+  if (!subActiveForMonth(s, serviceYm)) return sum;
   if (s.cycle !== "yearly") return sum + amount;
-  if (!s.renewal || !/^\d{4}-\d{2}-\d{2}$/.test(s.renewal)) return sum + amount / 12;
-  const renewalYm = s.renewal.slice(0, 7);
-  const chargeYm = s.card ? addMonth(renewalYm, 1) : renewalYm;
-  return chargeYm.slice(5, 7) === ym.slice(5, 7) ? sum + amount : sum;
+  if (!validDate(s.renewal)) return sum + amount / 12;
+  return s.renewal.slice(5, 7) === serviceYm.slice(5, 7) ? sum + amount : sum;
 }, 0);
 
 const salaryCycleYear = (ym: string): string => {
@@ -1783,6 +1801,7 @@ export function rollForwardSubs(subs: Sub[], todayStr?: string): Sub[] {
   let changed = false;
   const next = subs.map((s) => {
     if (!s.renewal) return s;
+    if (validDate(s.endDate) && s.endDate < today) return s;
     let r = s.renewal, guard = 0;
     while (r < today && guard < 240) { r = advanceRenewalDate(r, s.cycle); guard++; }
     if (r !== s.renewal) { changed = true; return { ...s, renewal: r }; }

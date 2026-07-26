@@ -15,7 +15,7 @@ export function Recurring({ subs, onSaveSubs, cards, debt, ym, onSaveDebt }) {
         <button style={{ ...styles.viewToggleBtn, ...(view === "subs" ? styles.viewToggleActive : {}) }} onClick={() => setView("subs")}>定期支払い</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "debt" ? styles.viewToggleActive : {}) }} onClick={() => setView("debt")}>分割払い</button>
       </div>
-      {view === "subs" ? <Subs subs={subs} onSave={onSaveSubs} cards={cards} /> : <DebtTable cards={cards} debt={debt} ym={ym} onSaveDebt={onSaveDebt} />}
+      {view === "subs" ? <Subs subs={subs} onSave={onSaveSubs} cards={cards} ym={ym} /> : <DebtTable cards={cards} debt={debt} ym={ym} onSaveDebt={onSaveDebt} />}
     </div>
   );
 }

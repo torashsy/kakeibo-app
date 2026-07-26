@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { MUTED } from '../theme.js';
-import { yen, uid, subMonthly, subYearly, evalAmount } from '../utils';
+import { yen, uid, subMonthly, subYearly, subActiveForMonth, evalAmount } from '../utils';
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
 
@@ -25,10 +25,11 @@ const renewalSort = (a, b) => {
   return 0;
 };
 
-export function Subs({ subs, onSave, cards }) {
+export function Subs({ subs, onSave, cards, ym }) {
   const [edit, setEdit] = useState(null);
-  const monthTotal = useMemo(() => subs.reduce((a, s) => a + subMonthly(s), 0), [subs]);
-  const yearTotal = useMemo(() => subs.reduce((a, s) => a + subYearly(s), 0), [subs]);
+  const activeSubs = useMemo(() => subs.filter((s) => subActiveForMonth(s, ym)), [subs, ym]);
+  const monthTotal = useMemo(() => activeSubs.reduce((a, s) => a + subMonthly(s), 0), [activeSubs]);
+  const yearTotal = useMemo(() => activeSubs.reduce((a, s) => a + subYearly(s), 0), [activeSubs]);
   // 分類ごとにまとめ、各分類の中は更新日順。分類は登録順(CATEGORIES優先)で並べる。
   const groups = useMemo(() => {
     const map = new Map();
@@ -40,12 +41,13 @@ export function Subs({ subs, onSave, cards }) {
 
   const commit = () => {
     if (!edit.name.trim()) return;
+    if (edit.startDate && edit.endDate && edit.endDate < edit.startDate) return;
     const s = { ...edit, name: edit.name.trim(), category: (edit.category || "").trim(), amount: Math.round(evalAmount(edit.amount) || 0), cycle: edit.cycle || "monthly" };
     const next = edit.id ? subs.map((x) => (x.id === edit.id ? s : x)) : [...subs, { ...s, id: uid() }];
     onSave(next); setEdit(null);
   };
   const remove = () => { onSave(subs.filter((x) => x.id !== edit.id)); setEdit(null); };
-  const newSub = () => setEdit({ name: "", amount: "", cycle: "monthly", category: "", card: "", renewal: "", plan: "", note: "" });
+  const newSub = () => setEdit({ name: "", amount: "", cycle: "monthly", category: "", card: "", renewal: "", startDate: "", endDate: "", plan: "", note: "" });
 
   return (
     <div>
@@ -54,12 +56,12 @@ export function Subs({ subs, onSave, cards }) {
         <div style={styles.subTotalDiv} />
         <div style={styles.subTotalCell}><span style={styles.subTotalLabel}>年合計</span><span style={styles.subTotalValue}>{yen(yearTotal)}</span></div>
       </div>
-      <div style={styles.detailHead}><span>登録中（{subs.length}）</span><button style={styles.addBtn} onClick={newSub}>＋ 追加</button></div>
+      <div style={styles.detailHead}><span>一覧（{subs.length}）</span><button style={styles.addBtn} onClick={newSub}>＋ 追加</button></div>
       {subs.length === 0 ? (
         <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>登録なし</div></div>
       ) : (
         groups.map(([cat, items]) => {
-          const catMonthly = items.reduce((a, s) => a + subMonthly(s), 0);
+          const catMonthly = items.filter((s) => subActiveForMonth(s, ym)).reduce((a, s) => a + subMonthly(s), 0);
           return (
             <div key={cat} style={{ marginBottom: 16 }}>
               <div style={styles.memoGroupHead}><span>{cat}</span><span style={styles.memoGroupSum}>月換算 {yen(catMonthly)}</span></div>
@@ -68,6 +70,7 @@ export function Subs({ subs, onSave, cards }) {
                   const d = daysUntil(s.renewal);
                   const soon = d != null && d >= 0 && d <= SOON_DAYS;
                   const past = d != null && d < 0;
+                  const ended = !!s.endDate && s.endDate < new Date().toISOString().slice(0, 10);
                   return (
                     <button key={s.id} style={{ ...styles.memoCard, ...(soon ? { border: "1.5px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...s, amount: s.amount ? String(s.amount) : "", category: s.category || "" })}>
                       <div style={styles.memoHead}>
@@ -75,9 +78,11 @@ export function Subs({ subs, onSave, cards }) {
                         <span style={styles.memoAmount}>{yen(s.amount)}<span style={styles.subCycle}>/{s.cycle === "yearly" ? "年" : "月"}</span></span>
                       </div>
                       <div style={styles.subMeta}>
-                        {soon && <span style={styles.subDue}>{d === 0 ? "本日更新" : `更新まであと${d}日`}</span>}
-                        {past && <span style={styles.subDuePast}>更新日を過ぎています</span>}
+                        {ended ? <span style={styles.subDuePast}>解約済み</span> : soon && <span style={styles.subDue}>{d === 0 ? "本日更新" : `更新まであと${d}日`}</span>}
+                        {!ended && past && <span style={styles.subDuePast}>更新日を過ぎています</span>}
                         {s.card && <span style={styles.brandTag}>{s.card}</span>}
+                        {s.startDate && <span style={styles.brandTag}>開始 {s.startDate}</span>}
+                        {s.endDate && <span style={styles.brandTag}>{ended ? "終了" : "終了予定"} {s.endDate}</span>}
                         {s.renewal && <span style={styles.brandTag}>更新 {s.renewal}</span>}
                         {s.cycle === "yearly" && <span style={styles.subMonthly}>月換算 {yen(subMonthly(s))}</span>}
                       </div>
@@ -120,11 +125,15 @@ export function Subs({ subs, onSave, cards }) {
             </div>
             <label style={styles.fieldLabel}>更新日</label>
             <input type="date" value={edit.renewal ?? ""} onChange={(e) => setEdit({ ...edit, renewal: e.target.value })} style={styles.textInput} />
+            <label style={styles.fieldLabel}>開始日</label>
+            <input type="date" value={edit.startDate ?? ""} onChange={(e) => setEdit({ ...edit, startDate: e.target.value })} style={styles.textInput} />
+            <label style={styles.fieldLabel}>終了予定日・解約日</label>
+            <input type="date" value={edit.endDate ?? ""} onChange={(e) => setEdit({ ...edit, endDate: e.target.value })} style={styles.textInput} />
             <label style={styles.fieldLabel}>プラン名（任意）</label>
             <input value={edit.plan ?? ""} onChange={(e) => setEdit({ ...edit, plan: e.target.value })} placeholder="例）Premium / 年間プラン" style={styles.textInput} />
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <textarea value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="解約条件や備考など" style={styles.memoTextarea} />
-            <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新" : "追加"}</button>
+            <button style={{ ...styles.saveBtn, opacity: edit.name.trim() && !(edit.startDate && edit.endDate && edit.endDate < edit.startDate) ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim() || !!(edit.startDate && edit.endDate && edit.endDate < edit.startDate)}>{edit.id ? "更新" : "追加"}</button>
             {edit.id && <button style={styles.deleteBtn} onClick={remove}>削除</button>}
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
           </div>

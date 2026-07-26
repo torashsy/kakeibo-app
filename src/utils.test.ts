@@ -5,7 +5,7 @@ import {
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
-  migratePlan, fixedMonthly, fixedForMonth, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
+  migratePlan, fixedMonthly, fixedForMonth, subActiveForMonth, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   estimateSalaryTakeHome, estimateSalaryWithAdditionalPay, plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedDebt,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
@@ -213,6 +213,20 @@ describe("計画", () => {
     const plans: Plan = { lines: { variable: { std: 50000, over: { "2026-06": 60000 } } } };
     expect(plannedSpending(plans, subs, "2026-05")).toBe(1000 + 50000);
     expect(plannedSpending(plans, subs, "2026-06")).toBe(13000 + 60000);
+  });
+
+  it("fixedForMonth: 開始前・終了後は除外し、カード月額は翌月へ計上する", () => {
+    const subs: Sub[] = [
+      { id: "s1", name: "期間あり", amount: 1000, cycle: "monthly", startDate: "2026-05-15", endDate: "2026-07-20" },
+      { id: "s2", name: "カード", amount: 2000, cycle: "monthly", card: "JCB", startDate: "2026-06-01", endDate: "2026-06-30" },
+    ];
+    expect(subActiveForMonth(subs[0], "2026-04")).toBe(false);
+    expect(subActiveForMonth(subs[0], "2026-05")).toBe(true);
+    expect(fixedForMonth(subs, "2026-04")).toBe(0);
+    expect(fixedForMonth(subs, "2026-05")).toBe(1000);
+    expect(fixedForMonth(subs, "2026-06")).toBe(1000);
+    expect(fixedForMonth(subs, "2026-07")).toBe(1000 + 2000);
+    expect(fixedForMonth(subs, "2026-08")).toBe(0);
   });
 
   it("estimateSalaryTakeHome: 標準月シートの例と一致する", () => {
