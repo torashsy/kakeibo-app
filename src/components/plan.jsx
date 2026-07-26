@@ -53,7 +53,8 @@ export function PlanView({ plans, onSave, subs, debt, entries, config, ym, close
   );
   const isActualMonth = (mo) => isMonthClosed(closedMonths, mo) || (entriesByMonth[mo] || []).length > 0;
   const forecastOf = (k, mo) => (isActualMonth(mo) ? actualOf(k, mo) : planOf(k, mo));
-  const cellOf = (k, mo) => (mode === "diff" ? actualOf(k, mo) - planOf(k, mo) : mode === "plan" ? planOf(k, mo) : forecastOf(k, mo));
+  // 差異は実績が入力済み（または記録なしで確定済み）の月だけ表示する。
+  const cellOf = (k, mo) => (mode === "diff" ? (isActualMonth(mo) ? actualOf(k, mo) - planOf(k, mo) : 0) : mode === "plan" ? planOf(k, mo) : forecastOf(k, mo));
 
   // 残高見通し: 実績残高があればアンカー、無ければ前月+当月の収支(見通し)
   const balByMonth = useMemo(() => {
