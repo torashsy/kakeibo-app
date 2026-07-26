@@ -99,32 +99,32 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
   const openSalary = () => {
     const cycles = (plans.salary && plans.salary.cycles) || {};
     const bonuses = (plans.salary && plans.salary.bonuses) || {};
+    const rule = (plans.salary && plans.salary.rules && plans.salary.rules[String(fyStart)]) || {};
     const prev = cycles[String(fyStart - 1)] || {};
     const current = cycles[String(fyStart)] || {};
     setSalaryEdit({
-      prevGross: prev.gross ? String(prev.gross) : "",
-      prevStandard: prev.standardMonthly ? String(prev.standardMonthly) : "",
-      currentGross: current.gross ? String(current.gross) : "",
-      currentStandard: current.standardMonthly ? String(current.standardMonthly) : "",
-      june: bonuses[`${fyStart}-06`] ? String(bonuses[`${fyStart}-06`]) : "",
-      july: bonuses[`${fyStart}-07`] ? String(bonuses[`${fyStart}-07`]) : "",
-      december: bonuses[`${fyStart}-12`] ? String(bonuses[`${fyStart}-12`]) : "",
+      aGross: prev.gross ? String(prev.gross) : "",
+      bGross: current.gross ? String(current.gross) : "",
+      x: rule.juneMultiplier != null ? String(rule.juneMultiplier) : (bonuses[`${fyStart}-06`] && prev.gross ? String(Number(bonuses[`${fyStart}-06`]) / Number(prev.gross)) : ""),
+      y: rule.decemberMultiplier != null ? String(rule.decemberMultiplier) : (bonuses[`${fyStart}-12`] && current.gross ? String(Number(bonuses[`${fyStart}-12`]) / Number(current.gross)) : ""),
     });
   };
 
   const commitSalary = () => {
-    const next = { ...plans, salary: { cycles: { ...((plans.salary && plans.salary.cycles) || {}) }, bonuses: { ...((plans.salary && plans.salary.bonuses) || {}) } } };
+    const next = { ...plans, salary: { cycles: { ...((plans.salary && plans.salary.cycles) || {}) }, bonuses: { ...((plans.salary && plans.salary.bonuses) || {}) }, rules: { ...((plans.salary && plans.salary.rules) || {}) } } };
     const amount = (value) => Math.max(0, Math.round(evalAmount(value) || 0));
-    const saveCycle = (key, grossValue, standardValue) => {
-      const gross = amount(grossValue); const standardMonthly = amount(standardValue) || gross;
+    const saveCycle = (key, grossValue) => {
+      const gross = amount(grossValue); const standardMonthly = gross;
       if (gross) next.salary.cycles[key] = { gross, standardMonthly };
       else delete next.salary.cycles[key];
     };
-    saveCycle(String(fyStart - 1), salaryEdit.prevGross, salaryEdit.prevStandard);
-    saveCycle(String(fyStart), salaryEdit.currentGross, salaryEdit.currentStandard);
-    for (const [month, value] of [[`${fyStart}-06`, salaryEdit.june], [`${fyStart}-07`, salaryEdit.july], [`${fyStart}-12`, salaryEdit.december]]) {
-      const v = amount(value); if (v) next.salary.bonuses[month] = v; else delete next.salary.bonuses[month];
-    }
+    saveCycle(String(fyStart - 1), salaryEdit.aGross);
+    saveCycle(String(fyStart), salaryEdit.bGross);
+    next.salary.rules[String(fyStart)] = {
+      juneMultiplier: Math.max(0, Number(salaryEdit.x) || 0),
+      decemberMultiplier: Math.max(0, Number(salaryEdit.y) || 0),
+    };
+    for (const month of [`${fyStart}-06`, `${fyStart}-07`, `${fyStart}-12`]) delete next.salary.bonuses[month];
     onSave(next); setSalaryEdit(null);
   };
   const commitOver = () => {
@@ -255,16 +255,13 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
           <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetHandle} />
             <div style={styles.sheetTitle}>給与</div>
-            <SalaryCycleFields label="4〜6月" gross={salaryEdit.prevGross} standard={salaryEdit.prevStandard}
-              onGross={(v) => setSalaryEdit({ ...salaryEdit, prevGross: v })} onStandard={(v) => setSalaryEdit({ ...salaryEdit, prevStandard: v })} />
-            <SalaryCycleFields label="7〜3月" gross={salaryEdit.currentGross} standard={salaryEdit.currentStandard}
-              onGross={(v) => setSalaryEdit({ ...salaryEdit, currentGross: v })} onStandard={(v) => setSalaryEdit({ ...salaryEdit, currentStandard: v })} />
-            <div style={{ ...styles.fieldLabel, marginTop: 12 }}>賞与</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-              {[['6月', 'june'], ['7月', 'july'], ['12月', 'december']].map(([label, key]) => (
-                <label key={key} style={{ fontSize: 12, color: MUTED }}><span>{label}</span><AmountField value={salaryEdit[key]} onChange={(v) => setSalaryEdit({ ...salaryEdit, [key]: v })} placeholder="0" /></label>
-              ))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <label style={{ fontSize: 12, color: MUTED }}><span>A額面（4〜6月）</span><AmountField value={salaryEdit.aGross} onChange={(v) => setSalaryEdit({ ...salaryEdit, aGross: v })} placeholder="0" /></label>
+              <label style={{ fontSize: 12, color: MUTED }}><span>B額面（7〜3月）</span><AmountField value={salaryEdit.bGross} onChange={(v) => setSalaryEdit({ ...salaryEdit, bGross: v })} placeholder="0" /></label>
+              <label style={{ fontSize: 12, color: MUTED }}><span>6月（xか月）</span><input type="number" inputMode="decimal" step="0.1" value={salaryEdit.x} onChange={(e) => setSalaryEdit({ ...salaryEdit, x: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} /></label>
+              <label style={{ fontSize: 12, color: MUTED }}><span>12月（yか月）</span><input type="number" inputMode="decimal" step="0.1" value={salaryEdit.y} onChange={(e) => setSalaryEdit({ ...salaryEdit, y: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} /></label>
             </div>
+            <SalaryRulePreview edit={salaryEdit} />
             <button style={styles.saveBtn} onClick={commitSalary}>保存</button>
             <button style={styles.cancelBtn} onClick={() => setSalaryEdit(null)}>閉じる</button>
           </div>
@@ -274,18 +271,18 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
   );
 }
 
-function SalaryCycleFields({ label, gross, standard, onGross, onStandard }) {
-  const estimate = estimateSalaryTakeHome(evalAmount(gross) || 0, evalAmount(standard) || evalAmount(gross) || 0);
+function SalaryRulePreview({ edit }) {
+  const a = Math.max(0, evalAmount(edit.aGross) || 0);
+  const b = Math.max(0, evalAmount(edit.bGross) || 0);
+  const june = a * Math.max(0, Number(edit.x) || 0);
+  const july = Math.max(0, b - a) * 3;
+  const december = b * Math.max(0, Number(edit.y) || 0);
+  const aNet = estimateSalaryTakeHome(a, a).takeHome;
+  const bNet = estimateSalaryTakeHome(b, b).takeHome;
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-        <strong style={{ fontSize: 13 }}>{label}</strong>
-        <span style={{ fontSize: 12, color: MUTED }}>手取り {num(estimate.takeHome)}　控除 {num(estimate.deduction)}</span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <label style={{ fontSize: 12, color: MUTED }}><span>月給</span><AmountField value={gross} onChange={onGross} placeholder="0" /></label>
-        <label style={{ fontSize: 12, color: MUTED }}><span>標準報酬</span><AmountField value={standard} onChange={onStandard} placeholder={gross || "0"} /></label>
-      </div>
+    <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.8, marginTop: 10 }}>
+      <div>手取り　A {num(aNet)} ／ B {num(bNet)}</div>
+      <div>賞与等　6月 {num(june)} ／ 7月 {num(july)} ／ 12月 {num(december)}</div>
     </div>
   );
 }

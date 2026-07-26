@@ -72,9 +72,11 @@ export interface Sub {
 
 export interface PlanLineData { std: number; over: Record<string, number>; }
 export interface SalaryCyclePlan { gross: number; standardMonthly: number; }
+export interface SalaryRule { juneMultiplier: number; decemberMultiplier: number; }
 export interface SalaryPlan {
   cycles: Record<string, SalaryCyclePlan>; // 7月開始年 -> 翌6月まで
   bonuses: Record<string, number>;         // YYYY-MM -> 額面
+  rules?: Record<string, SalaryRule>;      // 年度 -> A/B給与から作る賞与ルール
 }
 export interface Plan { version?: number; fyStart?: number; lines: Record<string, PlanLineData>; salary?: SalaryPlan; }
 
@@ -569,7 +571,18 @@ export const plannedSalaryEstimate = (plan: Plan | null | undefined, ym: string)
   const salary = plan && plan.salary;
   const cycle = salary && salary.cycles && salary.cycles[salaryCycleYear(ym)];
   if (!cycle) return null;
-  const bonus = Number(salary.bonuses && salary.bonuses[ym]) || 0;
+  const fy = fyStartOf(ym);
+  const rule = salary.rules && salary.rules[String(fy)];
+  let bonus = Number(salary.bonuses && salary.bonuses[ym]) || 0;
+  if (rule) {
+    const a = Number(salary.cycles[String(fy - 1)]?.gross) || 0;
+    const b = Number(salary.cycles[String(fy)]?.gross) || 0;
+    const month = Number(ym.slice(5, 7));
+    if (month === 6) bonus = a * (Number(rule.juneMultiplier) || 0);
+    else if (month === 7) bonus = Math.max(0, b - a) * 3;
+    else if (month === 12) bonus = b * (Number(rule.decemberMultiplier) || 0);
+    else bonus = 0;
+  }
   return estimateSalaryTakeHome((Number(cycle.gross) || 0) + bonus, Number(cycle.standardMonthly) || Number(cycle.gross) || 0);
 };
 

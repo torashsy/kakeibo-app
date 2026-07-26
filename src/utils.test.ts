@@ -227,6 +227,17 @@ describe("計画", () => {
     expect(plannedIncome(plan, "2026-07")).toBe(estimateSalaryTakeHome(315000, 320000).takeHome);
   });
 
+  it("plannedIncome: A/B額面とx/yから6月賞与・7月差額・12月賞与を作る", () => {
+    const plan: Plan = { lines: {}, salary: {
+      cycles: { "2025": { gross: 300000, standardMonthly: 300000 }, "2026": { gross: 320000, standardMonthly: 320000 } },
+      bonuses: {}, rules: { "2026": { juneMultiplier: 2, decemberMultiplier: 2.5 } },
+    } };
+    expect(plannedIncome(plan, "2026-05")).toBe(estimateSalaryTakeHome(300000, 300000).takeHome);
+    expect(plannedIncome(plan, "2026-06")).toBe(estimateSalaryTakeHome(900000, 300000).takeHome);
+    expect(plannedIncome(plan, "2026-07")).toBe(estimateSalaryTakeHome(380000, 320000).takeHome);
+    expect(plannedIncome(plan, "2026-12")).toBe(estimateSalaryTakeHome(1120000, 320000).takeHome);
+  });
+
   it("plannedDebt: 当年度は月別、次年度以降は年度額を12分割する", () => {
     const debt = { JCB: { "2026-06": 24000, "FY:2027": { items: [{ amount: 120000 }] } } };
     expect(plannedDebt(debt, "2026-06")).toBe(24000);
