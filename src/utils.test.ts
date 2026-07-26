@@ -6,7 +6,7 @@ import {
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
   migratePlan, fixedMonthly, fixedForMonth, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
-  estimateSalaryTakeHome, plannedIncome, plannedDebt,
+  estimateSalaryTakeHome, estimateSalaryWithAdditionalPay, plannedIncome, plannedDebt,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
   parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries, entryDaySignature, entryDate,
@@ -217,13 +217,29 @@ describe("計画", () => {
     });
   });
 
+  it("estimateSalaryWithAdditionalPay: 賞与にも社会保険料と所得税をかける", () => {
+    const base = estimateSalaryTakeHome(300000, 300000);
+    const withBonus = estimateSalaryWithAdditionalPay(300000, 300000, 600000);
+    expect(withBonus.gross).toBe(900000);
+    expect(withBonus.socialInsurance).toBeGreaterThan(base.socialInsurance);
+    expect(withBonus.incomeTax).toBeGreaterThan(base.incomeTax);
+    expect(withBonus.takeHome - base.takeHome).toBeLessThan(600000);
+  });
+
+  it("estimateSalaryWithAdditionalPay: 実際の6月・7月賞与明細と一致する", () => {
+    const june = estimateSalaryWithAdditionalPay(0, 300000, 163728);
+    expect(june).toEqual({ gross: 163728, socialInsurance: 23947, incomeTax: 5708, deduction: 29655, takeHome: 134073 });
+    const july = estimateSalaryWithAdditionalPay(0, 300000, 65000);
+    expect(july).toEqual({ gross: 65000, socialInsurance: 9548, incomeTax: 2264, deduction: 11812, takeHome: 53188 });
+  });
+
   it("plannedIncome: 7月開始の月給と指定月の賞与から手取りを計算する", () => {
     const plan: Plan = { lines: { income: { std: 1, over: {} } }, salary: {
       cycles: { "2025": { gross: 290856, standardMonthly: 300000 }, "2026": { gross: 315000, standardMonthly: 320000 } },
       bonuses: { "2026-06": 100000 },
     } };
     expect(plannedIncome(plan, "2026-05")).toBe(240822);
-    expect(plannedIncome(plan, "2026-06")).toBe(estimateSalaryTakeHome(390856, 300000).takeHome);
+    expect(plannedIncome(plan, "2026-06")).toBe(estimateSalaryWithAdditionalPay(290856, 300000, 100000).takeHome);
     expect(plannedIncome(plan, "2026-07")).toBe(estimateSalaryTakeHome(315000, 320000).takeHome);
   });
 
@@ -233,9 +249,9 @@ describe("計画", () => {
       bonuses: {}, rules: { "2026": { juneMultiplier: 2, decemberMultiplier: 2.5 } },
     } };
     expect(plannedIncome(plan, "2026-05")).toBe(estimateSalaryTakeHome(300000, 300000).takeHome);
-    expect(plannedIncome(plan, "2026-06")).toBe(estimateSalaryTakeHome(900000, 300000).takeHome);
-    expect(plannedIncome(plan, "2026-07")).toBe(estimateSalaryTakeHome(380000, 320000).takeHome);
-    expect(plannedIncome(plan, "2026-12")).toBe(estimateSalaryTakeHome(1120000, 320000).takeHome);
+    expect(plannedIncome(plan, "2026-06")).toBe(estimateSalaryWithAdditionalPay(300000, 300000, 600000).takeHome);
+    expect(plannedIncome(plan, "2026-07")).toBe(estimateSalaryWithAdditionalPay(320000, 320000, 60000).takeHome);
+    expect(plannedIncome(plan, "2026-12")).toBe(estimateSalaryWithAdditionalPay(320000, 320000, 800000).takeHome);
   });
 
   it("plannedDebt: 当年度は月別、次年度以降は年度額を12分割する", () => {

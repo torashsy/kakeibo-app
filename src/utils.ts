@@ -567,6 +567,28 @@ export function estimateSalaryTakeHome(grossValue: number, standardMonthlyValue:
   return { gross, socialInsurance, incomeTax, deduction, takeHome: Math.max(0, gross - deduction) };
 }
 
+// Additional pay (bonus or retroactive adjustment) is estimated as a separate bonus slip.
+// Premiums use the standard bonus amount (rounded down to ¥1,000); withholding tax
+// uses the 4.084% rate confirmed by the supplied June and July bonus slips.
+export function estimateSalaryWithAdditionalPay(baseGrossValue: number, standardMonthlyValue: number, additionalPayValue: number): SalaryEstimate {
+  const baseGross = Math.max(0, Math.round(Number(baseGrossValue) || 0));
+  const additionalPay = Math.max(0, Math.round(Number(additionalPayValue) || 0));
+  if (!additionalPay) return estimateSalaryTakeHome(baseGross, standardMonthlyValue);
+  const base = estimateSalaryTakeHome(baseGross, standardMonthlyValue);
+  const additionalStandard = Math.floor(additionalPay / 1000) * 1000;
+  const health = Math.floor(Math.round(additionalStandard * 0.0985) / 2);
+  const childSupport = Math.floor(Math.round(additionalStandard * 0.0023) / 2);
+  const pension = Math.floor(Math.round(additionalStandard * 0.183) / 2);
+  const employment = Math.floor(additionalPay * 0.005);
+  const additionalSocialInsurance = health + childSupport + pension + employment;
+  const additionalIncomeTax = Math.floor(Math.max(0, additionalPay - additionalSocialInsurance) * 0.04084);
+  const gross = base.gross + additionalPay;
+  const socialInsurance = base.socialInsurance + additionalSocialInsurance;
+  const incomeTax = base.incomeTax + additionalIncomeTax;
+  const deduction = socialInsurance + incomeTax;
+  return { gross, socialInsurance, incomeTax, deduction, takeHome: Math.max(0, gross - deduction) };
+}
+
 export const plannedSalaryEstimate = (plan: Plan | null | undefined, ym: string): SalaryEstimate | null => {
   const salary = plan && plan.salary;
   const cycle = salary && salary.cycles && salary.cycles[salaryCycleYear(ym)];
@@ -583,7 +605,8 @@ export const plannedSalaryEstimate = (plan: Plan | null | undefined, ym: string)
     else if (month === 12) bonus = b * (Number(rule.decemberMultiplier) || 0);
     else bonus = 0;
   }
-  return estimateSalaryTakeHome((Number(cycle.gross) || 0) + bonus, Number(cycle.standardMonthly) || Number(cycle.gross) || 0);
+  const baseGross = Number(cycle.gross) || 0;
+  return estimateSalaryWithAdditionalPay(baseGross, Number(cycle.standardMonthly) || baseGross, bonus);
 };
 
 export const plannedIncome = (plan: Plan, ym: string): number => plannedSalaryEstimate(plan, ym)?.takeHome ?? planValue(plan, PLAN_INCOME, ym);
