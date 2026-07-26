@@ -22,8 +22,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
     const [year, month] = ym.split("-").map(Number);
     const fiscalYear = month >= 4 ? year : year - 1;
     const months = Array.from({ length: month >= 4 ? 16 - month : 4 - month }, (_, i) => addMonth(ym, i));
-    const years = Array.from({ length: 5 }, (_, i) => `FY:${fiscalYear + i + 1}`);
-    return [...months, ...years];
+    return [...months, `FY+:${fiscalYear + 1}`];
   }, [ym]);
   const currentFiscalYear = Number(ym.slice(0, 4)) - (Number(ym.slice(5, 7)) < 4 ? 1 : 0);
   const isFuturePeriod = (period) => period.startsWith("FY:")
@@ -34,11 +33,20 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
     .reduce((sum, [, value]) => sum + debtValueTotal(value), 0);
   const totalRemaining = cards.reduce((a, c) => a + remaining(c.name), 0);
   const [edit, setEdit] = useState(null);
+  const fiscalYearOf = (key) => key.startsWith("FY:") ? Number(key.slice(3)) : /^\d{4}$/.test(key) ? Number(key) : null;
+  const fiscalAggregateEntries = (name, period) => {
+    const fromYear = Number(period.slice(4));
+    return Object.entries(debt[name] || {}).filter(([key]) => fiscalYearOf(key) != null && fiscalYearOf(key) >= fromYear);
+  };
+  const periodTotal = (name, period) => period.startsWith("FY+:")
+    ? fiscalAggregateEntries(name, period).reduce((sum, [, value]) => sum + debtValueTotal(value), 0)
+    : debtValueTotal(debt[name]?.[period]);
   const openEdit = (name, period) => {
-    const current = debt[name]?.[period];
-    const items = current && typeof current === "object" && Array.isArray(current.items)
+    const values = period.startsWith("FY+:") ? fiscalAggregateEntries(name, period).map(([, value]) => value) : [debt[name]?.[period]];
+    const loadedItems = values.flatMap((current) => current && typeof current === "object" && Array.isArray(current.items)
       ? current.items.map((item) => ({ id: item.id || uid(), label: item.label || "", amount: String(item.amount ?? "") }))
-      : [{ id: uid(), label: "", amount: current == null ? "" : String(current) }];
+      : current == null ? [] : [{ id: uid(), label: "", amount: String(current) }]);
+    const items = loadedItems.length ? loadedItems : [{ id: uid(), label: "", amount: "" }];
     setEdit({ name, period, items });
   };
   const setItem = (id, patch) => setEdit((prev) => ({ ...prev, items: prev.items.map((item) => item.id === id ? { ...item, ...patch } : item) }));
@@ -47,8 +55,16 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
       .map((item) => ({ id: item.id, label: item.label.trim(), amount: Number(item.amount) || 0 }))
       .filter((item) => item.amount !== 0);
     const next = { ...debt, [edit.name]: { ...(debt[edit.name] || {}) } };
-    if (!items.length) delete next[edit.name][edit.period];
-    else next[edit.name][edit.period] = { items };
+    let savePeriod = edit.period;
+    if (edit.period.startsWith("FY+:")) {
+      const fromYear = Number(edit.period.slice(4));
+      Object.keys(next[edit.name]).forEach((key) => {
+        if (fiscalYearOf(key) != null && fiscalYearOf(key) >= fromYear) delete next[edit.name][key];
+      });
+      savePeriod = `FY:${fromYear}`;
+    }
+    if (!items.length) delete next[edit.name][savePeriod];
+    else next[edit.name][savePeriod] = { items };
     onSaveDebt(next); setEdit(null);
   };
   return (
@@ -57,12 +73,12 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (columns.length + 1) * 96 }}>
           <colgroup><col style={{ width: 132 }} />{columns.map((p) => <col key={"col-" + p} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
-          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>カード</th>{columns.map((p) => <th key={p} style={styles.th}>{p.startsWith("FY:") ? `${p.slice(3)}年度` : `${Number(p.slice(5))}月`}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>残債</th></tr></thead>
+          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>カード</th>{columns.map((p) => <th key={p} style={styles.th}>{p.startsWith("FY+:") ? `${p.slice(4)}年度以降` : `${Number(p.slice(5))}月`}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>残債</th></tr></thead>
           <tbody>
             {cards.map((c) => (
               <tr key={c.id}>
                 <td style={{ ...styles.td, ...styles.tdSticky }}>{c.name}</td>
-                {columns.map((p) => <td key={p} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%", textAlign: "right" }} onClick={() => openEdit(c.name, p)}>{debtValueTotal(debt[c.name]?.[p]) ? num(debtValueTotal(debt[c.name][p])) : " "}</button></td>)}
+                {columns.map((p) => <td key={p} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%", textAlign: "right" }} onClick={() => openEdit(c.name, p)}>{periodTotal(c.name, p) ? num(periodTotal(c.name, p)) : " "}</button></td>)}
                 <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}>{num(remaining(c.name))}</td>
               </tr>
             ))}
@@ -72,7 +88,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
       {edit && (
         <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.sheetTitle}>{edit.name}・{edit.period.startsWith("FY:") ? `${edit.period.slice(3)}年度` : edit.period.includes("-") ? ymLabel(edit.period) : `${edit.period}年`}の残債内訳</div>
+            <div style={styles.sheetTitle}>{edit.name}・{edit.period.startsWith("FY+:") ? `${edit.period.slice(4)}年度以降` : edit.period.startsWith("FY:") ? `${edit.period.slice(3)}年度` : edit.period.includes("-") ? ymLabel(edit.period) : `${edit.period}年`}の残債内訳</div>
             {edit.items.map((item, index) => (
               <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 120px 28px", gap: 6, marginBottom: 8, alignItems: "center" }}>
                 <input value={item.label} onChange={(e) => setItem(item.id, { label: e.target.value })} placeholder={`内訳 ${index + 1}`} style={{ ...styles.textInput, margin: 0 }} autoFocus={index === 0} />
