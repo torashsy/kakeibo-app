@@ -8,7 +8,7 @@ import {
   migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
-  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature,
+  parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
 
@@ -1670,5 +1670,38 @@ describe("「カード」ルールの追加(版4)", () => {
     const before = { accounts: [], salaryItems: [], importRulesSeeded: 3, importRules: [] };
     const removed = { ...migrateConfig(before), importRules: [] };
     expect((migrateConfig(removed).importRules as ImportRule[])).toHaveLength(0);
+  });
+});
+
+describe("残高が締め日まで届いているか", () => {
+  const t = (date: string, amount: number, balance?: number) => ({ date, desc: "x", amount, ...(balance == null ? {} : { balance }) });
+
+  it("明細が締め日より後まで続いていれば、締め日時点の残高として扱う", () => {
+    // 10日締め → 5月度は 5/11〜6/10。6/11の取引があるので、6/04の残高が6/10時点の残高
+    const rows = [t("2026-06-11", 6000, 7085), t("2026-06-04", -70642, 1085)];
+    expect(cycleEndBalances(rows, 10).get("2026-05")).toEqual({ date: "2026-06-10", balance: 1085 });
+  });
+
+  it("締め日まで届いていなければ、最後の取引日時点の残高", () => {
+    // 5月の明細だけ(5/31まで)。6/1〜6/10の取引は分からない
+    const rows = [t("2026-05-31", -6000, 234355), t("2026-05-27", 1600, 240355)];
+    expect(cycleEndBalances(rows, 10).get("2026-05")).toEqual({ date: "2026-05-31", balance: 234355 });
+  });
+
+  it("残高の無い取引でも、明細が続いている証拠になる", () => {
+    const rows = [t("2026-06-11", 6000), t("2026-06-04", -70642, 1085)];
+    expect(cycleEndBalances(rows, 10).get("2026-05")!.date).toBe("2026-06-10");
+  });
+
+  it("届いていない残高は画面で断れる", () => {
+    expect(balanceReachesCycleEnd({ ym: "2026-05", asOf: "2026-05-31" }, 10)).toBe(false);
+    expect(balanceReachesCycleEnd({ ym: "2026-05", asOf: "2026-06-10" }, 10)).toBe(true);
+    // 手入力した残高(asOfなし)は月末残高のつもりなので断らない
+    expect(balanceReachesCycleEnd({ ym: "2026-05" }, 10)).toBe(true);
+  });
+
+  it("残高がいつ時点かを引き継ぐ", () => {
+    const entries = [{ id: "1", ym: "2026-05", cat: "account" as const, item: "残高", account: "ゆうちょ", amount: 234355, asOf: "2026-05-31" }];
+    expect(balancesAsOf(entries, "2026-06")["ゆうちょ"]).toEqual({ amount: 234355, ym: "2026-05", asOf: "2026-05-31" });
   });
 });

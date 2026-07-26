@@ -556,16 +556,21 @@ export const monthHasInput = (monthEntries: Entry[], memos: Memo[], ym: string):
 
 // 指定月度時点の各口座の残高。その月に記録が無ければ、記録のある直近の月から引き継ぐ。
 // (残高は「その月に動きがなければ前月末のまま」なので、記録の無い月を空欄にすると実態と合わない)
-export function balancesAsOf(entries: Entry[], ym: string): Record<string, { amount: number; ym: string }> {
-  const out: Record<string, { amount: number; ym: string }> = {};
+export function balancesAsOf(entries: Entry[], ym: string): Record<string, { amount: number; ym: string; asOf?: string }> {
+  const out: Record<string, { amount: number; ym: string; asOf?: string }> = {};
   for (const e of entries || []) {
     if (e.cat !== "account" || acctRole(e.item) !== "bal" || e.ym > ym) continue;
     const key = e.account || "";
     const cur = out[key];
-    if (!cur || e.ym > cur.ym) out[key] = { amount: e.amount, ym: e.ym };
+    if (!cur || e.ym > cur.ym) out[key] = { amount: e.amount, ym: e.ym, asOf: e.asOf };
   }
   return out;
 }
+
+// その残高が月度の締め日まで届いているか。届いていなければ、そのあとの取引が
+// 抜けたまま「月末残高」として表示されてしまうので、画面で断る必要がある。
+export const balanceReachesCycleEnd = (b: { ym: string; asOf?: string }, cutoffDay: number = 0): boolean =>
+  !b || !b.asOf || b.asOf >= cycleEndDate(b.ym, cutoffDay);
 export const balTotalAsOf = (entries: Entry[], ym: string): number | null => {
   const b = balancesAsOf(entries, ym);
   const ks = Object.keys(b);
@@ -1162,7 +1167,8 @@ export function pairOwnTransfers(items: TransferCandidate[]): number[] {
 // 「自分の残高から自分の金額を引いた額」が他の行の残高と一致するなら、その行は相手より後。
 // どの行の前でもない行が、その日の最後の取引。
 export function cycleEndBalances(txns: ParsedTxn[], cutoffDay: number = 0): Map<string, { date: string; balance: number }> {
-  const withBal = (txns || []).filter((t) => Number.isFinite(t.balance));
+  const all = txns || [];
+  const withBal = all.filter((t) => Number.isFinite(t.balance));
   const out = new Map<string, { date: string; balance: number }>();
   const byCycle = new Map<string, ParsedTxn[]>();
   for (const t of withBal) {
@@ -1177,7 +1183,12 @@ export function cycleEndBalances(txns: ParsedTxn[], cutoffDay: number = 0): Map<
     const isPredecessorOfOther = (t: ParsedTxn) =>
       sameDay.some((o) => o !== t && Math.round((o.balance as number) - o.amount) === Math.round(t.balance as number));
     const last = sameDay.find((t) => !isPredecessorOfOther(t)) || sameDay[sameDay.length - 1];
-    out.set(k, { date: lastDate, balance: Math.round(last.balance as number) });
+    // 明細が締め日より後まで続いているなら、その間に取引が無かったと分かるので、
+    // この残高は締め日時点の残高。続いていなければ最後の取引日時点の残高でしかない
+    // (銀行アプリは暦月単位で表示するため、10日締めの月度は翌月の明細まで要る)。
+    const end = cycleEndDate(k, cutoffDay);
+    const covered = all.some((t) => t.date > end);
+    out.set(k, { date: covered ? end : lastDate, balance: Math.round(last.balance as number) });
   }
   return out;
 }
