@@ -241,19 +241,22 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
                     if (mode === "diff") color = diffColor(r.k, v);
                     else if (r.net) color = v === 0 ? undefined : v > 0 ? GREEN : RED;
                     else if (r.muted || projected) color = MUTED;
-                    const base = { ...styles.tdNum, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 600 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
+                    // Keep every amount at the same weight. Hiragino/Yu Gothic
+                    // changes numeral metrics between regular and bold on iOS,
+                    // which makes comma and digit positions look staggered.
+                    const base = { ...styles.tdNum, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 400 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
                     const canOpen = r.salary || r.salaryDetail || r.destination || (r.editable && mode === "plan");
                     if (canOpen) return <td key={mo} style={base}><button aria-label={`${r.label}・${ymLabel(mo)}`} style={{ ...styles.cellBtn, display: "block", width: "100%", minHeight: 20, textAlign: "inherit", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
                     return <td key={mo} style={base}>{cellText(v)}</td>;
                   })}
-                  {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? { fontWeight: 700 } : {}), ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
+                  {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, fontWeight: 400, ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
                 </tr>
               );
             })}
             {showBal && (
               <tr>
                 <td style={{ ...styles.td, ...styles.tdSticky, ...styles.tdSubLabel }}>残高見通し</td>
-                {months.map((mo) => { const b = balByMonth[mo]; return <td key={mo} style={{ ...styles.tdNum, ...styles.tdSubTotal, fontWeight: 600, ...(mo === ym ? { background: "var(--col-hl)" } : {}), color: b.anchored ? INK : MUTED }}>{b.bal ? num(b.bal) : ""}</td>; })}
+                {months.map((mo) => { const b = balByMonth[mo]; return <td key={mo} style={{ ...styles.tdNum, ...styles.tdSubTotal, fontWeight: 400, ...(mo === ym ? { background: "var(--col-hl)" } : {}), color: b.anchored ? INK : MUTED }}>{b.bal ? num(b.bal) : ""}</td>; })}
                 <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}></td>
               </tr>
             )}
