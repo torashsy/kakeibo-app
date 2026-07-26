@@ -38,8 +38,8 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
           <span style={{ fontSize: 14, fontWeight: 700 }}>＋ まとめ入力</span>
         </button>
       )}
-      <SpendingMeter plans={plans} subs={subs} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
-      <AnnualOutlookCard plans={plans} subs={subs} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={onOpenPlan} />
+      <SpendingMeter plans={plans} subs={subs} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
+      <AnnualOutlookCard plans={plans} subs={subs} debt={debt} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={onOpenPlan} />
       <div style={styles.sumGrid}>
         <SumCell label="給与(手取り)" value={summary.gross + summary.deduction} color={GREEN} />
         <button
@@ -137,9 +137,9 @@ function CardBreakdownPanel({ rows }) {
 // 使いすぎメーター。今月の支出(実績)を計画支出(固定費+変動費)と並べ、
 // バーと一言で「使いすぎ/計画内」を判定できるようにする。副次的に収支の実績/計画も添える。
 // 「内訳」を開くと、その月の支出をカード別＋現金(出金)で確認できる(既存の記録から表示。入力は不要)。
-function SpendingMeter({ plans, subs, monthEntries, ym, startDay }) {
+function SpendingMeter({ plans, subs, debt, monthEntries, ym, startDay }) {
   const [open, setOpen] = useState(false);
-  const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym), [plans, subs, monthEntries, ym]);
+  const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym, debt), [plans, subs, debt, monthEntries, ym]);
   const bd = useMemo(() => {
     const cardMap = {}; let cashOut = 0;
     for (const e of monthEntries) {
@@ -193,8 +193,8 @@ function SpendingMeter({ plans, subs, monthEntries, ym, startDay }) {
 }
 
 // 今年の着地見込み。年度末の収支(累計)と残高の見込みを一目で。タップで計画タブへ。
-function AnnualOutlookCard({ plans, subs, entries, closedMonths, ym, onOpenPlan }) {
-  const o = useMemo(() => annualOutlook(plans, subs, entries || [], closedMonths, ym), [plans, subs, entries, closedMonths, ym]);
+function AnnualOutlookCard({ plans, subs, debt, entries, closedMonths, ym, onOpenPlan }) {
+  const o = useMemo(() => annualOutlook(plans, subs, entries || [], closedMonths, ym, debt), [plans, subs, debt, entries, closedMonths, ym]);
   return (
     <button style={{ ...styles.balCard, width: "100%", textAlign: "left", fontFamily: "inherit", cursor: onOpenPlan ? "pointer" : "default", display: "block", marginBottom: 14 }} onClick={() => onOpenPlan && onOpenPlan()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>

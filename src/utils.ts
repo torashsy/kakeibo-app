@@ -71,7 +71,12 @@ export interface Sub {
 }
 
 export interface PlanLineData { std: number; over: Record<string, number>; }
-export interface Plan { fyStart?: number; lines: Record<string, PlanLineData>; }
+export interface SalaryCyclePlan { gross: number; standardMonthly: number; }
+export interface SalaryPlan {
+  cycles: Record<string, SalaryCyclePlan>; // 7月開始年 -> 翌6月まで
+  bonuses: Record<string, number>;         // YYYY-MM -> 額面
+}
+export interface Plan { version?: number; fyStart?: number; lines: Record<string, PlanLineData>; salary?: SalaryPlan; }
 
 export interface Summary {
   gross: number; deduction: number; cardTotal: number; cashIn: number; cashOut: number; invest: number;
@@ -503,7 +508,72 @@ export const subYearly = (s: Sub): number => (s && s.cycle === "yearly" ? (Numbe
 // 定期費(subs)の月あたり固定費合計。計画の「固定費」はこれを土台にする。
 export const fixedMonthly = (subs: Sub[] | null | undefined): number => (subs || []).reduce((a, s) => a + subMonthly(s), 0);
 
-export const plannedIncome = (plan: Plan, ym: string): number => planValue(plan, PLAN_INCOME, ym);
+// 計画上の固定費。月額は毎月、年払いは更新月に一括計上する。
+// カード払いは請求を1か月後として扱う。更新月が無い旧データだけは従来どおり1/12で残す。
+export const fixedForMonth = (subs: Sub[] | null | undefined, ym: string): number => (subs || []).reduce((sum, s) => {
+  const amount = Number(s && s.amount) || 0;
+  if (s.cycle !== "yearly") return sum + amount;
+  if (!s.renewal || !/^\d{4}-\d{2}-\d{2}$/.test(s.renewal)) return sum + amount / 12;
+  const renewalYm = s.renewal.slice(0, 7);
+  const chargeYm = s.card ? addMonth(renewalYm, 1) : renewalYm;
+  return chargeYm.slice(5, 7) === ym.slice(5, 7) ? sum + amount : sum;
+}, 0);
+
+const salaryCycleYear = (ym: string): string => {
+  const [year, month] = ym.split("-").map(Number);
+  return String(month >= 7 ? year : year - 1);
+};
+
+const salaryIncomeDeduction = (taxableAfterSocial: number): number => {
+  if (taxableAfterSocial <= 158333) return 54167;
+  if (taxableAfterSocial <= 299999) return Math.ceil(taxableAfterSocial * 0.30 + 6667);
+  if (taxableAfterSocial <= 549999) return Math.ceil(taxableAfterSocial * 0.20 + 36667);
+  if (taxableAfterSocial <= 708330) return Math.ceil(taxableAfterSocial * 0.10 + 91667);
+  return 162500;
+};
+
+const withholdingIncomeTax = (taxable: number): number => {
+  const value = Math.max(0, taxable);
+  let rate = 0.05105, deduction = 0;
+  if (value >= 162501 && value <= 275000) { rate = 0.10210; deduction = 8296; }
+  else if (value >= 275001 && value <= 579166) { rate = 0.20420; deduction = 36374; }
+  else if (value >= 579167 && value <= 750000) { rate = 0.23483; deduction = 54113; }
+  else if (value >= 750001 && value <= 1500000) { rate = 0.33693; deduction = 130688; }
+  else if (value >= 1500001 && value <= 3333333) { rate = 0.40840; deduction = 237893; }
+  else if (value >= 3333334) { rate = 0.45945; deduction = 408061; }
+  return Math.max(0, Math.round((value * rate - deduction) / 10) * 10);
+};
+
+export interface SalaryEstimate {
+  gross: number; socialInsurance: number; incomeTax: number; deduction: number; takeHome: number;
+}
+
+// 添付Excel「標準月」の概算式。配偶者控除は0、基礎控除は月48,334円としている。
+export function estimateSalaryTakeHome(grossValue: number, standardMonthlyValue: number): SalaryEstimate {
+  const gross = Math.max(0, Math.round(Number(grossValue) || 0));
+  if (!gross) return { gross: 0, socialInsurance: 0, incomeTax: 0, deduction: 0, takeHome: 0 };
+  const standardMonthly = Math.max(0, Math.round(Number(standardMonthlyValue) || gross));
+  const health = Math.floor(standardMonthly * 0.04925);
+  const childSupport = Math.floor(standardMonthly * 0.00115);
+  const pension = Math.floor(standardMonthly * 0.0915);
+  const employment = Math.floor(gross * 0.005);
+  const socialInsurance = health + childSupport + pension + employment;
+  const afterSocial = Math.max(0, gross - socialInsurance);
+  const taxable = afterSocial - salaryIncomeDeduction(afterSocial) - 48334;
+  const incomeTax = withholdingIncomeTax(taxable);
+  const deduction = socialInsurance + incomeTax;
+  return { gross, socialInsurance, incomeTax, deduction, takeHome: Math.max(0, gross - deduction) };
+}
+
+export const plannedSalaryEstimate = (plan: Plan | null | undefined, ym: string): SalaryEstimate | null => {
+  const salary = plan && plan.salary;
+  const cycle = salary && salary.cycles && salary.cycles[salaryCycleYear(ym)];
+  if (!cycle) return null;
+  const bonus = Number(salary.bonuses && salary.bonuses[ym]) || 0;
+  return estimateSalaryTakeHome((Number(cycle.gross) || 0) + bonus, Number(cycle.standardMonthly) || Number(cycle.gross) || 0);
+};
+
+export const plannedIncome = (plan: Plan, ym: string): number => plannedSalaryEstimate(plan, ym)?.takeHome ?? planValue(plan, PLAN_INCOME, ym);
 // 変動費の予算枠(旅費/交際費など)。計画に "var|<名前>" 行があればそれらが枠、無ければ単一の変動費。
 export const variableBuckets = (plan: Plan | null | undefined): string[] =>
   plan && plan.lines ? Object.keys(plan.lines).filter((k) => k.startsWith("var|")).map((k) => k.slice(4)) : [];
@@ -515,12 +585,21 @@ export const plannedVariable = (plan: Plan, ym: string): number => {
 };
 export const plannedInvest = (plan: Plan, ym: string): number => planValue(plan, PLAN_INVEST, ym);
 // 支出見込み総額 = 固定費(subs) + 変動費見込み
-export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string): number => fixedMonthly(subs) + plannedVariable(plan, ym);
+export const plannedDebt = (debt: Record<string, Record<string, unknown>> | null | undefined, ym: string): number => {
+  const direct = Object.values(debt || {}).reduce((sum, schedule) => sum + debtValueTotal(schedule && schedule[ym]), 0);
+  if (direct) return direct;
+  const fy = fyStartOf(ym);
+  const annual = Object.values(debt || {}).reduce((sum, schedule) => sum + debtValueTotal(schedule && schedule[`FY:${fy}`]), 0);
+  return annual / 12;
+};
+
+export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null): number =>
+  fixedForMonth(subs, ym) + plannedVariable(plan, ym) + plannedDebt(debt, ym);
 // 計画の収支 = 収入 − 支出 + 投資振替(符号のまま)
-export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym) + plannedInvest(plan, ym);
+export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt) + plannedInvest(plan, ym);
 
 // 旧形式(カード別・口座フロー別に行を持つ計画)かどうか。旧キーは "salary|給与" のように "|" を含む。
-const isLegacyPlan = (plan: any): boolean => !!(plan && plan.lines && Object.keys(plan.lines).some((k) => k.includes("|")));
+const isLegacyPlan = (plan: any): boolean => !!(plan && plan.lines && Object.keys(plan.lines).some((k) => /^(salary|card|flow|memo)\|/.test(k)));
 
 // 旧計画を新モデル(収入/変動費/投資)へ移行する。総額を保つように:
 //  収入   = 給与系 + 収入側フロー(預入/入金)の合計
@@ -528,7 +607,7 @@ const isLegacyPlan = (plan: any): boolean => !!(plan && plan.lines && Object.key
 //  投資   = 投資振替(符号のまま)
 // メモ(交際費など)の計画行は、カテゴリ比較を廃止したため引き継がない。
 export function migratePlan(plan: any, subs: Sub[] | null | undefined): Plan {
-  if (!isLegacyPlan(plan)) return (plan && plan.lines) ? plan : { fyStart: plan && plan.fyStart, lines: {} };
+  if (!isLegacyPlan(plan)) return migrateSimplePlan((plan && plan.lines) ? plan : { fyStart: plan && plan.fyStart, lines: {} });
   const lines = plan.lines as Record<string, PlanLineData>;
   const keysStarting = (pfx: string) => Object.keys(lines).filter((k) => k.startsWith(pfx));
   const salaryKeys = keysStarting("salary|");
@@ -549,7 +628,37 @@ export function migratePlan(plan: any, subs: Sub[] | null | undefined): Plan {
     const vv = Math.max(0, sumAt(cardKeys.concat(outFlowKeys), m) - fixed); if (vv !== variable.std) variable.over[m] = vv;
     const nv = sumAt(investKeys, m); if (nv !== invest.std) invest.over[m] = nv;
   }
-  return { fyStart: plan.fyStart, lines: { [PLAN_INCOME]: income, [PLAN_VARIABLE]: variable, [PLAN_INVEST]: invest } };
+  return migrateSimplePlan({ fyStart: plan.fyStart, lines: { [PLAN_INCOME]: income, [PLAN_VARIABLE]: variable, [PLAN_INVEST]: invest } });
+}
+
+function migrateSimplePlan(plan: Plan): Plan {
+  const lines = { ...(plan.lines || {}) };
+  const needsVariableSplit = !Object.keys(lines).some((k) => k.startsWith("var|"));
+  if (!needsVariableSplit && plan.version && plan.version >= 3) return plan;
+  if (needsVariableSplit) {
+    const source = lines[PLAN_VARIABLE] || { std: 60000, over: {} };
+    const split = (totalValue: number) => {
+      const total = Math.max(0, Number(totalValue) || 0);
+      const food = Math.min(30000, total);
+      const transport = Math.min(30000, Math.max(0, total - food));
+      return [food, transport, Math.max(0, total - food - transport)];
+    };
+    const [foodStd, transportStd, otherStd] = split(source.std);
+    const food: PlanLineData = { std: foodStd, over: {} };
+    const transport: PlanLineData = { std: transportStd, over: {} };
+    const other: PlanLineData = { std: otherStd, over: {} };
+    for (const [month, total] of Object.entries(source.over || {})) {
+      const [f, t, o] = split(total);
+      if (f !== foodStd) food.over[month] = f;
+      if (t !== transportStd) transport.over[month] = t;
+      if (o !== otherStd) other.over[month] = o;
+    }
+    delete lines[PLAN_VARIABLE];
+    lines["var|食費"] = food;
+    lines["var|交通費"] = transport;
+    lines["var|その他"] = other;
+  }
+  return { ...plan, version: 3, lines };
 }
 
 // その月に何らかの入力(記録またはその月のメモ)があるか。
@@ -613,11 +722,11 @@ export const toggleMonthClosed = (closedMonths: string[] | null | undefined, ym:
 
 // 1か月分の 計画/実績(収入・支出・収支)と差を算出(今月タブの使いすぎ判定・計画対比に使う)。
 // 実績はその月の記録から computeSummary で集計、計画は簡素化モデル(収入/固定費+変動費/投資)から。
-export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string): PlanVsActual {
+export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, debt?: Record<string, Record<string, unknown>> | null): PlanVsActual {
   const s = computeSummary(monthEntries);
   const planIncome = plannedIncome(plan, ym);
-  const planSpending = plannedSpending(plan, subs, ym);
-  const planNet = plannedNet(plan, subs, ym);
+  const planSpending = plannedSpending(plan, subs, ym, debt);
+  const planNet = plannedNet(plan, subs, ym, debt);
   const actualIncome = s.income;
   const actualSpending = s.expense;   // カード請求＋現金出金(正の額)
   const actualNet = s.net;
@@ -634,7 +743,7 @@ export interface AnnualOutlook {
 
 // 今の月(ym)が属する年度について、年度末の収支(累計)と残高の見込みを算出する。
 // 入力が始まった/締めた月は実績、未入力の月は計画。残高は実績記録があればアンカーし、無ければ収支で試算。
-export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string): AnnualOutlook {
+export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null): AnnualOutlook {
   const fyStart = fyStartOf(ym);
   const months = planMonths(fyStart);
   const byMonth: Record<string, Entry[]> = {}; for (const m of months) byMonth[m] = [];
@@ -645,7 +754,7 @@ export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entrie
   for (const mo of months) {
     const es = byMonth[mo];
     const isActual = isMonthClosed(closedMonths, mo) || es.length > 0;
-    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo);
+    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo, debt);
     netForecast += net;
     if (isActual) actualNet += net;
     if (hasBalRecord(es)) bal = balTotalOf(es); else bal += net;

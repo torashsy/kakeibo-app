@@ -5,7 +5,8 @@ import {
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
-  migratePlan, fixedMonthly, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
+  migratePlan, fixedMonthly, fixedForMonth, plannedSpending, plannedVariable, variableBuckets, annualOutlook,
+  estimateSalaryTakeHome, plannedIncome, plannedDebt,
   isMonthClosed, toggleMonthClosed, cardBreakdown, monthHasInput, debtValueTotal,
   parseBankText, classifyTxn, classifyTxnForImport, txnToEntry, normalizeForMatch, verifyOcrBalanceChain, evalAmount,
   parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries, entryDaySignature, entryDate,
@@ -197,15 +198,39 @@ describe("計画", () => {
     expect(r.diff).toBe(r.actualNet - r.planNet);
   });
 
-  it("fixedMonthly/plannedSpending: 年払いは1/12で月換算し固定費に足す", () => {
+  it("fixedForMonth/plannedSpending: 年払いは支払月、カードなら翌月に一括計上", () => {
     const subs: Sub[] = [
       { id: "s1", name: "月額", amount: 1000, cycle: "monthly" },
-      { id: "s2", name: "年払い", amount: 12000, cycle: "yearly" },
+      { id: "s2", name: "年払い", amount: 12000, cycle: "yearly", renewal: "2026-05-01", card: "JCB" },
     ];
     expect(fixedMonthly(subs)).toBe(1000 + 1000);
+    expect(fixedForMonth(subs, "2026-05")).toBe(1000);
+    expect(fixedForMonth(subs, "2026-06")).toBe(1000 + 12000);
     const plans: Plan = { lines: { variable: { std: 50000, over: { "2026-06": 60000 } } } };
-    expect(plannedSpending(plans, subs, "2026-05")).toBe(2000 + 50000);
-    expect(plannedSpending(plans, subs, "2026-06")).toBe(2000 + 60000);
+    expect(plannedSpending(plans, subs, "2026-05")).toBe(1000 + 50000);
+    expect(plannedSpending(plans, subs, "2026-06")).toBe(13000 + 60000);
+  });
+
+  it("estimateSalaryTakeHome: 標準月シートの例と一致する", () => {
+    expect(estimateSalaryTakeHome(290856, 300000)).toEqual({
+      gross: 290856, socialInsurance: 44024, incomeTax: 6010, deduction: 50034, takeHome: 240822,
+    });
+  });
+
+  it("plannedIncome: 7月開始の月給と指定月の賞与から手取りを計算する", () => {
+    const plan: Plan = { lines: { income: { std: 1, over: {} } }, salary: {
+      cycles: { "2025": { gross: 290856, standardMonthly: 300000 }, "2026": { gross: 315000, standardMonthly: 320000 } },
+      bonuses: { "2026-06": 100000 },
+    } };
+    expect(plannedIncome(plan, "2026-05")).toBe(240822);
+    expect(plannedIncome(plan, "2026-06")).toBe(estimateSalaryTakeHome(390856, 300000).takeHome);
+    expect(plannedIncome(plan, "2026-07")).toBe(estimateSalaryTakeHome(315000, 320000).takeHome);
+  });
+
+  it("plannedDebt: 当年度は月別、次年度以降は年度額を12分割する", () => {
+    const debt = { JCB: { "2026-06": 24000, "FY:2027": { items: [{ amount: 120000 }] } } };
+    expect(plannedDebt(debt, "2026-06")).toBe(24000);
+    expect(plannedDebt(debt, "2027-04")).toBe(10000);
   });
 
   it("migratePlan: 旧形式(カード別・フロー別)を 収入/変動費/投資 の総額へ移行(総額を保つ)", () => {
@@ -223,12 +248,12 @@ describe("計画", () => {
       },
     };
     const p = migratePlan(legacy, subs);
-    expect(Object.keys(p.lines).sort()).toEqual(["income", "invest", "variable"]);
+    expect(Object.keys(p.lines).sort()).toEqual(["income", "invest", "var|その他", "var|交通費", "var|食費"]);
     expect(p.lines.income.std).toBe(300000 - 60000);
     expect(p.lines.income.over["2026-06"]).toBe(286000 - 60000);
     expect(p.lines.income.over["2026-11"]).toBe(300000 - 60000 + 100000);
     // 変動費 = (カード計 100000) − 固定費(2000)。総額=固定費+変動費=カード計 を保つ
-    expect(p.lines.variable.std).toBe(100000 - 2000);
+    expect(plannedVariable(p, "2026-05")).toBe(100000 - 2000);
     expect(plannedSpending(p, subs, "2026-05")).toBe(100000);
     expect(p.lines.invest.std).toBe(-46000);
     // 既に新形式なら素通し

@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
   num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
-  plannedIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedMonthly, variableBuckets,
+  plannedIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
+  plannedDebt, estimateSalaryTakeHome,
   hasBalRecord, balTotalOf, monthHasInput, isMonthClosed,
   PLAN_INCOME, PLAN_VARIABLE, PLAN_INVEST,
 } from '../utils';
@@ -14,9 +15,10 @@ import { AmountField } from './amount.jsx';
 //  - 見通し: 入力が始まった/締めた月は実績、それ以外は計画。残高は実績を引き継いで先へ試算。
 //  - 計画: セルをタップして収入・変動費・投資を編集(この月/毎月の標準)。固定費は定期費から自動表示。
 //  - 差異: 実績−計画。
-export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onToggleClosedMonth }) {
+export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths, onToggleClosedMonth }) {
   const [mode, setMode] = useState("forecast"); // forecast | plan | diff
   const [edit, setEdit] = useState(null);
+  const [salaryEdit, setSalaryEdit] = useState(null);
   const [fyOffset, setFyOffset] = useState(0);
 
   const fyStart = fyStartOf(ym) + fyOffset;
@@ -26,8 +28,6 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
     for (const e of entries) if (m[e.ym]) m[e.ym].push(e);
     return m;
   }, [entries, months]);
-  const fixed = useMemo(() => fixedMonthly(subs), [subs]);
-
   const actualOf = (k, mo) => {
     const s = computeSummary(entriesByMonth[mo] || []);
     return k === "income" ? s.income : k === "spending" ? s.expense : k === "invest" ? s.invest : k === "net" ? s.net : 0;
@@ -35,11 +35,12 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
   const planOf = (k, mo) => (
     k.startsWith("var|") ? planValue(plans, k, mo)
       : k === "income" ? plannedIncome(plans, mo)
-        : k === "spending" ? plannedSpending(plans, subs, mo)
+        : k === "spending" ? plannedSpending(plans, subs, mo, debt)
           : k === "variable" ? plannedVariable(plans, mo)
-            : k === "fixed" ? fixed
-              : k === "invest" ? plannedInvest(plans, mo)
-                : k === "net" ? plannedNet(plans, subs, mo) : 0
+            : k === "fixed" ? fixedForMonth(subs, mo)
+              : k === "debt" ? plannedDebt(debt, mo)
+                : k === "invest" ? plannedInvest(plans, mo)
+                  : k === "net" ? plannedNet(plans, subs, mo, debt) : 0
   );
   const isActualMonth = (mo) => isMonthClosed(closedMonths, mo) || (entriesByMonth[mo] || []).length > 0;
   const forecastOf = (k, mo) => (isActualMonth(mo) ? actualOf(k, mo) : planOf(k, mo));
@@ -56,7 +57,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
       res[mo] = { bal, anchored: hasBalRecord(es) };
     }
     return res;
-  }, [entries, months, entriesByMonth, plans, subs, mode]);
+  }, [entries, months, entriesByMonth, plans, subs, debt, mode]);
 
   const diffColor = (k, v) => (v === 0 ? MUTED : k === "spending" ? (v > 0 ? RED : GREEN) : k === "invest" ? MUTED : (v > 0 ? GREEN : RED));
   const cellText = (v) => (v === 0 ? "" : (mode === "diff" && v > 0 ? "+" + num(v) : num(v)));
@@ -68,9 +69,10 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
     : [{ k: "variable", label: "変動費", editable: PLAN_VARIABLE }];
   const rows = mode === "plan"
     ? [
-      { k: "income", label: "収入", editable: PLAN_INCOME },
+      { k: "income", label: "収入", salary: true },
       { k: "fixed", label: "固定費", muted: true },
       ...variableRows,
+      { k: "debt", label: "残債", muted: true },
       { k: "spending", label: "支出計", sub: true },
       { k: "invest", label: "投資振替", editable: PLAN_INVEST },
       { k: "net", label: "収支", net: true },
@@ -87,10 +89,43 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
   const showBal = mode === "forecast";
 
   const openEdit = (r, mo) => {
+    if (r.salary) { openSalary(); return; }
     if (mode !== "plan" || !r.editable) return;
     const l = plans && plans.lines && plans.lines[r.editable];
     const ov = l && l.over && l.over[mo] != null ? String(l.over[mo]) : "";
     setEdit({ key: r.editable, ym: mo, label: r.label, mlabel: ymLabel(mo), std: (l ? Number(l.std) || 0 : 0), value: ov });
+  };
+
+  const openSalary = () => {
+    const cycles = (plans.salary && plans.salary.cycles) || {};
+    const bonuses = (plans.salary && plans.salary.bonuses) || {};
+    const prev = cycles[String(fyStart - 1)] || {};
+    const current = cycles[String(fyStart)] || {};
+    setSalaryEdit({
+      prevGross: prev.gross ? String(prev.gross) : "",
+      prevStandard: prev.standardMonthly ? String(prev.standardMonthly) : "",
+      currentGross: current.gross ? String(current.gross) : "",
+      currentStandard: current.standardMonthly ? String(current.standardMonthly) : "",
+      june: bonuses[`${fyStart}-06`] ? String(bonuses[`${fyStart}-06`]) : "",
+      july: bonuses[`${fyStart}-07`] ? String(bonuses[`${fyStart}-07`]) : "",
+      december: bonuses[`${fyStart}-12`] ? String(bonuses[`${fyStart}-12`]) : "",
+    });
+  };
+
+  const commitSalary = () => {
+    const next = { ...plans, salary: { cycles: { ...((plans.salary && plans.salary.cycles) || {}) }, bonuses: { ...((plans.salary && plans.salary.bonuses) || {}) } } };
+    const amount = (value) => Math.max(0, Math.round(evalAmount(value) || 0));
+    const saveCycle = (key, grossValue, standardValue) => {
+      const gross = amount(grossValue); const standardMonthly = amount(standardValue) || gross;
+      if (gross) next.salary.cycles[key] = { gross, standardMonthly };
+      else delete next.salary.cycles[key];
+    };
+    saveCycle(String(fyStart - 1), salaryEdit.prevGross, salaryEdit.prevStandard);
+    saveCycle(String(fyStart), salaryEdit.currentGross, salaryEdit.currentStandard);
+    for (const [month, value] of [[`${fyStart}-06`, salaryEdit.june], [`${fyStart}-07`, salaryEdit.july], [`${fyStart}-12`, salaryEdit.december]]) {
+      const v = amount(value); if (v) next.salary.bonuses[month] = v; else delete next.salary.bonuses[month];
+    }
+    onSave(next); setSalaryEdit(null);
   };
   const commitOver = () => {
     const next = { ...plans, lines: { ...(plans.lines || {}) } };
@@ -138,6 +173,12 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
+      {mode === "plan" && <button style={{ ...styles.backupBtn, margin: "0 0 10px" }} onClick={openSalary}>給与</button>}
+      {mode === "forecast" && (
+        <div style={{ ...styles.balCard, marginBottom: 10 }}>
+          <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED }}>年度末</span><span style={{ ...styles.balVal, fontSize: 20 }}>{num(balByMonth[months[months.length - 1]].bal)}</span></div>
+        </div>
+      )}
       {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
       {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 4px 6px" }}>
@@ -165,7 +206,7 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
                     else if (r.net) color = v === 0 ? undefined : v > 0 ? GREEN : RED;
                     else if (r.muted || projected) color = MUTED;
                     const base = { ...styles.tdNum, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 600 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
-                    if (r.editable && mode === "plan") return <td key={mo} style={base}><button style={{ ...styles.cellBtn, display: "block", width: "100%", textAlign: "right", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
+                    if ((r.editable || r.salary) && mode === "plan") return <td key={mo} style={base}><button style={{ ...styles.cellBtn, display: "block", width: "100%", textAlign: "right", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
                     return <td key={mo} style={base}>{cellText(v)}</td>;
                   })}
                   {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? { fontWeight: 700 } : {}), ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
@@ -209,6 +250,42 @@ export function PlanView({ plans, onSave, subs, entries, ym, closedMonths, onTog
           </div>
         </div>
       )}
+      {salaryEdit && (
+        <div style={styles.sheetBackdrop} onClick={() => setSalaryEdit(null)}>
+          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetHandle} />
+            <div style={styles.sheetTitle}>給与</div>
+            <SalaryCycleFields label="4〜6月" gross={salaryEdit.prevGross} standard={salaryEdit.prevStandard}
+              onGross={(v) => setSalaryEdit({ ...salaryEdit, prevGross: v })} onStandard={(v) => setSalaryEdit({ ...salaryEdit, prevStandard: v })} />
+            <SalaryCycleFields label="7〜3月" gross={salaryEdit.currentGross} standard={salaryEdit.currentStandard}
+              onGross={(v) => setSalaryEdit({ ...salaryEdit, currentGross: v })} onStandard={(v) => setSalaryEdit({ ...salaryEdit, currentStandard: v })} />
+            <div style={{ ...styles.fieldLabel, marginTop: 12 }}>賞与</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+              {[['6月', 'june'], ['7月', 'july'], ['12月', 'december']].map(([label, key]) => (
+                <label key={key} style={{ fontSize: 12, color: MUTED }}><span>{label}</span><AmountField value={salaryEdit[key]} onChange={(v) => setSalaryEdit({ ...salaryEdit, [key]: v })} placeholder="0" /></label>
+              ))}
+            </div>
+            <button style={styles.saveBtn} onClick={commitSalary}>保存</button>
+            <button style={styles.cancelBtn} onClick={() => setSalaryEdit(null)}>閉じる</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SalaryCycleFields({ label, gross, standard, onGross, onStandard }) {
+  const estimate = estimateSalaryTakeHome(evalAmount(gross) || 0, evalAmount(standard) || evalAmount(gross) || 0);
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <strong style={{ fontSize: 13 }}>{label}</strong>
+        <span style={{ fontSize: 12, color: MUTED }}>手取り {num(estimate.takeHome)}　控除 {num(estimate.deduction)}</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <label style={{ fontSize: 12, color: MUTED }}><span>月給</span><AmountField value={gross} onChange={onGross} placeholder="0" /></label>
+        <label style={{ fontSize: 12, color: MUTED }}><span>標準報酬</span><AmountField value={standard} onChange={onStandard} placeholder={gross || "0"} /></label>
+      </div>
     </div>
   );
 }
