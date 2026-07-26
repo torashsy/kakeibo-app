@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown } from '../utils';
+import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, balanceReachesCycleEnd, cycleEndDate } from '../utils';
 import { styles } from '../styles.js';
 
 export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose, onOpenImport }) {
@@ -10,6 +10,9 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
   const hasBal = Object.keys(shown).length > 0;
   const balTotalNow = Object.values(shown).reduce((a, b) => a + b.amount, 0);
   const balChange = (hasBal && prevBalTotal != null) ? balTotalNow - prevBalTotal : null;
+  const partialAccounts = Object.entries(shown)
+    .filter(([, b]) => !balanceReachesCycleEnd(b, config.cycleCutoffDay))
+    .map(([acc, b]) => [acc, cycleEndDate(b.ym, config.cycleCutoffDay)]);
   const breakdown = useMemo(() => cardBreakdown(cards, debt || {}, memos, monthEntries, ym), [cards, debt, memos, monthEntries, ym]);
   const hasBreakdown = breakdown.length > 0;
   return (
@@ -56,12 +59,28 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
       <div style={styles.sectionTitle}>口座残高</div>
       <div style={styles.balCard}>
         {!hasBal && <div style={{ color: MUTED, fontSize: 13, padding: "6px 2px" }}>この月の残高記録はまだありません</div>}
-        {Object.entries(shown).map(([acc, b]) => (
-          <div style={styles.balRow} key={acc}>
-            <span style={styles.balAcc}>{acc}{b.ym !== ym && <span style={{ fontSize: 10.5, color: MUTED, marginLeft: 6 }}>{ymLabel(b.ym)}から</span>}</span>
-            <span style={styles.balVal}>{yen(b.amount)}</span>
+        {Object.entries(shown).map(([acc, b]) => {
+          // 締め日まで届いていない残高は「月末残高」ではない。そのあとの取引が
+          // 抜けたまま合っているように見えるので、いつ時点かを添える。
+          const partial = !balanceReachesCycleEnd(b, config.cycleCutoffDay);
+          return (
+            <div style={styles.balRow} key={acc}>
+              <span style={styles.balAcc}>
+                {acc}
+                {b.ym !== ym && <span style={{ fontSize: 10.5, color: MUTED, marginLeft: 6 }}>{ymLabel(b.ym)}から</span>}
+                {partial && <span style={{ fontSize: 10.5, color: RED, marginLeft: 6 }}>{b.asOf}時点</span>}
+              </span>
+              <span style={styles.balVal}>{yen(b.amount)}</span>
+            </div>
+          );
+        })}
+        {partialAccounts.length > 0 && (
+          <div style={{ fontSize: 11, color: RED, padding: "6px 2px 0", lineHeight: 1.5 }}>
+            {/* 締め日は残高が属する月度のもの。繰り越された残高だと表示中の月とは別になる */}
+            {partialAccounts.map(([acc, end]) => `${acc}（締め日 ${end}）`).join("・")}
+            の残高は締め日まで届いていません。翌月の明細も取り込むと、締め日時点の残高になります。
           </div>
-        ))}
+        )}
         {hasBal && <div style={{ ...styles.balRow, borderTop: `1px solid ${LINE}`, marginTop: 4, paddingTop: 10 }}><span style={{ ...styles.balAcc, fontWeight: 600 }}>合計</span><span style={{ ...styles.balVal, fontWeight: 600 }}>{yen(balTotalNow)}</span></div>}
         {balChange != null && <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED, fontSize: 13 }}>前月からの増減</span><span style={{ ...styles.balVal, color: balChange >= 0 ? GREEN : RED }}>{yen(balChange)}</span></div>}
       </div>
