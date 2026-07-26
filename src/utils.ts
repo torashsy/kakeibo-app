@@ -1357,7 +1357,9 @@ export function findDuplicateEntries(entries: Entry[]): DuplicateGroup[] {
     if (!e.id) continue;
     // 残高は月度・口座で1件に保たれているので対象外
     if (e.cat === "account" && acctRole(e.item) === "bal") continue;
-    const k = entrySignature(e);
+    // 日付が分かるものは日付まで一致したときだけまとめる(同じ月の別の日の
+    // 同額の取引を重複と決めつけない)。日付が無い記録(手入力)は月度でまとめる。
+    const k = entryDaySignature(e) || entrySignature(e);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(e);
   }
@@ -1554,12 +1556,22 @@ export function parseTxnKey(src: string | undefined): { date: string; amount: nu
 export const entrySignature = (e: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount">): string =>
   `${e.ym}|${e.cat}|${e.item}|${e.account || ""}|${Math.round(e.amount)}`;
 
+// 取り込んだ記録は指紋(src)に取引日を持っている(CSVもスクショも同じ)。
+// 月度だけで見ると「同じ月の別の日の同額の取引」まで重複扱いになるので、
+// 日付が分かるものは日付まで一致したときだけ同じ取引とみなす。
+export const entryDate = (e: Pick<Entry, "src">): string | undefined => parseTxnKey(e.src)?.date;
+export const entryDaySignature = (e: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount" | "src">): string | null => {
+  const d = entryDate(e);
+  return d ? `${d}|${e.cat}|${e.item}|${e.account || ""}|${Math.round(e.amount)}` : null;
+};
+
 // 目印ごとの件数。同じ内容の取引が本当に複数あることもあるので、
 // 重複の判定では「既にある件数の分だけ」を取込済みとみなす。
-export function countBySignature(entries: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount">[]): Map<string, number> {
+// 日付が分かる記録は日付ごとに、分からない記録(手入力)は月度ごとに数える。
+export function countBySignature(entries: Pick<Entry, "ym" | "cat" | "item" | "account" | "amount" | "src">[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const e of entries || []) {
-    const s = entrySignature(e);
+    const s = entryDaySignature(e) || entrySignature(e);
     m.set(s, (m.get(s) || 0) + 1);
   }
   return m;

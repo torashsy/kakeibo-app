@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ACCENT, MUTED, RED, DEFAULT_THEME, ACCENT_PRESETS } from '../theme.js';
-import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth, explainCycleGap, cycleGapDirection, findDuplicateEntries } from '../utils';
+import { uid, periodRange, findInternalTransfers, INTERNAL_TRANSFER_ITEM, yen, verifyCycles, periodLabel, cycleEndDate, ymLabel, addMonth, explainCycleGap, cycleGapDirection, findDuplicateEntries, parseTxnKey } from '../utils';
 import { styles } from '../styles.js';
 import { setSyncConfig, clearSyncConfig, getSyncState, onSyncChange, signUp, signIn, signInUser, signUpUser, displayName, signOut, syncNow } from '../storage.js';
 
@@ -394,8 +394,9 @@ function DuplicateFinder({ entries, onRemove }) {
     <div style={{ marginBottom: 18 }}>
       <div style={styles.detailHead}><span>二重に入っている記録を探す</span></div>
       <div style={{ fontSize: 11.5, color: MUTED, margin: "0 2px 6px", lineHeight: 1.6 }}>
-        同じ月度・同じ口座・同じ項目・同じ金額の記録をまとめます。同じ明細の行から取り込んだと分かるものは「確実」と出します。
-        同じ額の取引が本当に複数あることもあるので、消す前に確認してください。
+        同じ日・同じ口座・同じ項目・同じ金額の記録をまとめます（日付を持たない手入力の記録は同じ月度で見ます）。
+        同じ明細の行から取り込んだと分かるものは「確実」と出します。同じ日に同じ額の取引が本当に2件あることもあるので、
+        日付と摘要を見てから消してください。
       </div>
       <div style={styles.detailCard}>
         <button style={{ ...styles.backupBtn, marginTop: 6 }} onClick={scan}>記録を調べる</button>
@@ -409,10 +410,19 @@ function DuplicateFinder({ entries, onRemove }) {
                     {yen(g.entries[0].amount)}
                     <span style={{ color: MUTED, marginLeft: 6 }}>{where(g.entries[0])}</span>
                   </span>
+                  {/* 本当に重複かを目で確かめられるよう、日付と摘要を並べる */}
                   <span style={{ display: "block", fontSize: 11, color: g.certain ? RED : MUTED }}>
-                    {periodLabel(g.entries[0].ym)}・{g.entries.length}件
-                    {g.certain ? "（同じ明細の行なので確実に二重）" : "（同じ額の取引が本当に複数ないか確認してください）"}
+                    {g.entries.length}件
+                    {g.certain ? "・同じ明細の行なので確実に二重" : "・同じ額の取引が本当に複数ないか確認してください"}
                   </span>
+                  {g.entries.map((x, k) => {
+                    const t = parseTxnKey(x.src);
+                    return (
+                      <span key={x.id} style={{ display: "block", fontSize: 10.5, color: MUTED, lineHeight: 1.6 }}>
+                        {k === 0 ? "残す" : "消す"}　{t ? t.date : periodLabel(x.ym)}　{t ? t.desc : "（日付なし・手入力）"}
+                      </span>
+                    );
+                  })}
                 </span>
                 <button style={styles.addBtn} onClick={() => drop([g])}>1件だけ残す</button>
               </div>
