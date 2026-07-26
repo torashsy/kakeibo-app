@@ -105,6 +105,7 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
     setSalaryEdit({
       aGross: prev.gross ? String(prev.gross) : "",
       bGross: current.gross ? String(current.gross) : "",
+      standard: current.standardMonthly ? String(current.standardMonthly) : (prev.standardMonthly ? String(prev.standardMonthly) : ""),
       x: rule.juneMultiplier != null ? String(rule.juneMultiplier) : (bonuses[`${fyStart}-06`] && prev.gross ? String(Number(bonuses[`${fyStart}-06`]) / Number(prev.gross)) : ""),
       y: rule.decemberMultiplier != null ? String(rule.decemberMultiplier) : (bonuses[`${fyStart}-12`] && current.gross ? String(Number(bonuses[`${fyStart}-12`]) / Number(current.gross)) : ""),
     });
@@ -113,8 +114,10 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
   const commitSalary = () => {
     const next = { ...plans, salary: { cycles: { ...((plans.salary && plans.salary.cycles) || {}) }, bonuses: { ...((plans.salary && plans.salary.bonuses) || {}) }, rules: { ...((plans.salary && plans.salary.rules) || {}) } } };
     const amount = (value) => Math.max(0, Math.round(evalAmount(value) || 0));
+    const standardMonthly = amount(salaryEdit.standard);
+    if (!standardMonthly) return;
     const saveCycle = (key, grossValue) => {
-      const gross = amount(grossValue); const standardMonthly = gross;
+      const gross = amount(grossValue);
       if (gross) next.salary.cycles[key] = { gross, standardMonthly };
       else delete next.salary.cycles[key];
     };
@@ -258,11 +261,12 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <label style={{ fontSize: 12, color: MUTED }}><span>A額面（4〜6月）</span><AmountField value={salaryEdit.aGross} onChange={(v) => setSalaryEdit({ ...salaryEdit, aGross: v })} placeholder="0" /></label>
               <label style={{ fontSize: 12, color: MUTED }}><span>B額面（7〜3月）</span><AmountField value={salaryEdit.bGross} onChange={(v) => setSalaryEdit({ ...salaryEdit, bGross: v })} placeholder="0" /></label>
+              <label style={{ fontSize: 12, color: MUTED, gridColumn: "1 / -1" }}><span>標準報酬月額</span><AmountField value={salaryEdit.standard} onChange={(v) => setSalaryEdit({ ...salaryEdit, standard: v })} placeholder="0" /></label>
               <label style={{ fontSize: 12, color: MUTED }}><span>6月（xか月）</span><input type="number" inputMode="decimal" step="0.1" value={salaryEdit.x} onChange={(e) => setSalaryEdit({ ...salaryEdit, x: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} /></label>
               <label style={{ fontSize: 12, color: MUTED }}><span>12月（yか月）</span><input type="number" inputMode="decimal" step="0.1" value={salaryEdit.y} onChange={(e) => setSalaryEdit({ ...salaryEdit, y: e.target.value })} placeholder="0" style={{ ...styles.textInput, margin: 0, textAlign: "right" }} /></label>
             </div>
             <SalaryRulePreview edit={salaryEdit} />
-            <button style={styles.saveBtn} onClick={commitSalary}>保存</button>
+            <button style={{ ...styles.saveBtn, ...(!evalAmount(salaryEdit.standard) ? { opacity: 0.45 } : {}) }} disabled={!evalAmount(salaryEdit.standard)} onClick={commitSalary}>保存</button>
             <button style={styles.cancelBtn} onClick={() => setSalaryEdit(null)}>閉じる</button>
           </div>
         </div>
@@ -274,11 +278,12 @@ export function PlanView({ plans, onSave, subs, debt, entries, ym, closedMonths,
 function SalaryRulePreview({ edit }) {
   const a = Math.max(0, evalAmount(edit.aGross) || 0);
   const b = Math.max(0, evalAmount(edit.bGross) || 0);
+  const standard = Math.max(0, evalAmount(edit.standard) || 0);
   const june = a * Math.max(0, Number(edit.x) || 0);
   const july = Math.max(0, b - a) * 3;
   const december = b * Math.max(0, Number(edit.y) || 0);
-  const aNet = estimateSalaryTakeHome(a, a).takeHome;
-  const bNet = estimateSalaryTakeHome(b, b).takeHome;
+  const aNet = standard ? estimateSalaryTakeHome(a, standard).takeHome : 0;
+  const bNet = standard ? estimateSalaryTakeHome(b, standard).takeHome : 0;
   return (
     <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.8, marginTop: 10 }}>
       <div>手取り　A {num(aNet)} ／ B {num(bNet)}</div>
