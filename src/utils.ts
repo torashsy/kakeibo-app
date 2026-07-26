@@ -11,6 +11,7 @@ export interface Entry {
   src?: string;        // 取込元の指紋(日付|金額|摘要)。同じ明細を二重に取り込まないための目印
   asOf?: string;       // 残高がいつ時点のものか。周期末まで届いているかの確認に使う
   srcBalance?: number; // OCR明細に表示された取引後残高。摘要が揺れても同じ取引を判別する
+  imp?: string;        // どの取込で入ったか。1つの明細に同じ行は2回出ないので、重複判定の拠り所になる
 }
 
 export interface Config {
@@ -1194,13 +1195,21 @@ export function cycleEndBalances(txns: ParsedTxn[], cutoffDay: number = 0): Map<
     if (!byCycle.has(k)) byCycle.set(k, []);
     byCycle.get(k)!.push(t);
   }
+  // 明細の並びの向き。残高の連なりで決められないときの拠り所にする。
+  const dates = all.map((t) => t.date).filter(Boolean);
+  const descending = dates.length > 1 && dates[0] > dates[dates.length - 1];
   for (const [k, list] of byCycle) {
     const lastDate = list.reduce((a, t) => (t.date > a ? t.date : a), list[0].date);
     const sameDay = list.filter((t) => t.date === lastDate);
     // その日の中で、他のどの行の「ひとつ前」にもなっていない行が最後
     const isPredecessorOfOther = (t: ParsedTxn) =>
       sameDay.some((o) => o !== t && Math.round((o.balance as number) - o.amount) === Math.round(t.balance as number));
-    const last = sameDay.find((t) => !isPredecessorOfOther(t)) || sameDay[sameDay.length - 1];
+    const candidates = sameDay.filter((t) => !isPredecessorOfOther(t));
+    // その日の始めと終わりの残高がたまたま同じだと連なりが輪になり、どれも
+    // 「ひとつ前」になってしまう(実例: 7/24に 2,253→+80,000→-60,000→-20,000→2,253)。
+    // 決められないときは明細の並びの向きで、その日の最後の行を採る。
+    const last = candidates.length === 1 ? candidates[0]
+      : (descending ? sameDay[0] : sameDay[sameDay.length - 1]);
     // 明細が締め日より後まで続いているなら、その間に取引が無かったと分かるので、
     // この残高は締め日時点の残高。続いていなければ最後の取引日時点の残高でしかない
     // (銀行アプリは暦月単位で表示するため、10日締めの月度は翌月の明細まで要る)。
@@ -1364,29 +1373,28 @@ export function findDuplicateEntries(entries: Entry[]): DuplicateGroup[] {
     groups.get(k)!.push(e);
   }
   const out: DuplicateGroup[] = [];
-  const group = (list: Entry[], certain: boolean) => {
-    if (list.length < 2) return;
-    out.push({ entries: list, certain, keepId: list[0].id as string, removeIds: list.slice(1).map((e) => e.id as string) });
-  };
   for (const list of groups.values()) {
     if (list.length < 2) continue;
-    // 同じ明細の行(指紋が同じ)を二重に取り込んだものは確実。まずそれだけを「確実」にする。
-    const bySrc = new Map<string, Entry[]>();
-    for (const e of list) {
-      if (!e.src) continue;
-      if (!bySrc.has(e.src)) bySrc.set(e.src, []);
-      bySrc.get(e.src)!.push(e);
+    // 1つの明細(CSV・スクショ)に同じ行が2回出ることはないので、同じ取込から入った
+    // 同じ内容の記録は別々の取引。実例: 6/23にSBIハイブリッド預金振替 -20,000 が2回。
+    // よって「1つの取込が出した最大の件数」が本来の件数で、それを超えた分が二重。
+    // 取込の印が無い記録(印を付ける前のデータ・手入力)は、1件ずつ別の取込とみなす。
+    const impOf = (e: Entry) => e.imp || `#${e.id}`;
+    const counts = new Map<string, number>();
+    for (const e of list) counts.set(impOf(e), (counts.get(impOf(e)) || 0) + 1);
+    const expected = Math.max(...counts.values());
+    if (list.length <= expected) continue;
+    // 最も多く出した取込の分を残す(同数なら先に入っている方)
+    const best = list.map(impOf).find((k) => counts.get(k) === expected) as string;
+    const keep = list.filter((e) => impOf(e) === best);
+    const remove = list.filter((e) => impOf(e) !== best);
+    // 消す側が、残す側と同じ明細の行(指紋が一致)なら、同じ行を二重に取り込んだと言い切れる。
+    // 摘要の読み取り方が違うだけのものは、そこまで言い切れないので分けて出す。
+    const sameRow = (r: Entry) => !!r.src && keep.some((k) => k.src === r.src);
+    for (const [part, certain] of [[remove.filter(sameRow), true], [remove.filter((r) => !sameRow(r)), false]] as [Entry[], boolean][]) {
+      if (!part.length) continue;
+      out.push({ entries: [...keep, ...part], certain, keepId: keep[0].id as string, removeIds: part.map((e) => e.id as string) });
     }
-    for (const same of bySrc.values()) group(same, true);
-    // 各明細行から1件ずつ残したものと、指紋を持たない記録。
-    // 摘要の読み取り方が違うだけの同じ取引かもしれないが、
-    // 同じ額の取引が本当に複数あることもあるので「要確認」に留める。
-    const seen = new Set<string>();
-    group(list.filter((e) => {
-      if (!e.src) return true;
-      if (seen.has(e.src)) return false;
-      seen.add(e.src); return true;
-    }), false);
   }
   // 確実なものを先に、次に額の大きいものから
   return out.sort((a, b) =>

@@ -419,7 +419,11 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
     ...ocrBalEntries,
   ];
   const commit = () => {
-    const list = [...newEntries, ...pairing.replacementEntries, ...balEntries];
+    // この取込のまとまりに印を付ける。1つの明細に同じ行が2回出ることはないので、
+    // 「同じ取込から入った同じ内容の記録」は別々の取引だと言い切れる
+    // (実例: 6/23にSBIハイブリッド預金振替 -20,000 が2回)。
+    const imp = uid();
+    const list = [...newEntries.map((e) => ({ ...e, imp })), ...pairing.replacementEntries, ...balEntries];
     // 過去の片側も「口座振替」に置き換え、両口座の移動記録を残したまま収支から外す
     if (list.length || pairing.removeIds.length) onAddEntries(list, pairing.removeIds);
     onClose();

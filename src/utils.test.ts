@@ -1856,3 +1856,67 @@ describe("重複の判定は日付まで見る", () => {
     expect(entryDate(e({ src: "2026-06-15|20000|x" }))).toBe("2026-06-15");
   });
 });
+
+describe("同じ取込の中の同じ内容は別の取引", () => {
+  // 実例(NEOBANK 2026-06-23): SBIハイブリッド預金振替 -20,000 が同じ日に2回
+  const e = (o: any) => ({ ym: "2026-06", cat: "account" as const, item: "投資振替", account: "NEOBANK",
+    amount: -20000, src: "2026-06-23|-20000|sbiハイフリツト預金振替", ...o });
+
+  it("1つのCSVに2行あったものは重複にしない", () => {
+    const rows = [e({ id: "a", imp: "csv1" }), e({ id: "b", imp: "csv1" })];
+    expect(findDuplicateEntries(rows)).toEqual([]);
+  });
+
+  it("同じCSVを2回取り込んだら、その取込ぶんを丸ごと消す候補にする", () => {
+    const rows = [e({ id: "a", imp: "csv1" }), e({ id: "b", imp: "csv1" }),
+                  e({ id: "c", imp: "csv2" }), e({ id: "d", imp: "csv2" })];
+    const g = findDuplicateEntries(rows);
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ certain: true, keepId: "a" });
+    expect(g[0].removeIds.sort()).toEqual(["c", "d"]);
+  });
+
+  it("片方の取込にしか無い分は、多い方を本来の件数とみなす", () => {
+    // csv1が2件、スクショが1件しか読めなかった → 本来2件。スクショの1件が余分
+    const rows = [e({ id: "a", imp: "csv1" }), e({ id: "b", imp: "csv1" }), e({ id: "c", imp: "shot" })];
+    expect(findDuplicateEntries(rows)[0]).toMatchObject({ keepId: "a", removeIds: ["c"] });
+  });
+
+  it("取込の印が無い記録は1件ずつ別の取込とみなす(印を付ける前のデータ)", () => {
+    const rows = [e({ id: "a" }), e({ id: "b" })];
+    expect(findDuplicateEntries(rows)[0]).toMatchObject({ keepId: "a", removeIds: ["b"] });
+  });
+
+  it("摘要が違えば「要確認」にする(同じ行とは言い切れない)", () => {
+    const rows = [e({ id: "a", imp: "csv1" }), e({ id: "b", imp: "shot", src: "2026-06-23|-20000|ハイフリツト" })];
+    expect(findDuplicateEntries(rows)[0]).toMatchObject({ certain: false, removeIds: ["b"] });
+  });
+});
+
+describe("同じ日の始めと終わりの残高が同じとき", () => {
+  const t = (date: string, amount: number, balance: number) => ({ date, desc: "x", amount, balance });
+
+  it("残高の連なりが輪になっても、明細の向きで最後の行を採る(新しい順)", () => {
+    // 実例(NEOBANK 7/24): 2,253 →+80,000→ 82,253 →-60,000→ 22,253 →-20,000→ 2,253
+    // 日の始めと終わりが同じ2,253なので、どの行も他の行の「ひとつ前」に見える
+    const rows = [
+      t("2026-07-24", -20000, 2253), t("2026-07-24", -60000, 22253), t("2026-07-24", 80000, 82253),
+      t("2026-07-21", -2000, 2253),
+    ];
+    expect(cycleEndBalances(rows, 10).get("2026-07")).toEqual({ date: "2026-07-24", balance: 2253 });
+  });
+
+  it("古い順に並ぶ明細でも同じ答えになる", () => {
+    const rows = [
+      t("2026-07-21", -2000, 2253),
+      t("2026-07-24", 80000, 82253), t("2026-07-24", -60000, 22253), t("2026-07-24", -20000, 2253),
+    ];
+    expect(cycleEndBalances(rows, 10).get("2026-07")!.balance).toBe(2253);
+  });
+
+  it("連なりで決まるときは、これまでどおり並び順に依らない", () => {
+    const rows = [t("2026-05-11", -37804, 924), t("2026-05-11", -120681, 38728)];
+    expect(cycleEndBalances(rows, 10).get("2026-04")!.balance).toBe(924);
+    expect(cycleEndBalances([...rows].reverse(), 10).get("2026-04")!.balance).toBe(924);
+  });
+});
