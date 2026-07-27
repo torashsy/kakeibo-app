@@ -33,6 +33,10 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
     .reduce((sum, [, value]) => sum + debtValueTotal(value), 0);
   const totalRemaining = cards.reduce((a, c) => a + remaining(c.name), 0);
   const [edit, setEdit] = useState(null);
+  const [showEmpty, setShowEmpty] = useState(false);
+  const debtCards = cards.filter((card) => remaining(card.name) !== 0);
+  const emptyCards = cards.filter((card) => remaining(card.name) === 0);
+  const visibleCards = showEmpty ? [...debtCards, ...emptyCards] : debtCards;
   const amountRefs = useRef([]);
   const fiscalYearOf = (key) => key.startsWith("FY:") ? Number(key.slice(3)) : /^\d{4}$/.test(key) ? Number(key) : null;
   const fiscalAggregateEntries = (name, period) => {
@@ -80,13 +84,15 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   };
   return (
     <div>
-      <div style={styles.debtSummary}><span style={{ fontSize: 13, color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={{ fontSize: 22, fontWeight: 600, color: RED }}>{yen(totalRemaining)}</span></div>
+      <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
+        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span style={{ color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={styles.editRowRight}><span style={{ ...styles.subtotalNum, color: RED }}>{yen(totalRemaining)}</span><span style={styles.chevRSpacer} /></span></div>
+      </div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (columns.length + 1) * 96 }}>
           <colgroup><col style={{ width: 132 }} />{columns.map((p) => <col key={"col-" + p} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
           <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>カード</th>{columns.map((p) => <th key={p} style={styles.th}>{p.startsWith("FY+:") ? `${p.slice(4)}年度以降` : `${Number(p.slice(5))}月`}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>残債</th></tr></thead>
           <tbody>
-            {cards.map((c) => (
+            {visibleCards.map((c) => (
               <tr key={c.id}>
                 <td style={{ ...styles.td, ...styles.tdSticky }}>{c.name}</td>
                 {columns.map((p) => <td key={p} style={styles.tdNum}><button style={{ ...styles.cellBtn, minWidth: 28, minHeight: 18, display: "block", width: "100%", textAlign: "right" }} onClick={() => openEdit(c.name, p)}>{periodTotal(c.name, p) ? num(periodTotal(c.name, p)) : " "}</button></td>)}
@@ -96,6 +102,12 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
           </tbody>
         </table>
       </div>
+      {emptyCards.length > 0 && (
+        <button style={{ ...styles.collapseRow, marginTop: 8, padding: "10px 14px", border: `1px solid var(--line)`, borderRadius: "var(--radius)", background: "var(--card-bg)" }} onClick={() => setShowEmpty((value) => !value)} aria-expanded={showEmpty}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: MUTED, fontSize: 13 }}><span style={{ ...styles.chev, transform: showEmpty ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>残債なし</span>
+          <span style={{ ...styles.detailTotal, color: MUTED }}>{emptyCards.length}枚</span>
+        </button>
+      )}
       {edit && (
         <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { MUTED } from '../theme.js';
+import { INK, LINE, MUTED } from '../theme.js';
 import { yen, uid, subMonthly, subYearly, subActiveForMonth, evalAmount } from '../utils';
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
@@ -27,6 +27,7 @@ const renewalSort = (a, b) => {
 
 export function Subs({ subs, onSave, cards, ym }) {
   const [edit, setEdit] = useState(null);
+  const [openGroups, setOpenGroups] = useState({});
   const activeSubs = useMemo(() => subs.filter((s) => subActiveForMonth(s, ym)), [subs, ym]);
   const monthTotal = useMemo(() => activeSubs.reduce((a, s) => a + subMonthly(s), 0), [activeSubs]);
   const yearTotal = useMemo(() => activeSubs.reduce((a, s) => a + subYearly(s), 0), [activeSubs]);
@@ -51,10 +52,9 @@ export function Subs({ subs, onSave, cards, ym }) {
 
   return (
     <div>
-      <div style={styles.subTotals}>
-        <div style={styles.subTotalCell}><span style={styles.subTotalLabel}>月換算合計</span><span style={styles.subTotalValue}>{yen(monthTotal)}</span></div>
-        <div style={styles.subTotalDiv} />
-        <div style={styles.subTotalCell}><span style={styles.subTotalLabel}>年合計</span><span style={styles.subTotalValue}>{yen(yearTotal)}</span></div>
+      <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 12 }}>
+        <div style={styles.subtotalRow}><span>月換算</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(monthTotal)}</span><span style={styles.chevRSpacer} /></span></div>
+        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span>年合計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(yearTotal)}</span><span style={styles.chevRSpacer} /></span></div>
       </div>
       <div style={styles.detailHead}><span>一覧（{subs.length}）</span><button style={styles.addBtn} onClick={newSub}>＋ 追加</button></div>
       {subs.length === 0 ? (
@@ -62,35 +62,35 @@ export function Subs({ subs, onSave, cards, ym }) {
       ) : (
         groups.map(([cat, items]) => {
           const catMonthly = items.filter((s) => subActiveForMonth(s, ym)).reduce((a, s) => a + subMonthly(s), 0);
+          const open = !!openGroups[cat];
           return (
-            <div key={cat} style={{ marginBottom: 16 }}>
-              <div style={styles.memoGroupHead}><span>{cat}</span><span style={styles.memoGroupSum}>月換算 {yen(catMonthly)}</span></div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div key={cat} style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
+              <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpenGroups((value) => ({ ...value, [cat]: !value[cat] }))} aria-expanded={open}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>{cat}<span style={styles.countBadge}>{items.length}</span></span>
+                <span style={{ ...styles.detailTotal, color: INK }}>{yen(catMonthly)}</span>
+              </button>
+              {open && <div style={{ paddingBottom: 4 }}>
                 {items.map((s) => {
                   const d = daysUntil(s.renewal);
                   const soon = d != null && d >= 0 && d <= SOON_DAYS;
                   const past = d != null && d < 0;
                   const ended = !!s.endDate && s.endDate < new Date().toISOString().slice(0, 10);
                   return (
-                    <button key={s.id} style={{ ...styles.memoCard, ...(soon ? { border: "1.5px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...s, amount: s.amount ? String(s.amount) : "", category: s.category || "" })}>
-                      <div style={styles.memoHead}>
-                        <span style={styles.memoTitle}>{s.name}{s.plan ? <span style={styles.subCycle}>　{s.plan}</span> : null}</span>
-                        <span style={styles.memoAmount}>{yen(s.amount)}<span style={styles.subCycle}>/{s.cycle === "yearly" ? "年" : "月"}</span></span>
-                      </div>
-                      <div style={styles.subMeta}>
+                    <button key={s.id} style={{ ...styles.itemRow, ...(soon ? { color: "var(--accent)" } : {}) }} onClick={() => setEdit({ ...s, amount: s.amount ? String(s.amount) : "", category: s.category || "" })}>
+                      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: INK }}>{s.name}{s.plan ? <small style={styles.subCycle}>　{s.plan}</small> : null}</span>
+                        <span style={{ ...styles.subMeta, marginTop: 4 }}>
                         {ended ? <span style={styles.subDuePast}>解約済み</span> : soon && <span style={styles.subDue}>{d === 0 ? "本日更新" : `更新まであと${d}日`}</span>}
                         {!ended && past && <span style={styles.subDuePast}>更新日を過ぎています</span>}
                         {s.card && <span style={styles.brandTag}>{s.card}</span>}
-                        {s.startDate && <span style={styles.brandTag}>開始 {s.startDate}</span>}
-                        {s.endDate && <span style={styles.brandTag}>{ended ? "終了" : "終了予定"} {s.endDate}</span>}
                         {s.renewal && <span style={styles.brandTag}>更新 {s.renewal}</span>}
-                        {s.cycle === "yearly" && <span style={styles.subMonthly}>月換算 {yen(subMonthly(s))}</span>}
-                      </div>
-                      {s.note && <div style={styles.memoBody}>{s.note}</div>}
+                        </span>
+                      </span>
+                      <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(s.amount)}<small style={styles.subCycle}>/{s.cycle === "yearly" ? "年" : "月"}</small></span><span style={styles.chev}>›</span></span>
                     </button>
                   );
                 })}
-              </div>
+              </div>}
             </div>
           );
         })

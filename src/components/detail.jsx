@@ -13,14 +13,12 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, onSave
     <div style={{ padding: "4px 2px 8px" }}>
       <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
         <button style={{ ...styles.viewToggleBtn, ...(view === "list" ? styles.viewToggleActive : {}) }} onClick={() => setView("list")}>履歴</button>
-        <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>項目別</button>
-        <button style={{ ...styles.viewToggleBtn, ...(view === "table" ? styles.viewToggleActive : {}) }} onClick={() => setView("table")}>表</button>
+        <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>月別</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
       </div>
       {view === "list" && <DetailList monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
-      {view === "table" && <DetailTable S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "year" && <YearTable entries={entries} ym={ym} config={config} cards={cards} />}
       {view === "memo" && <MemoList memos={memos} onSave={onSaveMemos} cards={cards} config={config} ym={ym} />}
     </div>
@@ -101,7 +99,9 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
 
 export function DetailCards({ S, config, cards, onEdit }) {
   const [open, setOpen] = useState({});
+  const [sections, setSections] = useState({ salary: true, card: true });
   const toggle = (key) => setOpen((o) => ({ ...o, [key]: !o[key] }));
+  const toggleSection = (key) => setSections((value) => ({ ...value, [key]: !value[key] }));
   const rowProps = { open, toggle, onEdit };
 
   // 給与
@@ -111,51 +111,35 @@ export function DetailCards({ S, config, cards, onEdit }) {
   const cardTotal = (cards || []).reduce((a, c) => a + S.totalOf("card|" + c.name + "|"), 0);
   // 口座
   const balTotalAll = S.accounts.reduce((a, acc) => a + S.totalOf(`account|残高|${acc}`), 0);
+  const activeSalary = salaryItems.filter((it) => S.get("salary", it, "").entries.length > 0);
+  const activeCards = (cards || []).filter((c) => S.get("card", c.name, "").entries.length > 0);
+  const activeAccounts = S.accounts.map((acc) => ({ acc, flows: S.flowsFor(acc).filter((t) => S.get("account", t, acc).entries.length > 0) })).filter((row) => row.flows.length > 0);
+  const activeBalances = S.accounts.filter((acc) => S.get("account", "残高", acc).entries.length > 0);
+  const section = (key, label, total, children, count) => (
+    <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
+      <button style={{ ...styles.collapseRow, borderBottom: sections[key] ? `1px solid ${LINE}` : "none" }} onClick={() => toggleSection(key)} aria-expanded={!!sections[key]}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: sections[key] ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>{label}{count > 0 && <span style={styles.countBadge}>{count}</span>}</span>
+        <span style={{ ...styles.detailTotal, color: total < 0 ? RED : INK }}>{yen(total)}</span>
+      </button>
+      {sections[key] && <div style={{ paddingBottom: 4 }}>{children}</div>}
+    </div>
+  );
 
   return (
     <>
-
-      {/* 給与系 */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={styles.detailHead}><span>給与系</span></div>
-        <div style={styles.detailCard}>
-          {salaryItems.map((it) => <ItemRow key={it} label={it} node={S.get("salary", it, "")} gkey={"salary|" + it} {...rowProps} />)}
-          <div style={styles.subtotalRow}><span>給与計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(salaryTotal)}</span><span style={styles.chevRSpacer} /></span></div>
-        </div>
-      </div>
-
-      {/* カード */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={styles.detailHead}><span>カード</span></div>
-        <div style={styles.detailCard}>
-          {(cards || []).map((c) => <ItemRow key={c.id} label={c.name} node={S.get("card", c.name, "")} gkey={"card|" + c.name} {...rowProps} />)}
-          <div style={styles.subtotalRow}><span>カード計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(cardTotal)}</span><span style={styles.chevRSpacer} /></span></div>
-        </div>
-      </div>
-
-      {/* 口座: 口座ごとにまとめる */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={styles.detailHead}><span>口座（入出金・振替）</span></div>
-        {S.accounts.map((acc) => {
-          const flows = S.flowsFor(acc);
+      {activeSalary.length > 0 && section("salary", "給与", salaryTotal, activeSalary.map((it) => <ItemRow key={it} label={it} node={S.get("salary", it, "")} gkey={"salary|" + it} {...rowProps} />), activeSalary.length)}
+      {activeCards.length > 0 && section("card", "カード", cardTotal, activeCards.map((c) => <ItemRow key={c.id} label={c.name} node={S.get("card", c.name, "")} gkey={"card|" + c.name} {...rowProps} />), activeCards.length)}
+      {activeAccounts.length > 0 && section("account", "口座入出金", activeAccounts.reduce((sum, row) => sum + row.flows.reduce((v, t) => v + S.totalOf(`account|${t}|${row.acc}`), 0), 0), activeAccounts.map(({ acc, flows }) => {
           const accTotal = flows.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
           return (
-            <div style={{ ...styles.detailCard, marginBottom: 10 }} key={acc}>
+            <div key={acc}>
               <div style={styles.subGroupHead}><span>{acc}</span><span style={styles.editRowRight}><span style={styles.subGroupTotal}>{yen(accTotal)}</span><span style={styles.chevRSpacer} /></span></div>
               {flows.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
             </div>
           );
-        })}
-      </div>
-
-      {/* 口座残高 */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={styles.detailHead}><span>口座残高</span></div>
-        <div style={styles.detailCard}>
-          {S.accounts.map((acc) => <ItemRow key={acc} label={acc} node={S.get("account", "残高", acc)} gkey={`bal|${acc}`} {...rowProps} />)}
-          <div style={styles.subtotalRow}><span>残高計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(balTotalAll)}</span><span style={styles.chevRSpacer} /></span></div>
-        </div>
-      </div>
+        }), activeAccounts.length)}
+      {activeBalances.length > 0 && section("balance", "口座残高", balTotalAll, activeBalances.map((acc) => <ItemRow key={acc} label={acc} node={S.get("account", "残高", acc)} gkey={`bal|${acc}`} {...rowProps} />), activeBalances.length)}
+      {activeSalary.length + activeCards.length + activeAccounts.length + activeBalances.length === 0 && <div style={{ color: MUTED, fontSize: 13, padding: 12 }}>記録なし</div>}
     </>
   );
 }
@@ -213,7 +197,7 @@ export function DetailTable({ S, config, cards, onEdit }) {
               return (
                 <tr key={i}>
                   <td
-                    style={{ ...styles.td, ...styles.tdSticky, ...(r.indent ? { paddingLeft: 20 } : {}), ...(zero ? { color: "var(--zero)" } : {}) }}>{r.label}</td>
+                    style={{ ...styles.td, ...styles.tdSticky, ...(r.indent ? { padding: "8px 10px 8px 20px" } : {}), ...(zero ? { color: "var(--zero)" } : {}) }}>{r.label}</td>
                   {cols.map((c) => { const e = its[c - 1]; return <td style={styles.tdNum} key={c}>{e ? <button style={styles.cellBtn} onClick={() => onEdit(e)}>{num(e.amount)}</button> : ""}</td>; })}
                   <td
                     style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(zero ? { color: "var(--zero)" } : {}) }}>{zero ? "0" : num(total)}</td>
@@ -246,6 +230,9 @@ export function YearTable({ entries, ym, config, cards }) {
     return map;
   }, [entries]);
   const val = (mo, cat, item, account) => sums[`${mo}|${cat}|${item}|${account || ""}`] || 0;
+  const hasAnnualValue = (cat, item, account = "") => months.some((mo) => val(mo, cat, item, account) !== 0);
+  const visibleSalaryItems = salaryItems.filter((item) => hasAnnualValue("salary", item));
+  const visibleCards = cardList.filter((card) => hasAnnualValue("card", card.name));
 
   // 月ごとの収支(サマリと同じ計算)
   const netByMonth = useMemo(() => {
@@ -259,10 +246,10 @@ export function YearTable({ entries, ym, config, cards }) {
   rows.push({ kind: "head", label: "収支" });
   rows.push({ kind: "net", label: "月間収支", get: (mo) => netByMonth[mo] || 0 });
   rows.push({ kind: "head", label: "給与系" });
-  salaryItems.forEach((it) => rows.push({ kind: "row", label: it, get: (mo) => val(mo, "salary", it, "") }));
+  visibleSalaryItems.forEach((it) => rows.push({ kind: "row", label: it, get: (mo) => val(mo, "salary", it, "") }));
   rows.push({ kind: "sub", label: "給与計", get: (mo) => salaryItems.reduce((a, it) => a + val(mo, "salary", it, ""), 0) });
   rows.push({ kind: "head", label: "カード" });
-  cardList.forEach((c) => rows.push({ kind: "row", label: c.name, get: (mo) => val(mo, "card", c.name, "") }));
+  visibleCards.forEach((c) => rows.push({ kind: "row", label: c.name, get: (mo) => val(mo, "card", c.name, "") }));
   rows.push({ kind: "sub", label: "カード計", get: (mo) => cardList.reduce((a, c) => a + val(mo, "card", c.name, ""), 0) });
   rows.push({ kind: "head", label: "口座（入出金・振替）" });
   accounts.forEach((acc) => {
@@ -295,7 +282,7 @@ export function YearTable({ entries, ym, config, cards }) {
               return (
                 <tr key={i}>
                   <td
-                    style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { paddingLeft: 20 } : {}) }}>{r.label}</td>
+                    style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { padding: "8px 10px 8px 20px" } : {}) }}>{r.label}</td>
                   {months.map((mo) => { const v = r.get(mo); return (
                     <td
                       style={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 600 } : {})) }}
@@ -315,6 +302,7 @@ export function YearTable({ entries, ym, config, cards }) {
 
 // 年度内の月ごとの貯蓄率(収支÷収入)を並べた簡易チャート
 function SavingsChart({ entries, months, ym }) {
+  const [open, setOpen] = useState(false);
   const rates = useMemo(() => months.map((mo) => {
     const s = computeSummary(entries.filter((e) => e.ym === mo));
     return { mo, rate: s.income > 0 ? s.net / s.income : null };
@@ -326,12 +314,12 @@ function SavingsChart({ entries, months, ym }) {
   const W = 442, H = 132, padBottom = 20, topH = (H - padBottom) * 0.62, midY = topH, barAreaH = H - padBottom - 12;
   const colW = W / months.length;
   return (
-    <div style={{ ...styles.detailCard, marginBottom: 14, padding: "12px 6px 6px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 6px 8px" }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: MUTED }}>貯蓄率の推移（収支 ÷ 収入）</span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: avg >= 0 ? GREEN : RED }}>平均 {Math.round(avg * 100)}%</span>
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+    <div style={{ ...styles.detailCard, marginBottom: 10, padding: "0 14px" }}>
+      <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>貯蓄率</span>
+        <span style={{ ...styles.detailTotal, color: avg >= 0 ? GREEN : RED }}>平均 {Math.round(avg * 100)}%</span>
+      </button>
+      {open && <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", padding: "8px 0 4px" }}>
         <line x1={0} y1={midY} x2={W} y2={midY} stroke={LINE} strokeWidth={1} />
         {rates.map((r, i) => {
           if (r.rate == null) return null;
@@ -350,7 +338,7 @@ function SavingsChart({ entries, months, ym }) {
         {months.map((mo, i) => (
           <text key={mo} x={i * colW + colW / 2} y={H - 5} fontSize="9.5" textAnchor="middle" fill={mo === ym ? ACCENT : MUTED} fontWeight={mo === ym ? 700 : 400}>{parseInt(mo.split("-")[1], 10)}月</text>
         ))}
-      </svg>
+      </svg>}
     </div>
   );
 }
