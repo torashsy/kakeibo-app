@@ -445,6 +445,25 @@ export function computeSummary(monthEntries: Entry[]): Summary {
   return { gross, deduction, cardTotal, cashIn, cashOut, invest, salaryIncome, otherIncome, income, expense, net, balances, balTotal };
 }
 
+export function migrateCard(raw: any): Card {
+  if (typeof raw === "string") return { id: uid(), name: raw, brand: "", note: "", annualFee: 0 };
+  const source = raw && typeof raw === "object" ? raw : {};
+  const day = (value: unknown) => {
+    const n = Math.round(Number(value) || 0);
+    return n >= 1 && n <= 31 ? n : undefined;
+  };
+  return {
+    ...source,
+    id: source.id || uid(),
+    name: source.name || "",
+    brand: source.brand || "",
+    note: source.note || "",
+    annualFee: Number(source.annualFee) || 0,
+    cutoffDay: day(source.cutoffDay),
+    paymentDay: day(source.paymentDay),
+  };
+}
+
 
 export const DEFAULT_CARDS: Card[] = [
   { id: uid(), name: "SMCC Gold", brand: "VISA", note: "三井住友ゴールドNL" },

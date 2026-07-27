@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migrateCard, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -62,7 +62,7 @@ export default function App() {
         // 締め日(サイクル)設定があれば、起動時は「今の周期」を表示する
         setYm(currentCycleYm(loadedConfig.cycleCutoffDay));
         const rawCards = cd && cd.value ? JSON.parse(cd.value) : null;
-        setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "", annualFee: 0 } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "", annualFee: Number(c.annualFee) || 0 }) : DEFAULT_CARDS);
+        setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map(migrateCard) : DEFAULT_CARDS);
         const rawDebt = d && d.value ? JSON.parse(d.value) : null;
         setDebt(rawDebt && typeof rawDebt === "object" ? rawDebt : SEED_DEBT);
         setTheme(th && th.value ? { ...DEFAULT_THEME, ...JSON.parse(th.value) } : DEFAULT_THEME);
@@ -164,7 +164,7 @@ export default function App() {
   const importData = (d) => {
     if (Array.isArray(d.entries)) { const m = d.entries.map(migrateEntry).filter(Boolean); setEntries(m); save("entries", m); }
     if (d.config && typeof d.config === "object") commitConfig(migrateConfig({ ...DEFAULT_CONFIG, ...d.config }));
-    if (Array.isArray(d.cards)) commitCards(d.cards.map((c) => typeof c === "string" ? { id: uid(), name: c, brand: "", note: "", annualFee: 0 } : { id: c.id || uid(), name: c.name || "", brand: c.brand || "", note: c.note || "", annualFee: Number(c.annualFee) || 0 }));
+    if (Array.isArray(d.cards)) commitCards(d.cards.map(migrateCard));
     if (d.debt && typeof d.debt === "object") commitDebt(d.debt);
     if (Array.isArray(d.memos)) commitMemos(d.memos);
     if (Array.isArray(d.subs)) commitSubs(d.subs);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday, nextBankBusinessDay, cardPaymentDate, cardPaymentDateForCycle, pendingCardClaims, cardClaimStates, upcomingDebits,
-  migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
+  migrateEntry, migrateConfig, migrateCard, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
   planVsActualForMonth, advanceRenewalDate, rollForwardSubs,
@@ -12,6 +12,23 @@ import {
   parseCsvRows, normalizeCsvDate, parseCsvAmount, parseBankCsv, txnKey, dedupeTxns, guessYuchoScreenshotAccount, matchesOwnName, pairOwnTransfers, findInternalTransfers, verifyBalanceTotal, isCardStatement, fixSignsFromBalances, cycleEndBalances, findCardByTotal, cardMonthTotal, DEBIT_HINT_RE, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, balancesAsOf, balTotalAsOf, verifyCycles, cycleEndDate, decodeImportPayload, fuzzyIncludes, repairAmountsFromBalances, entrySignature, countBySignature, balanceReachesCycleEnd, shouldReplaceBalance, explainCycleGap, cycleGapDirection, findDuplicateEntries, entryDaySignature, entryDate,
   type Entry, type Memo, type Card, type Config, type Plan, type Sub, type ImportRule,
 } from "./utils";
+
+describe("migrateCard", () => {
+  it("締日と引き落とし日を保持する", () => {
+    expect(migrateCard({
+      id: "card-1", name: "JCB", brand: "JCB", annualFee: "11000",
+      cutoffDay: "15", paymentDay: "10", custom: "keep",
+    })).toMatchObject({
+      id: "card-1", name: "JCB", brand: "JCB", annualFee: 11000,
+      cutoffDay: 15, paymentDay: 10, custom: "keep",
+    });
+  });
+
+  it("範囲外の日付だけ除外する", () => {
+    expect(migrateCard({ id: "card-2", name: "VIEW", cutoffDay: 0, paymentDay: 32 }))
+      .toMatchObject({ id: "card-2", name: "VIEW", cutoffDay: undefined, paymentDay: undefined });
+  });
+});
 
 describe("整形", () => {
   it("yen: 正負とカンマ", () => {
