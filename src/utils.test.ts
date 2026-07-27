@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday, nextBankBusinessDay, cardPaymentDate,
+  yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday, nextBankBusinessDay, cardPaymentDate, cardPaymentDateForCycle, pendingCardClaims,
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
@@ -773,6 +773,21 @@ describe("cycleYm / periodLabel / periodRange", () => {
     expect(cardPaymentDate("2026-06-16", card)).toBe("2026-08-10");
     expect(cardPaymentDate("2026-04-20", { ...card, cutoffDay: 31 })).toBe("2026-05-11"); // 5/10(日)
     expect(nextBankBusinessDay("2026-01-10")).toBe("2026-01-13"); // 土日+成人の日
+  });
+  it("cardPaymentDateForCycle: 家計月度の中の引落日を求める", () => {
+    expect(cardPaymentDateForCycle("2026-07", 10, 10)).toBe("2026-08-10");
+    expect(cardPaymentDateForCycle("2026-07", 27, 10)).toBe("2026-07-27");
+    expect(cardPaymentDateForCycle("2026-04", 10, 10)).toBe("2026-05-11"); // 5/10(日)
+  });
+  it("pendingCardClaims: 残高基準日より後に引かれるカード請求だけを返す", () => {
+    const cards: Card[] = [{ id: "c", name: "JCB", paymentDay: 10 }];
+    const balance = (asOf?: string): Entry => ({ ym: "2026-07", cat: "account", item: "残高", account: "ゆうちょ", amount: 100000, ...(asOf ? { asOf } : {}) });
+    const manual: Entry = { ym: "2026-07", cat: "card", item: "JCB", amount: 30000 };
+    expect(pendingCardClaims([balance("2026-07-24"), manual], cards, "2026-07", 10)).toBe(30000);
+    expect(pendingCardClaims([balance("2026-08-10"), manual], cards, "2026-07", 10)).toBe(0);
+    const imported: Entry = { ...manual, date: "2026-07-10" };
+    expect(pendingCardClaims([balance("2026-07-24"), imported], cards, "2026-07", 10)).toBe(0);
+    expect(pendingCardClaims([balance(), manual], cards, "2026-07", 10)).toBe(0); // 月末確定残高
   });
   it("cycleYm: 締め日が土日祝なら翌営業日まで同じ周期に含める", () => {
     // 2026-01は 1/10(土)・1/11(日)・1/12(成人の日) と続き、締め日10は営業日1/13へ送られる

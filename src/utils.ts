@@ -619,6 +619,37 @@ export interface SalaryEstimate {
   gross: number; socialInsurance: number; incomeTax: number; deduction: number; takeHome: number;
 }
 
+// 家計月度の中で、カードの実際の引落日を求める。
+// 10日締めの7月度(7/11〜8/10)なら、10日払いは8/10、27日払いは7/27。
+export function cardPaymentDateForCycle(ym: string, paymentDay: number | null | undefined, cutoffDay: number = 0): string {
+  const day = Math.min(31, Math.max(1, Math.round(Number(paymentDay) || Number(cutoffDay) || 31)));
+  const start = cycleStartDate(ym, cutoffDay);
+  const end = cycleEndDate(ym, cutoffDay);
+  const candidates = [start.slice(0, 7), end.slice(0, 7)]
+    .filter((value, index, list) => list.indexOf(value) === index)
+    .map((month) => nextBankBusinessDay(`${month}-${String(Math.min(day, daysInMonth(month))).padStart(2, "0")}`))
+    .filter((date) => date >= start && date <= end)
+    .sort();
+  return candidates[0] || end;
+}
+
+// 記録済みの口座残高に、まだ反映されていないカード請求額。
+// 日付つきカード記録は実際の出金日、手入力はカード設定の引落予定日で判定する。
+// 残高にasOfが無い場合は月末確定値なので、当月の請求は反映済みとみなす。
+export function pendingCardClaims(monthEntries: Entry[], cards: Card[] | null | undefined, ym: string, cutoffDay: number = 0): number {
+  const balances = (monthEntries || []).filter((e) => e.cat === "account" && acctRole(e.item) === "bal");
+  if (!balances.length) return 0;
+  const coveredThrough = balances.some((e) => !e.asOf)
+    ? cycleEndDate(ym, cutoffDay)
+    : balances.map((e) => e.asOf || "").sort().pop() || "";
+  return (monthEntries || []).reduce((sum, e) => {
+    if (e.cat !== "card") return sum;
+    const card = (cards || []).find((c) => c.name === e.item);
+    const due = entryDate(e) || cardPaymentDateForCycle(ym, card?.paymentDay, cutoffDay);
+    return due > coveredThrough ? sum + Math.abs(Number(e.amount) || 0) : sum;
+  }, 0);
+}
+
 // 添付Excel「標準月」の概算式。配偶者控除は0、基礎控除は月48,334円としている。
 export function estimateSalaryTakeHome(grossValue: number, standardMonthlyValue: number): SalaryEstimate {
   const gross = Math.max(0, Math.round(Number(grossValue) || 0));
@@ -880,7 +911,7 @@ export interface AnnualOutlook {
 
 // 今の月(ym)が属する年度について、年度末の収支(累計)と残高の見込みを算出する。
 // 入力が始まった/締めた月は実績、未入力の月は計画。残高は実績記録があればアンカーし、無ければ収支で試算。
-export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): AnnualOutlook {
+export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): AnnualOutlook {
   const fyStart = fyStartOf(ym);
   const months = planMonths(fyStart);
   const byMonth: Record<string, Entry[]> = {}; for (const m of months) byMonth[m] = [];
@@ -894,7 +925,7 @@ export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entrie
     const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo, debt, cards);
     netForecast += net;
     if (isActual) actualNet += net;
-    if (hasBalRecord(es)) bal = balTotalOf(es); else bal += net;
+    if (hasBalRecord(es)) bal = balTotalOf(es) - pendingCardClaims(es, cards, mo, cutoffDay); else bal += net;
   }
   return { fyStart, netForecast, actualNet, balStart, balEnd: bal };
 }

@@ -4,7 +4,7 @@ import {
   num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
   plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
   plannedDebt, estimateSalaryTakeHome, plannedSalaryBreakdown,
-  hasBalRecord, balTotalOf, monthHasInput, isMonthClosed,
+  hasBalRecord, balTotalOf, pendingCardClaims, monthHasInput, isMonthClosed,
   PLAN_OTHER_INCOME, PLAN_VARIABLE, PLAN_INVEST,
 } from '../utils';
 import { styles } from '../styles.js';
@@ -62,7 +62,7 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
     let bal = entries.reduce((a, e) => a + (e.ym === prevMo && e.cat === "account" && e.item === "残高" ? e.amount : 0), 0);
     for (const mo of months) {
       const es = entriesByMonth[mo] || [];
-      if (hasBalRecord(es)) bal = balTotalOf(es);
+      if (hasBalRecord(es)) bal = balTotalOf(es) - pendingCardClaims(es, cards, mo, config?.cycleCutoffDay || 0);
       else bal += forecastOf("net", mo);
       res[mo] = { bal, anchored: hasBalRecord(es) };
     }
