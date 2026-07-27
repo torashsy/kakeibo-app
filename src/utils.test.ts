@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday, nextBankBusinessDay, cardPaymentDate, cardPaymentDateForCycle, pendingCardClaims,
+  yen, num, addMonth, ymLabel, cycleYm, cycleStartDate, periodLabel, periodRange, isBankHoliday, nextBankBusinessDay, cardPaymentDate, cardPaymentDateForCycle, pendingCardClaims, cardClaimStates, upcomingDebits,
   migrateEntry, migrateConfig, acctRole, flowTypesFor, computeSummary,
   planMonths, fyStartOf, planValue,
   hasBalRecord, balTotalOf, DEFAULT_CONFIG, INTERNAL_TRANSFER_ITEM,
@@ -788,6 +788,39 @@ describe("cycleYm / periodLabel / periodRange", () => {
     const imported: Entry = { ...manual, date: "2026-07-10" };
     expect(pendingCardClaims([balance("2026-07-24"), imported], cards, "2026-07", 10)).toBe(0);
     expect(pendingCardClaims([balance(), manual], cards, "2026-07", 10)).toBe(0); // 月末確定残高
+  });
+  it("cardClaimStates: 入力・基準日・計画から支払状態を分ける", () => {
+    const cards: Card[] = [
+      { id: "a", name: "確定カード", cutoffDay: 15, paymentDay: 10 },
+      { id: "b", name: "引落済カード", cutoffDay: 15, paymentDay: 27 },
+      { id: "c", name: "見込みカード", cutoffDay: 15, paymentDay: 10 },
+    ];
+    const entries: Entry[] = [
+      { ym: "2026-07", cat: "account", item: "残高", amount: 100000, asOf: "2026-07-27" },
+      { ym: "2026-07", cat: "card", item: "確定カード", amount: 30000 },
+      { ym: "2026-07", cat: "card", item: "引落済カード", amount: 20000, date: "2026-07-27" },
+    ];
+    const debt = { 見込みカード: { "2026-07": 10000 } };
+    const subs: Sub[] = [{ id: "s", name: "定期費", amount: 2000, cycle: "monthly", card: "見込みカード", renewal: "2026-07-01" }];
+    const rows = cardClaimStates(cards, debt, subs, entries, "2026-07", 10);
+    expect(rows.find((r) => r.name === "確定カード")).toMatchObject({ amount: 30000, due: "2026-08-10", status: "confirmed" });
+    expect(rows.find((r) => r.name === "引落済カード")).toMatchObject({ amount: 20000, due: "2026-07-27", status: "paid" });
+    expect(rows.find((r) => r.name === "見込みカード")).toMatchObject({ amount: 12000, due: "2026-08-10", status: "forecast", debtPortion: 10000, otherPortion: 2000 });
+  });
+  it("upcomingDebits: カード払い定期費を二重表示せず、未引落だけを返す", () => {
+    const cards: Card[] = [{ id: "c", name: "JCB", cutoffDay: 15, paymentDay: 10 }];
+    const entries: Entry[] = [
+      { ym: "2026-07", cat: "account", item: "残高", amount: 100000, asOf: "2026-07-27" },
+      { ym: "2026-07", cat: "card", item: "JCB", amount: 30000 },
+    ];
+    const subs: Sub[] = [
+      { id: "card-sub", name: "カードの通信費", amount: 5000, cycle: "monthly", card: "JCB", renewal: "2026-07-01" },
+      { id: "direct", name: "口座振替保険", amount: 4000, cycle: "monthly", renewal: "2026-08-05" },
+    ];
+    expect(upcomingDebits(entries, cards, {}, subs, 10, "2026-07-27", 30)).toEqual([
+      { id: "fixed|2026-08-05|direct", date: "2026-08-05", label: "口座振替保険", amount: 4000, status: "forecast", kind: "fixed" },
+      { id: "card|2026-07|JCB", date: "2026-08-10", label: "JCB", amount: 30000, status: "confirmed", kind: "card" },
+    ]);
   });
   it("cycleYm: 締め日が土日祝なら翌営業日まで同じ周期に含める", () => {
     // 2026-01は 1/10(土)・1/11(日)・1/12(成人の日) と続き、締め日10は営業日1/13へ送られる

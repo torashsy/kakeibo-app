@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
+import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
 import { styles } from '../styles.js';
 
-export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose, onOpenImport }) {
+export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards, onOpenClose, onOpenImport }) {
   const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
@@ -14,7 +14,9 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
     .filter(([, b]) => !balanceReachesCycleEnd(b, config.cycleCutoffDay))
     .map(([acc, b]) => [acc, cycleEndDate(b.ym, config.cycleCutoffDay)]);
   const breakdown = useMemo(() => cardBreakdown(cards, debt || {}, memos, monthEntries, ym), [cards, debt, memos, monthEntries, ym]);
-  const hasBreakdown = breakdown.length > 0;
+  const claimStates = useMemo(() => cardClaimStates(cards, debt || {}, subs, monthEntries, ym, config.cycleCutoffDay), [cards, debt, subs, monthEntries, ym, config.cycleCutoffDay]);
+  const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay), [entries, cards, debt, subs, config.cycleCutoffDay]);
+  const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div style={{ padding: "4px 2px" }}>
       <div style={styles.heroCard}>
@@ -38,6 +40,7 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
           <span style={{ fontSize: 14, fontWeight: 700 }}>＋ まとめ入力</span>
         </button>
       )}
+      <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
       <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
       <AnnualOutlookCard plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />
       <div style={styles.sumGrid}>
@@ -56,7 +59,7 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
         <SumCell label="出金(引出・出金)" value={-summary.cashOut} color={RED} />
         <SumCell label="投資振替" value={summary.invest} color={ACCENT} style={{ gridColumn: "1 / -1" }} />
       </div>
-      {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} />}
+      {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} claims={claimStates} />}
       <MonthlyNetChart entries={entries || []} ym={ym} />
       <div style={styles.sectionTitle}>口座残高</div>
       <div style={styles.balCard}>
@@ -102,7 +105,7 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
 
 // カード請求額の内訳(残債とそれ以外)。カード請求セルをタップした時に展開表示する。
 // 表示のみで収支計算には影響しない。カードに紐づくメモがあれば参考情報として一緒に表示。
-function CardBreakdownPanel({ rows }) {
+function CardBreakdownPanel({ rows, claims }) {
   const [debtOpen, setDebtOpen] = useState(false);
   const [otherOpen, setOtherOpen] = useState(false);
   const totalAll = rows.reduce((a, r) => a + r.total, 0);
@@ -112,9 +115,80 @@ function CardBreakdownPanel({ rows }) {
   const otherRows = rows.filter((r) => r.otherPortion > 0 || r.linkedMemos.length > 0);
   return (
     <div style={{ ...styles.detailCard, marginBottom: 14 }}>
+      <CardClaimStatusList rows={claims} />
       <BreakdownGroup label="残債分" total={debtAll} rows={debtRows} valueKey="debtPortion" open={debtOpen} onToggle={() => setDebtOpen((o) => !o)} />
       <BreakdownGroup label="残債以外" total={otherAll} rows={otherRows} valueKey="otherPortion" open={otherOpen} onToggle={() => setOtherOpen((o) => !o)} showMemos />
       <div style={styles.subtotalRow}><span>カード請求計</span><span style={styles.subtotalNum}>{yen(totalAll)}</span></div>
+    </div>
+  );
+}
+
+const claimStatus = {
+  paid: { label: "引落済", color: GREEN, bg: "var(--accent-soft)" },
+  confirmed: { label: "確定・未引落", color: RED, bg: "var(--expense-soft)" },
+  forecast: { label: "見込み", color: MUTED, bg: "var(--group-bg)" },
+};
+
+const shortDate = (date) => date ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}` : "";
+
+function CardClaimStatusList({ rows }) {
+  if (!rows.length) return null;
+  return (
+    <div style={{ padding: "5px 2px 9px", borderBottom: `1px solid ${LINE}` }}>
+      {rows.map((row) => {
+        const state = claimStatus[row.status];
+        return (
+          <div key={row.name} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, alignItems: "center", padding: "6px 0" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.name}</div>
+              <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{row.due ? `${shortDate(row.due)}引落` : "引落日未設定"}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)", fontSize: 13.5, fontWeight: 600 }}>{yen(row.amount)}</div>
+              <span style={{ display: "inline-block", marginTop: 3, padding: "1px 6px", borderRadius: 5, background: state.bg, color: state.color, fontSize: 10.5, fontWeight: 600 }}>{state.label}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
+  const [open, setOpen] = useState(false);
+  if (!rows.length && !missingCount) return null;
+  const total = rows.reduce((sum, row) => sum + row.amount, 0);
+  const visible = open ? rows : rows.slice(0, 3);
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={styles.sectionTitle}>次の引き落とし</div>
+      <div style={styles.balCard}>
+        {rows.length > 0 && <div style={{ ...styles.balRow, borderBottom: `1px solid ${LINE}` }}>
+          <span style={{ fontSize: 12.5, color: MUTED }}>30日以内</span>
+          <span style={{ ...styles.balVal, color: RED }}>{yen(-total)}</span>
+        </div>}
+        {visible.map((row) => {
+          const state = claimStatus[row.status];
+          return (
+            <div key={row.id} style={{ display: "grid", gridTemplateColumns: "42px minmax(0,1fr) auto", gap: 8, alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${LINE}` }}>
+              <span style={{ color: ACCENT, fontSize: 12.5, fontWeight: 600 }}>{shortDate(row.date)}</span>
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13.5 }}>{row.label}</span>
+              <span style={{ textAlign: "right" }}>
+                <span style={{ display: "block", fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)", fontSize: 13.5 }}>{yen(row.amount)}</span>
+                <span style={{ color: state.color, fontSize: 10.5 }}>{state.label}</span>
+              </span>
+            </div>
+          );
+        })}
+        {rows.length > 3 && (
+          <button style={{ ...styles.chipGhost, width: "100%", padding: "8px 0 3px" }} onClick={() => setOpen((value) => !value)}>{open ? "閉じる" : `ほか${rows.length - 3}件`}</button>
+        )}
+        {missingCount > 0 && (
+          <button style={{ ...styles.collapseRow, borderBottom: "none", color: MUTED, padding: "10px 0 6px" }} onClick={onOpenCards}>
+            <span style={{ fontSize: 12.5 }}>引落日未設定 {missingCount}枚</span><span style={styles.chev}>›</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

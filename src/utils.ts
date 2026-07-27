@@ -555,7 +555,7 @@ const daysInMonth = (ym: string): number => {
   const [year, month] = ym.split("-").map(Number);
   return new Date(year, month, 0).getDate();
 };
-const recurringDate = (s: Sub, serviceYm: string): string => {
+export const recurringDate = (s: Sub, serviceYm: string): string => {
   const source = validDate(s.renewal) ? s.renewal : validDate(s.startDate) ? s.startDate : "";
   const day = source ? Number(source.slice(8, 10)) : 1;
   return `${serviceYm}-${String(Math.min(day, daysInMonth(serviceYm))).padStart(2, "0")}`;
@@ -648,6 +648,116 @@ export function pendingCardClaims(monthEntries: Entry[], cards: Card[] | null | 
     const due = entryDate(e) || cardPaymentDateForCycle(ym, card?.paymentDay, cutoffDay);
     return due > coveredThrough ? sum + Math.abs(Number(e.amount) || 0) : sum;
   }, 0);
+}
+
+export type CardClaimStatus = "paid" | "confirmed" | "forecast";
+export interface CardClaimState {
+  name: string;
+  amount: number;
+  due: string;
+  status: CardClaimStatus;
+  debtPortion: number;
+  otherPortion: number;
+}
+
+const balanceCoveredThrough = (monthEntries: Entry[], ym: string, cutoffDay: number): string => {
+  const balances = (monthEntries || []).filter((e) => e.cat === "account" && acctRole(e.item) === "bal");
+  if (!balances.length) return "";
+  return balances.some((e) => !e.asOf)
+    ? cycleEndDate(ym, cutoffDay)
+    : balances.map((e) => e.asOf || "").sort().pop() || "";
+};
+
+// カードに紐づく定期費のうち、この家計月度に引き落とされる既知額。
+// カード請求の実績がまだ無いときだけ「見込み」として使い、実績との二重加算はしない。
+const plannedFixedForCard = (subs: Sub[] | null | undefined, cards: Card[] | null | undefined, cardName: string, ym: string, cutoffDay: number): number => {
+  return (subs || []).reduce((sum, s) => {
+    if (s.card !== cardName) return sum;
+    const card = (cards || []).find((c) => c.name === cardName);
+    const amount = Number(s.amount) || 0;
+    let subtotal = 0;
+    for (let offset = 0; offset <= 3; offset++) {
+      const serviceYm = addMonth(ym, -offset);
+      const exactDue = cardPaymentDate(recurringDate(s, serviceYm), card);
+      const paymentCycle = exactDue ? cycleYm(exactDue, cutoffDay) : subPaymentYm(s, serviceYm, cards);
+      if (!subActiveForMonth(s, serviceYm) || paymentCycle !== ym) continue;
+      if (s.cycle !== "yearly") subtotal += amount;
+      else if (!validDate(s.renewal)) subtotal += amount / 12;
+      else if (s.renewal.slice(5, 7) === serviceYm.slice(5, 7)) subtotal += amount;
+    }
+    return sum + subtotal;
+  }, 0);
+};
+
+// 入力済み請求・口座残高の基準日・既知の計画額から、カードごとの支払状態を作る。
+export function cardClaimStates(cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, cutoffDay: number = 0): CardClaimState[] {
+  const coveredThrough = balanceCoveredThrough(monthEntries, ym, cutoffDay);
+  return (cards || []).map((card) => {
+    const cardEntries = (monthEntries || []).filter((e) => e.cat === "card" && e.item === card.name);
+    const actual = cardEntries.reduce((sum, e) => sum + Math.abs(Number(e.amount) || 0), 0);
+    const debtPortion = debtValueTotal(debt && debt[card.name] && debt[card.name][ym]);
+    const knownPlan = debtPortion + plannedFixedForCard(subs, cards, card.name, ym, cutoffDay);
+    const amount = actual || knownPlan;
+    const due = card.paymentDay ? cardPaymentDateForCycle(ym, card.paymentDay, cutoffDay) : "";
+    const paid = actual > 0 && (cardEntries.some((e) => Boolean(entryDate(e))) || Boolean(due && coveredThrough && due <= coveredThrough));
+    const status: CardClaimStatus = paid ? "paid" : actual > 0 ? "confirmed" : "forecast";
+    return {
+      name: card.name,
+      amount,
+      due,
+      status,
+      debtPortion: Math.min(amount, debtPortion),
+      otherPortion: Math.max(0, amount - debtPortion),
+    };
+  }).filter((row) => row.amount > 0);
+}
+
+export interface UpcomingDebit {
+  id: string;
+  date: string;
+  label: string;
+  amount: number;
+  status: Exclude<CardClaimStatus, "paid">;
+  kind: "card" | "fixed";
+}
+
+const addDays = (date: string, amount: number): string => {
+  const [y, m, d] = date.split("-").map(Number);
+  const value = new Date(y, m - 1, d + amount);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+};
+
+// 今日から指定日数内の未引落カードと、カードを使わない定期費を日付順に返す。
+export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, todayValue?: string, days: number = 30): UpcomingDebit[] {
+  const today = validDate(todayValue) ? todayValue : (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const end = addDays(today, Math.max(0, days));
+  const startYm = cycleYm(today, cutoffDay);
+  const cardRows: UpcomingDebit[] = [];
+  for (let offset = 0; offset <= 2; offset++) {
+    const ym = addMonth(startYm, offset);
+    const monthEntries = (entries || []).filter((e) => e.ym === ym);
+    for (const row of cardClaimStates(cards, debt, subs, monthEntries, ym, cutoffDay)) {
+      if (row.status === "paid" || !row.due || row.due < today || row.due > end) continue;
+      cardRows.push({ id: `card|${ym}|${row.name}`, date: row.due, label: row.name, amount: row.amount, status: row.status, kind: "card" });
+    }
+  }
+
+  const fixedRows: UpcomingDebit[] = [];
+  const calendarMonths = [0, 1, 2].map((offset) => addMonth(today.slice(0, 7), offset));
+  for (const s of subs || []) {
+    if (s.card || (!validDate(s.renewal) && !validDate(s.startDate))) continue; // カード払いはカード請求へ集約。日が不明なものは誤表示しない。
+    for (const serviceYm of calendarMonths) {
+      if (!subActiveForMonth(s, serviceYm)) continue;
+      if (s.cycle === "yearly" && validDate(s.renewal) && s.renewal.slice(5, 7) !== serviceYm.slice(5, 7)) continue;
+      const date = nextBankBusinessDay(recurringDate(s, serviceYm));
+      if (date < today || date > end) continue;
+      fixedRows.push({ id: `fixed|${date}|${s.id}`, date, label: s.name, amount: Number(s.amount) || 0, status: "forecast", kind: "fixed" });
+    }
+  }
+  return [...cardRows, ...fixedRows].filter((row) => row.amount > 0).sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
 }
 
 // 添付Excel「標準月」の概算式。配偶者控除は0、基礎控除は月48,334円としている。
