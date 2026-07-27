@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, ACCENT_SOFT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, balanceReachesCycleEnd, cycleEndDate } from '../utils';
+import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
 import { styles } from '../styles.js';
 
 export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenClose, onOpenImport }) {
@@ -21,7 +21,7 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
         <div style={styles.heroLabel}>今月の収支</div>
         <div
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
-        <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
+        <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}　投資振替 {yen(summary.invest)}</div>
       </div>
       {onOpenImport && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
@@ -54,8 +54,10 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
           <div style={{ ...styles.sumCellValue, color: RED }}>{yen(-summary.cardTotal)}</div>
         </button>
         <SumCell label="出金(引出・出金)" value={-summary.cashOut} color={RED} />
+        <SumCell label="投資振替" value={summary.invest} color={ACCENT} style={{ gridColumn: "1 / -1" }} />
       </div>
       {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} />}
+      <MonthlyNetChart entries={entries || []} ym={ym} />
       <div style={styles.sectionTitle}>口座残高</div>
       <div style={styles.balCard}>
         {!hasBal && <div style={{ color: MUTED, fontSize: 13, padding: "6px 2px" }}>この月の残高記録はまだありません</div>}
@@ -101,35 +103,88 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
 // カード請求額の内訳(残債とそれ以外)。カード請求セルをタップした時に展開表示する。
 // 表示のみで収支計算には影響しない。カードに紐づくメモがあれば参考情報として一緒に表示。
 function CardBreakdownPanel({ rows }) {
+  const [debtOpen, setDebtOpen] = useState(false);
+  const [otherOpen, setOtherOpen] = useState(false);
   const totalAll = rows.reduce((a, r) => a + r.total, 0);
   const debtAll = rows.reduce((a, r) => a + r.debtPortion, 0);
   const otherAll = rows.reduce((a, r) => a + r.otherPortion, 0);
+  const debtRows = rows.filter((r) => r.debtPortion > 0);
+  const otherRows = rows.filter((r) => r.otherPortion > 0 || r.linkedMemos.length > 0);
   return (
     <div style={{ ...styles.detailCard, marginBottom: 14 }}>
-      {rows.map((r) => (
-        <div key={r.name} style={{ padding: "8px 2px" }}>
-          <div style={styles.subGroupHead}><span>{r.name}</span><span style={styles.subGroupTotal}>{yen(r.total)}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 2px 2px", fontSize: 13, color: MUTED }}>
-            <span>残債</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{yen(r.debtPortion)}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 2px", fontSize: 13, color: MUTED }}>
-            <span>残債以外</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{yen(r.otherPortion)}</span>
-          </div>
-          {r.linkedMemos.length > 0 && (
-            <div style={{ marginTop: 4 }}>
-              {r.linkedMemos.map((m) => (
-                <div key={m.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: MUTED, padding: "3px 0" }}>
-                  <span>・{m.title}</span>
-                  {Number(m.amount) > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>{yen(m.amount)}</span>}
+      <BreakdownGroup label="残債分" total={debtAll} rows={debtRows} valueKey="debtPortion" open={debtOpen} onToggle={() => setDebtOpen((o) => !o)} />
+      <BreakdownGroup label="残債以外" total={otherAll} rows={otherRows} valueKey="otherPortion" open={otherOpen} onToggle={() => setOtherOpen((o) => !o)} showMemos />
+      <div style={styles.subtotalRow}><span>カード請求計</span><span style={styles.subtotalNum}>{yen(totalAll)}</span></div>
+    </div>
+  );
+}
+
+function BreakdownGroup({ label, total, rows, valueKey, open, onToggle, showMemos = false }) {
+  return (
+    <div>
+      <button style={styles.collapseRow} onClick={onToggle} aria-expanded={open}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}>
+          <span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>{label}
+        </span>
+        <span style={styles.detailTotal}>{yen(total)}</span>
+      </button>
+      {open && (
+        <div style={{ padding: "3px 2px 8px 22px" }}>
+          {rows.length === 0 && <div style={{ color: MUTED, fontSize: 12.5, padding: "5px 0" }}>なし</div>}
+          {rows.map((r) => (
+            <div key={r.name}>
+              {r[valueKey] > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", fontSize: 13 }}>
+                  <span>{r.name}</span><span style={{ fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)" }}>{yen(r[valueKey])}</span>
+                </div>
+              )}
+              {showMemos && r.linkedMemos.map((m) => (
+                <div key={m.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "2px 0 2px 10px", fontSize: 12, color: MUTED }}>
+                  <span>{m.title}</span>{Number(m.amount) > 0 && <span>{yen(m.amount)}</span>}
                 </div>
               ))}
             </div>
-          )}
+          ))}
         </div>
-      ))}
-      <div style={styles.subtotalRow}><span>合計</span><span style={styles.subtotalNum}>{yen(totalAll)}</span></div>
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 2px", fontSize: 12.5, color: MUTED }}><span>残債計</span><span>{yen(debtAll)}</span></div>
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 2px", fontSize: 12.5, color: MUTED }}><span>残債以外計</span><span>{yen(otherAll)}</span></div>
+      )}
+    </div>
+  );
+}
+
+function MonthlyNetChart({ entries, ym }) {
+  const months = useMemo(() => Array.from({ length: 6 }, (_, i) => addMonth(ym, i - 5)), [ym]);
+  const points = useMemo(() => months.map((mo) => ({
+    mo,
+    hasData: entries.some((e) => e.ym === mo && e.cat !== "memo"),
+    net: computeSummary(entries.filter((e) => e.ym === mo)).net,
+  })), [entries, months]);
+  if (points.filter((p) => p.hasData).length < 2) return null;
+
+  const W = 360, H = 126, top = 8, bottom = 24;
+  const values = points.filter((p) => p.hasData).map((p) => p.net);
+  const max = Math.max(0, ...values), min = Math.min(0, ...values);
+  const range = Math.max(1, max - min);
+  const y = (v) => top + ((max - v) / range) * (H - top - bottom);
+  const zeroY = y(0), colW = W / points.length, barW = colW * 0.5;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={styles.sectionTitle}>収支推移</div>
+      <div style={{ ...styles.balCard, padding: "8px 8px 4px" }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }} role="img" aria-label="直近6か月の収支推移">
+          <line x1="0" y1={zeroY} x2={W} y2={zeroY} stroke={LINE} strokeWidth="1" />
+          {points.map((p, i) => {
+            const x = i * colW + (colW - barW) / 2;
+            const valueY = y(p.net);
+            const height = p.hasData ? Math.max(2, Math.abs(valueY - zeroY)) : 0;
+            return (
+              <g key={p.mo}>
+                {p.hasData && <rect x={x} y={p.net >= 0 ? valueY : zeroY} width={barW} height={height} rx="2" fill={p.net >= 0 ? GREEN : RED} opacity={p.mo === ym ? 1 : 0.58} />}
+                <text x={i * colW + colW / 2} y={H - 6} textAnchor="middle" fontSize="10" fill={p.mo === ym ? ACCENT : MUTED} fontWeight={p.mo === ym ? 700 : 400}>{parseInt(p.mo.slice(5), 10)}月</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
     </div>
   );
 }
@@ -207,6 +262,6 @@ function AnnualOutlookCard({ plans, subs, cards, debt, entries, closedMonths, co
   );
 }
 
-export function SumCell({ label, value, color }) {
-  return <div style={styles.sumCell}><div style={styles.sumCellLabel}>{label}</div><div style={{ ...styles.sumCellValue, color }}>{yen(value)}</div></div>;
+export function SumCell({ label, value, color, style }) {
+  return <div style={{ ...styles.sumCell, ...style }}><div style={styles.sumCellLabel}>{label}</div><div style={{ ...styles.sumCellValue, color }}>{yen(value)}</div></div>;
 }
