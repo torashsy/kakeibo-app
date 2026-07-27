@@ -9,6 +9,7 @@ import {
 } from '../utils';
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
+import { AnnualMatrix } from './annual-matrix.jsx';
 
 // 簡素化した計画ビュー。計画は「収入」「変動費」「投資振替」の3本だけを持ち、
 // 支出見込み総額 = 固定費(定期費から自動) + 変動費。年度(4月開始)の月×項目で見る。
@@ -20,6 +21,7 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
   const [edit, setEdit] = useState(null);
   const [salaryEdit, setSalaryEdit] = useState(null);
   const [salaryExpanded, setSalaryExpanded] = useState(false);
+  const [spendingExpanded, setSpendingExpanded] = useState(false);
   const [newBucket, setNewBucket] = useState(null);
   const [fyOffset, setFyOffset] = useState(0);
 
@@ -71,8 +73,6 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
 
   const diffColor = (k, v) => (v === 0 ? MUTED : k === "spending" ? (v > 0 ? RED : GREEN) : k === "invest" ? MUTED : (v > 0 ? GREEN : RED));
   const cellText = (v) => (v === 0 ? "" : (mode === "diff" && v > 0 ? "+" + num(v) : num(v)));
-  const mlabel = (mo) => parseInt(mo.split("-")[1], 10) + "月";
-
   const buckets = variableBuckets(plans);
   const variableRows = buckets.length
     ? [...buckets.map((name) => ({ k: "var|" + name, label: "・" + name, editable: "var|" + name })), { k: "variable", label: "変動費計", sub: true }]
@@ -81,19 +81,21 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
   const salaryDetailRows = salaryExpanded ? salaryItems.map((item) => ({ k: "salaryItem|" + item, label: "・" + item, salaryDetail: true })) : [];
   const rows = mode === "plan"
     ? [
-      { k: "salaryIncome", label: "給与", salary: true, expandable: true },
+      { k: "salaryIncome", label: "給与", salary: true, expandable: true, group: "salary" },
       ...salaryDetailRows,
       { k: "otherIncome", label: "その他", editable: PLAN_OTHER_INCOME },
       { k: "income", label: "収入計", sub: true },
-      { k: "fixed", label: "固定費", muted: true, destination: "subs" },
-      ...variableRows,
-      { k: "debt", label: "残債", muted: true, destination: "debt" },
-      { k: "spending", label: "支出計", sub: true },
+      { k: "spending", label: "支出", sub: true, expandable: true, group: "spending" },
+      ...(spendingExpanded ? [
+        { k: "fixed", label: "固定費", muted: true, destination: "subs", spendingDetail: true },
+        ...variableRows.map((row) => ({ ...row, spendingDetail: true })),
+        { k: "debt", label: "残債", muted: true, destination: "debt", spendingDetail: true },
+      ] : []),
       { k: "invest", label: "投資振替", editable: PLAN_INVEST },
       { k: "net", label: "収支", net: true },
     ]
     : [
-      { k: "salaryIncome", label: "給与", expandable: true },
+      { k: "salaryIncome", label: "給与", expandable: true, group: "salary" },
       ...salaryDetailRows,
       { k: "otherIncome", label: "その他" },
       { k: "income", label: "収入計", sub: true },
@@ -102,9 +104,6 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
       { k: "net", label: "収支", net: true },
     ];
 
-  const rowTotal = (r) => months.reduce((a, mo) => a + cellOf(r.k, mo), 0);
-  // 実績の年間表と同じ列幅にする。異なる列幅だとiOSで数値の右端がずれて見える。
-  const tableWidth = 132 + (months.length + 1) * 96;
   const showBal = mode === "forecast";
 
   const openEdit = (r, mo) => {
@@ -190,6 +189,39 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
     onSave(next);
   };
 
+  const matrixRows = rows.map((r) => {
+    const canOpen = r.salary || r.salaryDetail || r.destination || (r.editable && mode === "plan");
+    const groupOpen = r.group === "salary" ? salaryExpanded : r.group === "spending" ? spendingExpanded : false;
+    return {
+      key: r.k,
+      label: r.label.replace(/^・/, ""),
+      kind: r.net ? "net" : ((r.salaryDetail || r.spendingDetail) && !r.sub ? "row" : "summary"),
+      indent: !!(r.salaryDetail || r.spendingDetail),
+      muted: !!r.muted,
+      open: r.expandable ? groupOpen : undefined,
+      onToggle: r.group === "salary" ? () => setSalaryExpanded((value) => !value) : r.group === "spending" ? () => setSpendingExpanded((value) => !value) : undefined,
+      onLabelClick: !r.expandable && canOpen ? () => openEdit(r, months.includes(ym) ? ym : months[0]) : undefined,
+      value: (mo) => cellOf(r.k, mo),
+      format: (value) => cellText(value),
+      color: (value, column) => {
+        if (mode === "diff") return diffColor(r.k, value);
+        if (r.net) return value === 0 ? undefined : value > 0 ? GREEN : RED;
+        if (r.muted || (mode === "forecast" && column && !isActualMonth(column.key))) return MUTED;
+        return value === 0 ? "var(--zero)" : undefined;
+      },
+      renderCell: canOpen ? (mo, value, text) => <button aria-label={`${r.label}・${ymLabel(mo)}`} style={{ ...styles.cellBtn, display: "block", width: "100%", minHeight: 20, textAlign: "inherit", color: "inherit" }} onClick={() => openEdit(r, mo)}>{text || " "}</button> : undefined,
+    };
+  });
+  if (showBal) matrixRows.push({
+    key: "balanceForecast",
+    label: "残高見通し",
+    kind: "balance",
+    total: null,
+    value: (mo) => balByMonth[mo]?.bal || 0,
+    color: (_value, column) => column && balByMonth[column.key]?.anchored ? INK : MUTED,
+  });
+  const matrixColumns = months.map((mo) => ({ key: mo, label: `${parseInt(mo.split("-")[1], 10)}月` }));
+
   return (
     <div style={{ marginTop: 4 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 10 }}>
@@ -203,12 +235,6 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
-      {mode === "plan" && <button style={{ ...styles.backupBtn, margin: "0 0 10px" }} onClick={openSalary}>給与</button>}
-      {mode === "forecast" && (
-        <div style={{ ...styles.balCard, marginBottom: 10 }}>
-          <div style={styles.balRow}><span style={{ ...styles.balAcc, color: MUTED }}>年度末</span><span style={{ ...styles.balVal, fontSize: 20 }}>{num(balByMonth[months[months.length - 1]].bal)}</span></div>
-        </div>
-      )}
       {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
       {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 4px 6px" }}>
@@ -218,53 +244,9 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
           <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定"}</button>
         </div>
       )}
-      <div style={styles.tableScroll}>
-        <table style={{ ...styles.table, width: tableWidth }}>
-          <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
-          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th key={mo} style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>通期</th></tr></thead>
-          <tbody>
-            {rows.map((r) => {
-              const isSub = !!(r.sub || r.net);
-              return (
-                <tr key={r.k}>
-                  <td style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.salaryDetail ? { color: MUTED, fontWeight: 400 } : {}), ...(r.muted ? { color: MUTED } : {}) }}>
-                    {r.expandable
-                      ? <button aria-expanded={salaryExpanded} style={{ ...styles.cellBtn, width: "100%", textAlign: "left", fontWeight: 600 }} onClick={() => setSalaryExpanded((v) => !v)}>{salaryExpanded ? "⌄" : "›"} {r.label}</button>
-                      : (r.editable || r.salaryDetail || r.destination)
-                        ? <button style={{ ...styles.cellBtn, width: "100%", textAlign: "left", color: "inherit", fontWeight: "inherit" }} onClick={() => openEdit(r, months.includes(ym) ? ym : months[0])}>{r.label}</button>
-                        : r.label}
-                  </td>
-                  {months.map((mo) => {
-                    const v = cellOf(r.k, mo);
-                    const projected = mode === "forecast" && !isActualMonth(mo);
-                    let color;
-                    if (mode === "diff") color = diffColor(r.k, v);
-                    else if (r.net) color = v === 0 ? undefined : v > 0 ? GREEN : RED;
-                    else if (r.muted || projected) color = MUTED;
-                    // Keep every amount at the same weight. Hiragino/Yu Gothic
-                    // changes numeral metrics between regular and bold on iOS,
-                    // which makes comma and digit positions look staggered.
-                    const base = { ...styles.tdNum, ...(isSub ? { ...styles.tdSubTotal, fontWeight: 400 } : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(color ? { color } : {}) };
-                    const canOpen = r.salary || r.salaryDetail || r.destination || (r.editable && mode === "plan");
-                    if (canOpen) return <td key={mo} style={base}><button aria-label={`${r.label}・${ymLabel(mo)}`} style={{ ...styles.cellBtn, display: "block", width: "100%", minHeight: 20, textAlign: "inherit", color: "inherit" }} onClick={() => openEdit(r, mo)}>{cellText(v) || " "}</button></td>;
-                    return <td key={mo} style={base}>{cellText(v)}</td>;
-                  })}
-                  {(() => { const t = rowTotal(r); const c = mode === "diff" ? diffColor(r.k, t) : r.net ? (t === 0 ? undefined : t > 0 ? GREEN : RED) : undefined; return <td style={{ ...styles.tdNum, ...styles.tdTotalCell, fontWeight: 400, ...(c ? { color: c } : (r.muted ? { color: MUTED } : {})) }}>{cellText(t)}</td>; })()}
-                </tr>
-              );
-            })}
-            {showBal && (
-              <tr>
-                <td style={{ ...styles.td, ...styles.tdSticky, ...styles.tdSubLabel }}>残高見通し</td>
-                {months.map((mo) => { const b = balByMonth[mo]; return <td key={mo} style={{ ...styles.tdNum, ...styles.tdSubTotal, fontWeight: 400, ...(mo === ym ? { background: "var(--col-hl)" } : {}), color: b.anchored ? INK : MUTED }}>{b.bal ? num(b.bal) : ""}</td>; })}
-                <td style={{ ...styles.tdNum, ...styles.tdTotalCell }}></td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <AnnualMatrix columns={matrixColumns} rows={matrixRows} currentKey={ym} />
 
-      {mode === "plan" && (
+      {mode === "plan" && spendingExpanded && (
         <div style={{ margin: "12px 4px 0" }}>
           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 6 }}>変動費内訳</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, num, buildStructure, computeSummary, flowTypesFor, parseTxnKey, entryDate } from '../utils';
+import { yen, num, buildStructure, computeSummary, flowTypesFor, acctRole, parseTxnKey, entryDate } from '../utils';
 import { styles } from '../styles.js';
 import { MemoList } from './memos.jsx';
+import { AnnualMatrix } from './annual-matrix.jsx';
 
 // 記録タブ。その月に入力した実績(給与・カード・口座)を、履歴/項目別/表/年間で見返す。
 // 「メモ」は収支に計上しない用途記録(現金の使い道など)。計画は独立した「計画」タブへ分離した。
@@ -212,6 +213,7 @@ export function DetailTable({ S, config, cards, onEdit }) {
 }
 
 export function YearTable({ entries, ym, config, cards }) {
+  const [openGroups, setOpenGroups] = useState({});
   const salaryItems = config.salaryItems || [];
   const cardList = cards || [];
   const accounts = config.accounts || [];
@@ -234,68 +236,42 @@ export function YearTable({ entries, ym, config, cards }) {
   const visibleSalaryItems = salaryItems.filter((item) => hasAnnualValue("salary", item));
   const visibleCards = cardList.filter((card) => hasAnnualValue("card", card.name));
 
-  // 月ごとの収支(サマリと同じ計算)
-  const netByMonth = useMemo(() => {
+  const summaryByMonth = useMemo(() => {
     const map = {};
-    for (const mo of months) map[mo] = computeSummary(entries.filter((e) => e.ym === mo)).net;
+    for (const mo of months) map[mo] = computeSummary(entries.filter((e) => e.ym === mo));
     return map;
   }, [entries, fyStart]);
-
-  // 行定義
-  const rows = [];
-  rows.push({ kind: "head", label: "収支" });
-  rows.push({ kind: "net", label: "月間収支", get: (mo) => netByMonth[mo] || 0 });
-  rows.push({ kind: "head", label: "給与系" });
-  visibleSalaryItems.forEach((it) => rows.push({ kind: "row", label: it, get: (mo) => val(mo, "salary", it, "") }));
-  rows.push({ kind: "sub", label: "給与計", get: (mo) => salaryItems.reduce((a, it) => a + val(mo, "salary", it, ""), 0) });
-  rows.push({ kind: "head", label: "カード" });
-  visibleCards.forEach((c) => rows.push({ kind: "row", label: c.name, get: (mo) => val(mo, "card", c.name, "") }));
-  rows.push({ kind: "sub", label: "カード計", get: (mo) => cardList.reduce((a, c) => a + val(mo, "card", c.name, ""), 0) });
-  rows.push({ kind: "head", label: "口座（入出金・振替）" });
-  accounts.forEach((acc) => {
-    rows.push({ kind: "acct", label: acc });
-    flowTypesFor(acc, config).forEach((t) => rows.push({ kind: "row", label: t, indent: true, get: (mo) => val(mo, "account", t, acc) }));
-  });
-  rows.push({ kind: "sub", label: "入出金 計", get: (mo) => accounts.reduce((a, acc) => a + flowTypesFor(acc, config).reduce((b, t) => b + val(mo, "account", t, acc), 0), 0) });
-  rows.push({ kind: "head", label: "口座残高" });
-  accounts.forEach((acc) => rows.push({ kind: "row", label: acc, get: (mo) => val(mo, "account", "残高", acc) }));
-  rows.push({ kind: "sub", label: "残高計", get: (mo) => accounts.reduce((a, acc) => a + val(mo, "account", "残高", acc), 0) });
-
-  const mlabel = (mo) => parseInt(mo.split("-")[1], 10) + "月";
+  const open = (key) => !!openGroups[key];
+  const toggle = (key) => setOpenGroups((value) => ({ ...value, [key]: !value[key] }));
+  const accountRows = (roles) => accounts.flatMap((account) => flowTypesFor(account, config)
+    .filter((item) => roles.includes(acctRole(item)) && hasAnnualValue("account", item, account))
+    .map((item) => ({ account, item })));
+  const incomeRows = accountRows(["in"]);
+  const expenseRows = accountRows(["out"]);
+  const transferRows = accountRows(["transfer", "neutral"]);
+  const visibleBalances = accounts.filter((account) => hasAnnualValue("account", "残高", account));
+  const group = (key, label, value) => ({ key, label, kind: "summary", value, open: open(key), onToggle: () => toggle(key) });
+  const child = (key, label, value, groupKey) => ({ key, label, value, indent: true, hidden: !open(groupKey) });
+  const rows = [
+    group("salary", "給与", (mo) => summaryByMonth[mo]?.salaryIncome || 0),
+    ...visibleSalaryItems.map((item) => child(`salary|${item}`, item, (mo) => val(mo, "salary", item, ""), "salary")),
+    group("other", "その他", (mo) => summaryByMonth[mo]?.otherIncome || 0),
+    ...incomeRows.map(({ account, item }) => child(`in|${account}|${item}`, `${account} / ${item}`, (mo) => val(mo, "account", item, account), "other")),
+    { key: "income", label: "収入計", kind: "summary", value: (mo) => summaryByMonth[mo]?.income || 0 },
+    group("spending", "支出", (mo) => summaryByMonth[mo]?.expense || 0),
+    ...visibleCards.map((card) => child(`card|${card.id}`, card.name, (mo) => val(mo, "card", card.name, ""), "spending")),
+    ...expenseRows.map(({ account, item }) => child(`out|${account}|${item}`, `${account} / ${item}`, (mo) => Math.abs(val(mo, "account", item, account)), "spending")),
+    group("invest", "投資振替", (mo) => summaryByMonth[mo]?.invest || 0),
+    ...transferRows.map(({ account, item }) => child(`transfer|${account}|${item}`, `${account} / ${item}`, (mo) => val(mo, "account", item, account), "invest")),
+    { key: "net", label: "収支", kind: "net", value: (mo) => summaryByMonth[mo]?.net || 0 },
+    group("balance", "口座残高", (mo) => summaryByMonth[mo]?.balTotal || 0),
+    ...visibleBalances.map((account) => child(`balance|${account}`, account, (mo) => val(mo, "account", "残高", account), "balance")),
+  ];
+  const columns = months.map((mo) => ({ key: mo, label: `${parseInt(mo.split("-")[1], 10)}月` }));
   return (
     <div style={{ marginTop: 4 }}>
       <SavingsChart entries={entries} months={months} ym={ym} />
-      <div style={styles.tableScroll}>
-        <table style={{ ...styles.table, width: 132 + (months.length + 1) * 96 }}>
-          <colgroup><col style={{ width: 132 }} />{months.map((mo) => <col key={"col-" + mo} style={{ width: 96 }} />)}<col style={{ width: 96 }} /></colgroup>
-          <thead><tr><th style={{ ...styles.th, ...styles.thSticky }}>項目</th>{months.map((mo) => <th
-            style={{ ...styles.th, ...(mo === ym ? { color: ACCENT } : {}) }}
-            key={mo}>{mlabel(mo)}</th>)}<th style={{ ...styles.th, ...styles.thTotal }}>年間計</th></tr></thead>
-          <tbody>
-            {rows.map((r, i) => {
-              if (r.kind === "head") return <tr key={i}><td style={styles.tdGroup} colSpan={months.length + 2}>{r.label}</td></tr>;
-              if (r.kind === "acct") return <tr key={i}><td style={styles.tdAcct} colSpan={months.length + 2}>{r.label}</td></tr>;
-              const isNet = r.kind === "net";
-              const isSub = r.kind === "sub" || isNet;
-              const yearTotal = months.reduce((a, mo) => a + r.get(mo), 0);
-              const signColor = (v) => (v > 0 ? GREEN : v < 0 ? RED : "var(--zero)");
-              return (
-                <tr key={i}>
-                  <td
-                    style={{ ...styles.td, ...styles.tdSticky, ...(isSub ? styles.tdSubLabel : {}), ...(r.indent ? { padding: "8px 10px 8px 20px" } : {}) }}>{r.label}</td>
-                  {months.map((mo) => { const v = r.get(mo); return (
-                    <td
-                      style={{ ...styles.tdNum, ...(isSub ? styles.tdSubTotal : {}), ...(mo === ym ? { background: "var(--col-hl)" } : {}), ...(v === 0 ? { color: "var(--zero)" } : (isNet ? { color: signColor(v), fontWeight: 600 } : {})) }}
-                      key={mo}>{v === 0 ? "" : num(v)}</td>
-                  ); })}
-                  <td
-                    style={{ ...styles.tdNum, ...styles.tdTotalCell, ...(isSub ? styles.tdSubTotal : {}), ...(isNet ? { color: signColor(yearTotal), fontWeight: 600 } : {}) }}>{num(yearTotal)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <AnnualMatrix columns={columns} rows={rows} currentKey={ym} />
     </div>
   );
 }
