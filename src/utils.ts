@@ -746,33 +746,39 @@ const addDays = (date: string, amount: number): string => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 };
 
-// 今日から指定日数内の未引落カードと、カードを使わない定期費を日付順に返す。
-export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, todayValue?: string, days: number = 30): UpcomingDebit[] {
+// 選択月度内の未引落カードと、カードを使わない定期費を日付順に返す。
+// targetYm が無い呼び出しは、従来どおり今日から指定日数内を対象にする。
+export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, targetYm?: string, todayValue?: string, days: number = 30): UpcomingDebit[] {
   const today = validDate(todayValue) ? todayValue : (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
-  const end = addDays(today, Math.max(0, days));
-  const startYm = cycleYm(today, cutoffDay);
+  const targetRange = targetYm ? { start: cycleStartDate(targetYm, cutoffDay), end: cycleEndDate(targetYm, cutoffDay) } : null;
+  const start = targetRange && targetRange.start > today ? targetRange.start : today;
+  const end = targetRange?.end || addDays(today, Math.max(0, days));
+  const startYm = targetYm || cycleYm(today, cutoffDay);
   const cardRows: UpcomingDebit[] = [];
-  for (let offset = 0; offset <= 2; offset++) {
+  const cardMonthCount = targetYm ? 1 : 3;
+  for (let offset = 0; offset < cardMonthCount; offset++) {
     const ym = addMonth(startYm, offset);
     const monthEntries = (entries || []).filter((e) => e.ym === ym);
     for (const row of cardClaimStates(cards, debt, subs, monthEntries, ym, cutoffDay)) {
-      if (row.status === "paid" || !row.due || row.due < today || row.due > end) continue;
+      if (row.status === "paid" || !row.due || row.due < start || row.due > end) continue;
       cardRows.push({ id: `card|${ym}|${row.name}`, date: row.due, label: row.name, amount: row.amount, status: row.status, kind: "card" });
     }
   }
 
   const fixedRows: UpcomingDebit[] = [];
-  const calendarMonths = [0, 1, 2].map((offset) => addMonth(today.slice(0, 7), offset));
+  const calendarMonths = targetRange
+    ? Array.from(new Set([targetRange.start.slice(0, 7), targetRange.end.slice(0, 7)]))
+    : [0, 1, 2].map((offset) => addMonth(today.slice(0, 7), offset));
   for (const s of subs || []) {
     if (s.card || (!validDate(s.renewal) && !validDate(s.startDate))) continue; // カード払いはカード請求へ集約。日が不明なものは誤表示しない。
     for (const serviceYm of calendarMonths) {
       if (!subActiveForMonth(s, serviceYm)) continue;
       if (s.cycle === "yearly" && validDate(s.renewal) && s.renewal.slice(5, 7) !== serviceYm.slice(5, 7)) continue;
       const date = nextBankBusinessDay(recurringDate(s, serviceYm));
-      if (date < today || date > end) continue;
+      if (date < start || date > end) continue;
       fixedRows.push({ id: `fixed|${date}|${s.id}`, date, label: s.name, amount: Number(s.amount) || 0, status: "forecast", kind: "fixed" });
     }
   }

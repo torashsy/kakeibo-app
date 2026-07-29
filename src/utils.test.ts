@@ -834,8 +834,26 @@ describe("cycleYm / periodLabel / periodRange", () => {
       { id: "card-sub", name: "カードの通信費", amount: 5000, cycle: "monthly", card: "JCB", renewal: "2026-07-01" },
       { id: "direct", name: "口座振替保険", amount: 4000, cycle: "monthly", renewal: "2026-08-05" },
     ];
-    expect(upcomingDebits(entries, cards, {}, subs, 10, "2026-07-27", 30)).toEqual([
+    expect(upcomingDebits(entries, cards, {}, subs, 10, undefined, "2026-07-27", 30)).toEqual([
       { id: "fixed|2026-08-05|direct", date: "2026-08-05", label: "口座振替保険", amount: 4000, status: "forecast", kind: "fixed" },
+      { id: "card|2026-07|JCB", date: "2026-08-10", label: "JCB", amount: 30000, status: "confirmed", kind: "card" },
+    ]);
+  });
+  it("upcomingDebits: 選択月度の期間外にある次月度の引き落としを合算しない", () => {
+    const cards: Card[] = [
+      { id: "current", name: "JCB", cutoffDay: 15, paymentDay: 10 },
+      { id: "next", name: "VIEW", cutoffDay: 15, paymentDay: 27 },
+    ];
+    const entries: Entry[] = [
+      { ym: "2026-07", cat: "card", item: "JCB", amount: 30000 },
+      { ym: "2026-08", cat: "card", item: "VIEW", amount: 50000 },
+    ];
+    const subs: Sub[] = [
+      { id: "inside", name: "当月の口座振替", amount: 4000, cycle: "monthly", renewal: "2026-08-05" },
+      { id: "outside", name: "次月の口座振替", amount: 6000, cycle: "monthly", renewal: "2026-08-20" },
+    ];
+    expect(upcomingDebits(entries, cards, {}, subs, 10, "2026-07", "2026-07-27", 30)).toEqual([
+      { id: "fixed|2026-08-05|inside", date: "2026-08-05", label: "当月の口座振替", amount: 4000, status: "forecast", kind: "fixed" },
       { id: "card|2026-07|JCB", date: "2026-08-10", label: "JCB", amount: 30000, status: "confirmed", kind: "card" },
     ]);
   });

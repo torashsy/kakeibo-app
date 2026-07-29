@@ -15,7 +15,7 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
     .map(([acc, b]) => [acc, cycleEndDate(b.ym, config.cycleCutoffDay)]);
   const breakdown = useMemo(() => cardBreakdown(cards, debt || {}, memos, monthEntries, ym), [cards, debt, memos, monthEntries, ym]);
   const claimStates = useMemo(() => cardClaimStates(cards, debt || {}, subs, monthEntries, ym, config.cycleCutoffDay), [cards, debt, subs, monthEntries, ym, config.cycleCutoffDay]);
-  const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay), [entries, cards, debt, subs, config.cycleCutoffDay]);
+  const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym), [entries, cards, debt, subs, config.cycleCutoffDay, ym]);
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div style={{ padding: "4px 2px" }}>
