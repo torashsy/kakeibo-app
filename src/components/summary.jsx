@@ -246,7 +246,7 @@ function MonthlyNetChart({ entries, ym }) {
 // 「内訳」を開くと、その月の支出をカード別＋現金(出金)で確認できる(既存の記録から表示。入力は不要)。
 function SpendingMeter({ plans, subs, cards, debt, monthEntries, ym, startDay }) {
   const [open, setOpen] = useState(false);
-  const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym, debt, cards), [plans, subs, cards, debt, monthEntries, ym]);
+  const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym, debt, cards, startDay), [plans, subs, cards, debt, monthEntries, ym, startDay]);
   const bd = useMemo(() => {
     const cardMap = {}; let cashOut = 0;
     for (const e of monthEntries) {

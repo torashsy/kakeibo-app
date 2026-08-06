@@ -69,6 +69,8 @@ export interface Sub {
   category?: string;    // サブスク/通信/光熱/保険など。定期費の分類・小計・解約検討に使う
   card?: string;
   renewal?: string;     // "YYYY-MM-DD"
+  renewalDay?: number;  // 月次自動更新で維持する日。月末をまたいでも元の日を失わない
+  autoRenew?: boolean;  // false のとき更新日を自動で繰り越さない。未設定は既存互換で true
   startDate?: string;   // 利用開始日。これより前の計画には含めない
   endDate?: string;     // 終了予定日/解約日。これより後の計画には含めない
   plan?: string;
@@ -584,24 +586,24 @@ export const subActiveForMonth = (s: Sub, ym: string): boolean => {
   return (!validDate(s.startDate) || occurrence >= s.startDate) && (!validDate(s.endDate) || occurrence <= s.endDate);
 };
 
-const subPaymentYm = (s: Sub, serviceYm: string, cards?: Card[] | null): string => {
-  if (!s.card) return serviceYm;
+const subPaymentYm = (s: Sub, serviceYm: string, cards?: Card[] | null, cutoffDay: number = 0): string => {
+  if (!s.card) return cycleYm(recurringDate(s, serviceYm), cutoffDay);
   const card = (cards || []).find((c) => c.name === s.card);
   const exact = cardPaymentDate(recurringDate(s, serviceYm), card);
-  return exact ? exact.slice(0, 7) : addMonth(serviceYm, 1); // 未設定カードは従来の翌月概算
+  return exact ? cycleYm(exact, cutoffDay) : addMonth(serviceYm, 1); // 未設定カードは従来の翌月概算
 };
 
 // 計画上の固定費。月額は毎月、年払いは更新月に一括計上する。
 // カード払いは締日・引き落とし日から計上月を求め、休日なら翌営業日に送る。
 // 開始前・終了後の利用月は除外する。
 // 年払いで更新日が無い旧データだけは従来どおり1/12で残す。
-export const fixedForMonth = (subs: Sub[] | null | undefined, ym: string, cards?: Card[] | null): number => (subs || []).reduce((sum, s) => {
+export const fixedForMonth = (subs: Sub[] | null | undefined, ym: string, cards?: Card[] | null, cutoffDay: number = 0): number => (subs || []).reduce((sum, s) => {
   const amount = Number(s && s.amount) || 0;
   let subtotal = 0;
   // 支払月は通常利用月+1、締日後なら+2、休日跨ぎならさらに翌月になり得る。
-  for (let offset = 0; offset <= 3; offset++) {
+  for (let offset = -1; offset <= 3; offset++) {
     const serviceYm = addMonth(ym, -offset);
-    if (!subActiveForMonth(s, serviceYm) || subPaymentYm(s, serviceYm, cards) !== ym) continue;
+    if (!subActiveForMonth(s, serviceYm) || subPaymentYm(s, serviceYm, cards, cutoffDay) !== ym) continue;
     if (s.cycle !== "yearly") subtotal += amount;
     else if (!validDate(s.renewal)) subtotal += amount / 12;
     else if (s.renewal.slice(5, 7) === serviceYm.slice(5, 7)) subtotal += amount;
@@ -893,10 +895,10 @@ export const plannedDebt = (debt: Record<string, Record<string, unknown>> | null
   return annual / 12;
 };
 
-export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): number =>
-  fixedForMonth(subs, ym, cards) + plannedVariable(plan, ym) + plannedDebt(debt, ym);
+export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): number =>
+  fixedForMonth(subs, ym, cards, cutoffDay) + plannedVariable(plan, ym) + plannedDebt(debt, ym);
 // 計画の収支 = 収入 − 支出 + 投資振替(符号のまま)
-export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt, cards) + plannedInvest(plan, ym);
+export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt, cards, cutoffDay) + plannedInvest(plan, ym);
 
 // 旧形式(カード別・口座フロー別に行を持つ計画)かどうか。旧キーは "salary|給与" のように "|" を含む。
 const isLegacyPlan = (plan: any): boolean => !!(plan && plan.lines && Object.keys(plan.lines).some((k) => /^(salary|card|flow|memo)\|/.test(k)));
@@ -1025,11 +1027,11 @@ export const toggleMonthClosed = (closedMonths: string[] | null | undefined, ym:
 
 // 1か月分の 計画/実績(収入・支出・収支)と差を算出(今月タブの使いすぎ判定・計画対比に使う)。
 // 実績はその月の記録から computeSummary で集計、計画は簡素化モデル(収入/固定費+変動費/投資)から。
-export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null): PlanVsActual {
+export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): PlanVsActual {
   const s = computeSummary(monthEntries);
   const planIncome = plannedIncome(plan, ym);
-  const planSpending = plannedSpending(plan, subs, ym, debt, cards);
-  const planNet = plannedNet(plan, subs, ym, debt, cards);
+  const planSpending = plannedSpending(plan, subs, ym, debt, cards, cutoffDay);
+  const planNet = plannedNet(plan, subs, ym, debt, cards, cutoffDay);
   const actualIncome = s.income;
   const actualSpending = s.expense;   // カード請求＋現金出金(正の額)
   const actualNet = s.net;
@@ -1057,7 +1059,7 @@ export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entrie
   for (const mo of months) {
     const es = byMonth[mo];
     const isActual = isMonthClosed(closedMonths, mo) || es.length > 0;
-    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo, debt, cards);
+    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo, debt, cards, cutoffDay);
     netForecast += net;
     if (isActual) actualNet += net;
     if (hasBalRecord(es)) bal = balTotalOf(es) - pendingCardClaims(es, cards, mo, cutoffDay); else bal += net;
@@ -2019,12 +2021,12 @@ export function txnToEntry(txn: ParsedTxn, cls: TxnClassification | null, cutoff
   return { ym, cat: "account", item, account: cls.target!, amount: txn.amount, ...source };
 }
 
-// 更新日(YYYY-MM-DD)を1周期ぶん進める。monthlyは月末クランプに注意しJSのDateに委ねる。
-export function advanceRenewalDate(dateStr: string, cycle: "monthly" | "yearly"): string {
+// 更新日(YYYY-MM-DD)を1周期ぶん進める。存在しない日は対象月の月末へクランプする。
+export function advanceRenewalDate(dateStr: string, cycle: "monthly" | "yearly", preferredDay?: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
-  if (cycle === "yearly") { const dt = new Date(y + 1, m - 1, d); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; }
-  const dt = new Date(y, m, d);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const targetYm = cycle === "yearly" ? `${y + 1}-${String(m).padStart(2, "0")}` : addMonth(dateStr.slice(0, 7), 1);
+  const day = Math.min(preferredDay || d, daysInMonth(targetYm));
+  return `${targetYm}-${String(day).padStart(2, "0")}`;
 }
 
 // 更新日が過ぎているサブスクを、今日以降になるまで自動で繰り越す(周期分ずつ進める)。
@@ -2033,11 +2035,12 @@ export function rollForwardSubs(subs: Sub[], todayStr?: string): Sub[] {
   const today = todayStr || new Date().toISOString().slice(0, 10);
   let changed = false;
   const next = subs.map((s) => {
-    if (!s.renewal) return s;
+    if (!s.renewal || s.autoRenew === false) return s;
     if (validDate(s.endDate) && s.endDate < today) return s;
+    const renewalDay = s.renewalDay || Number(s.renewal.slice(8, 10));
     let r = s.renewal, guard = 0;
-    while (r < today && guard < 240) { r = advanceRenewalDate(r, s.cycle); guard++; }
-    if (r !== s.renewal) { changed = true; return { ...s, renewal: r }; }
+    while (r < today && guard < 240) { r = advanceRenewalDate(r, s.cycle, renewalDay); guard++; }
+    if (r !== s.renewal) { changed = true; return { ...s, renewal: r, renewalDay }; }
     return s;
   });
   return changed ? next : subs;

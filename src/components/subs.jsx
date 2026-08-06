@@ -3,6 +3,7 @@ import { INK, LINE, MUTED } from '../theme.js';
 import { yen, uid, subMonthly, subYearly, subActiveForMonth, evalAmount } from '../utils';
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
+import { ClearableCalendarInput } from './calendar-input.jsx';
 
 // 定期費(サブスク・通信費・光熱費・保険など、毎月/毎年決まって出ていく支払い)の台帳。
 // 計画タブの「固定費」の土台になり、分類ごとの小計で解約検討にも使える。収支の実績集計には影響しない。
@@ -43,12 +44,13 @@ export function Subs({ subs, onSave, cards, ym }) {
   const commit = () => {
     if (!edit.name.trim()) return;
     if (edit.startDate && edit.endDate && edit.endDate < edit.startDate) return;
-    const s = { ...edit, name: edit.name.trim(), category: (edit.category || "").trim(), amount: Math.round(evalAmount(edit.amount) || 0), cycle: edit.cycle || "monthly" };
+    const renewalDay = edit.renewal ? Number(edit.renewal.slice(8, 10)) : undefined;
+    const s = { ...edit, name: edit.name.trim(), category: (edit.category || "").trim(), amount: Math.round(evalAmount(edit.amount) || 0), cycle: edit.cycle || "monthly", renewalDay };
     const next = edit.id ? subs.map((x) => (x.id === edit.id ? s : x)) : [...subs, { ...s, id: uid() }];
     onSave(next); setEdit(null);
   };
   const remove = () => { onSave(subs.filter((x) => x.id !== edit.id)); setEdit(null); };
-  const newSub = () => setEdit({ name: "", amount: "", cycle: "monthly", category: "", card: "", renewal: "", startDate: "", endDate: "", plan: "", note: "" });
+  const newSub = () => setEdit({ name: "", amount: "", cycle: "monthly", category: "", card: "", renewal: "", startDate: "", endDate: "", autoRenew: true, plan: "", note: "" });
 
   return (
     <div>
@@ -124,11 +126,15 @@ export function Subs({ subs, onSave, cards, ym }) {
               ))}
             </div>
             <label style={styles.fieldLabel}>更新日</label>
-            <input type="date" value={edit.renewal ?? ""} onChange={(e) => setEdit({ ...edit, renewal: e.target.value })} style={styles.textInput} />
+            <ClearableCalendarInput value={edit.renewal ?? ""} onChange={(value) => setEdit({ ...edit, renewal: value, renewalDay: value ? Number(value.slice(8, 10)) : undefined })} style={styles.textInput} />
+            <div style={styles.kindRow}>
+              <button style={{ ...styles.kindBtn, ...(edit.autoRenew !== false ? { background: "var(--accent)", color: "#fff", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, autoRenew: true })}>{edit.cycle === "yearly" ? "毎年自動更新" : "毎月自動更新"}</button>
+              <button style={{ ...styles.kindBtn, ...(edit.autoRenew === false ? { background: "var(--accent)", color: "#fff", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, autoRenew: false })}>固定</button>
+            </div>
             <label style={styles.fieldLabel}>開始日</label>
-            <input type="date" value={edit.startDate ?? ""} onChange={(e) => setEdit({ ...edit, startDate: e.target.value })} style={styles.textInput} />
+            <ClearableCalendarInput value={edit.startDate ?? ""} onChange={(value) => setEdit({ ...edit, startDate: value })} style={styles.textInput} />
             <label style={styles.fieldLabel}>終了予定日・解約日</label>
-            <input type="date" value={edit.endDate ?? ""} onChange={(e) => setEdit({ ...edit, endDate: e.target.value })} style={styles.textInput} />
+            <ClearableCalendarInput value={edit.endDate ?? ""} onChange={(value) => setEdit({ ...edit, endDate: value })} style={styles.textInput} />
             <label style={styles.fieldLabel}>プラン名（任意）</label>
             <input value={edit.plan ?? ""} onChange={(e) => setEdit({ ...edit, plan: e.target.value })} placeholder="例）Premium / 年間プラン" style={styles.textInput} />
             <label style={styles.fieldLabel}>メモ（任意）</label>

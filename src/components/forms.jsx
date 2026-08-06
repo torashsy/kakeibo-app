@@ -4,6 +4,7 @@ import { yen, ymLabel, addMonth, evalAmount, ACCOUNT_TYPES, acctRole, entryDate,
 import { styles } from '../styles.js';
 import { Icon } from '../icons.jsx';
 import { AmountField } from './amount.jsx';
+import { ClearableCalendarInput } from './calendar-input.jsx';
 
 export function PickCategory({ onClose, onPick }) {
   const cats = [
@@ -95,7 +96,7 @@ function DateField({ date, setDate, entryYm, setEntryYm, cutoffDay }) {
   return (
     <>
       <label style={styles.fieldLabel}>日付</label>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...styles.dateInput, marginBottom: 4 }} />
+      <ClearableCalendarInput value={date} onChange={setDate} style={{ ...styles.dateInput, marginBottom: 4 }} />
       <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
         {date ? `${periodLabel(cycleYm(date, cutoffDay), cutoffDay)} に入ります` : "日付を入れると、その日の月度へ自動で振り分けます"}
       </div>

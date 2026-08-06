@@ -156,7 +156,7 @@ export default function App() {
 
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
-  const commitSubs = (n) => { setSubs(n); save("subs", n); };
+  const commitSubs = (n) => { const rolled = rollForwardSubs(n); setSubs(rolled); save("subs", rolled); };
   const commitPlans = (n) => { setPlans(n); save("plans", n); };
   const toggleClosedMonth = (targetYm) => { const n = toggleMonthClosed(closedMonths, targetYm); setClosedMonths(n); save("closedMonths", n); };
 

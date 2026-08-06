@@ -4,6 +4,7 @@ import { yen, uid, evalAmount } from '../utils';
 import { styles } from '../styles.js';
 import { Subs } from './subs.jsx';
 import { AmountField } from './amount.jsx';
+import { ClearableCalendarInput } from './calendar-input.jsx';
 
 // メモタブ。「メモ(自由メモ・カテゴリ別小計)」と「サブスク(定期支払い管理)」の切替。
 // いずれも収支計算(entries/computeSummary)とは無関係の独立データ。
@@ -15,7 +16,7 @@ export function MemoTab({ memos, onSaveMemos, subs, onSaveSubs, cards, config, y
         <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "subs" ? styles.viewToggleActive : {}) }} onClick={() => setView("subs")}>サブスク</button>
       </div>
-      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} cards={cards} config={config} ym={ym} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} />}
+      {view === "memo" ? <MemoList memos={memos} onSave={onSaveMemos} cards={cards} config={config} ym={ym} /> : <Subs subs={subs} onSave={onSaveSubs} cards={cards} ym={ym} />}
     </div>
   );
 }
@@ -79,7 +80,7 @@ export function MemoList({ memos, onSave, cards, config, ym }) {
             <label style={styles.fieldLabel}>金額（円・任意）</label>
             <AmountField value={edit.amount ?? ""} onChange={(v) => setEdit({ ...edit, amount: v })} />
             <label style={styles.fieldLabel}>月（任意・計画との比較に使用）</label>
-            <input type="month" value={edit.ym ?? ""} onChange={(e) => setEdit({ ...edit, ym: e.target.value })} style={styles.dateInput} />
+            <ClearableCalendarInput type="month" value={edit.ym ?? ""} onChange={(value) => setEdit({ ...edit, ym: value })} />
             {cards && cards.length > 0 && (
               <>
                 <label style={styles.fieldLabel}>内訳（任意・紐づくカードのサマリ展開に表示）</label>

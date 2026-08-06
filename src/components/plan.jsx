@@ -46,12 +46,12 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
       : k === "salaryIncome" ? plannedSalaryIncome(plans, mo)
         : k === "otherIncome" ? plannedOtherIncome(plans, mo)
           : k === "income" ? plannedIncome(plans, mo)
-        : k === "spending" ? plannedSpending(plans, subs, mo, debt, cards)
+        : k === "spending" ? plannedSpending(plans, subs, mo, debt, cards, config?.cycleCutoffDay || 0)
           : k === "variable" ? plannedVariable(plans, mo)
-            : k === "fixed" ? fixedForMonth(subs, mo, cards)
+            : k === "fixed" ? fixedForMonth(subs, mo, cards, config?.cycleCutoffDay || 0)
               : k === "debt" ? plannedDebt(debt, mo)
                 : k === "invest" ? plannedInvest(plans, mo)
-                  : k === "net" ? plannedNet(plans, subs, mo, debt, cards) : 0
+                  : k === "net" ? plannedNet(plans, subs, mo, debt, cards, config?.cycleCutoffDay || 0) : 0
   );
   const isActualMonth = (mo) => isMonthClosed(closedMonths, mo) || (entriesByMonth[mo] || []).length > 0;
   const forecastOf = (k, mo) => (isActualMonth(mo) ? actualOf(k, mo) : planOf(k, mo));
@@ -69,7 +69,7 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
       res[mo] = { bal, anchored: hasBalRecord(es) };
     }
     return res;
-  }, [entries, months, entriesByMonth, plans, subs, cards, debt, mode]);
+  }, [entries, months, entriesByMonth, plans, subs, cards, debt, mode, config?.cycleCutoffDay]);
 
   const diffColor = (k, v) => (v === 0 ? MUTED : k === "spending" ? (v > 0 ? RED : GREEN) : k === "invest" ? MUTED : (v > 0 ? GREEN : RED));
   const cellText = (v) => (v === 0 ? "" : (mode === "diff" && v > 0 ? "+" + num(v) : num(v)));
