@@ -12,7 +12,9 @@ import { PickCategory, SalaryForm, SalaryEditForm, CardForm, AccountForm } from 
 import { ImportSheet } from './components/import.jsx';
 import { MonthlyClose } from './components/monthly.jsx';
 import { Icon } from './icons.jsx';
-import { getSyncState, onSyncChange } from './storage.js';
+import { getSyncState, onSyncChange, onFinanceAuthChange, isFinanceSessionCurrent, readFinanceFeed } from './storage.js';
+import { mergeFinanceObservations } from './finance';
+import { FinanceFeedPanel } from './components/finance-feed.jsx';
 
 export default function App() {
   const [entries, setEntries] = useState([]);
@@ -32,11 +34,16 @@ export default function App() {
   const [sheet, setSheet] = useState(null);
   const [importMode, setImportMode] = useState("");
   const [editing, setEditing] = useState(null);
+  const [financeFeed, setFinanceFeed] = useState(null);
+  const [financeState, setFinanceState] = useState({ mode: "loading", error: "" });
+  const [financeSuppressed, setFinanceSuppressed] = useState([]);
+  const [financeRefresh, setFinanceRefresh] = useState(0);
+  const [loadedLedgerUserId, setLoadedLedgerUserId] = useState(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th, mm, sb, pl, cm] = await Promise.all([
+        const [e, c, cd, d, th, mm, sb, pl, cm, fs] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
@@ -46,6 +53,7 @@ export default function App() {
           window.storage.get("subs", true).catch(() => null),
           window.storage.get("plans", true).catch(() => null),
           window.storage.get("closedMonths", true).catch(() => null),
+          window.storage.get("financeSuppressed", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -82,6 +90,10 @@ export default function App() {
         if (rawPlans && rawPlans.lines && loadedPlan !== rawPlans) { try { window.storage.set("plans", JSON.stringify(loadedPlan), true); } catch {} }
         const rawClosed = cm && cm.value ? JSON.parse(cm.value) : null;
         setClosedMonths(Array.isArray(rawClosed) ? rawClosed : []);
+        const rawSuppressed = fs && fs.value ? JSON.parse(fs.value) : [];
+        setFinanceSuppressed(Array.isArray(rawSuppressed) ? rawSuppressed : []);
+        const initialSync = await getSyncState();
+        setLoadedLedgerUserId(initialSync.ledgerUserId || null);
       } catch {
         setEntries(SEED_ENTRIES.map((x) => ({ ...x, id: uid() }))); setCards(DEFAULT_CARDS); setDebt(SEED_DEBT);
       } finally { setLoaded(true); }
@@ -123,6 +135,52 @@ export default function App() {
   }, []);
 
   const save = (k, v) => { try { window.storage.set(k, JSON.stringify(v), true); } catch (e) { console.error(e); } };
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false, reading = false, lastRead = 0, generation = 0;
+    const refresh = async (force = false) => {
+      if (!force && (reading || Date.now() - lastRead < 10000 || document.visibilityState === "hidden")) return;
+      const request = ++generation;
+      reading = true; lastRead = Date.now();
+      try {
+        const next = await readFinanceFeed();
+        if (cancelled || request !== generation) return;
+        setFinanceState({ mode: next.mode, userId: next.userId, authEpoch: next.authEpoch, error: "" });
+        setFinanceFeed((old) => JSON.stringify(old) === JSON.stringify(next.feed) ? old : next.feed);
+      } catch (error) {
+        if (!cancelled && request === generation) setFinanceState((old) => ({ ...old, error: String(error?.message || error) }));
+      } finally { if (request === generation) reading = false; }
+    };
+    refresh();
+    const passiveRefresh = () => refresh();
+    const timer = window.setInterval(passiveRefresh, 30000);
+    const off = onSyncChange(passiveRefresh);
+    const offAuth = onFinanceAuthChange(() => {
+      setFinanceFeed(null); setFinanceState({ mode: "loading", error: "" });
+      // Auth callbacks must return before another getSession call acquires the auth lock.
+      generation += 1;
+      setTimeout(() => { if (!cancelled) refresh(true); }, 0);
+    });
+    window.addEventListener("focus", passiveRefresh);
+    document.addEventListener("visibilitychange", passiveRefresh);
+    return () => { cancelled = true; generation += 1; clearInterval(timer); off(); offAuth(); window.removeEventListener("focus", passiveRefresh); document.removeEventListener("visibilitychange", passiveRefresh); };
+  }, [loaded, financeRefresh]);
+  const financeCanApply = financeState.mode === "on" && !financeState.error && loadedLedgerUserId === financeState.userId && isFinanceSessionCurrent(financeState.userId, financeState.authEpoch);
+  const financeMerge = useMemo(() => mergeFinanceObservations(entries, financeCanApply ? financeFeed : null, config, cards, { closedMonths, suppressed: financeSuppressed }), [entries, financeFeed, financeCanApply, config, cards, closedMonths, financeSuppressed]);
+  useEffect(() => {
+    if (!loaded || !financeFeed || !financeCanApply || sheet || !financeMerge.changed) return;
+    setEntries((previous) => {
+      if (!isFinanceSessionCurrent(financeState.userId, financeState.authEpoch)) return previous;
+      const merged = mergeFinanceObservations(previous, financeFeed, config, cards, { closedMonths, suppressed: financeSuppressed });
+      if (merged.changed) save("entries", merged.entries);
+      return merged.changed ? merged.entries : previous;
+    });
+  }, [loaded, financeFeed, financeCanApply, financeState.userId, financeState.authEpoch, financeMerge, config, cards, closedMonths, financeSuppressed, sheet]);
+  const suppressFinanceEntries = (list) => {
+    const keys = list.map((e) => e.autoLogicalKey).filter(Boolean);
+    if (!keys.length) return;
+    setFinanceSuppressed((old) => { const next = [...new Set([...old, ...keys])]; save("financeSuppressed", next); return next; });
+  };
   const commitConfig = (n) => { setConfig(n); save("config", n); };
   // カード名は entries/debt/plans/subs/memos が文字列で参照しているため、
   // 名前を変えたときは同じidのカードを比較して旧名→新名へ一括で追従させる(参照が迷子にならないように)
@@ -150,6 +208,7 @@ export default function App() {
   // 取引の記録だけをすべて消す(設定・カード・取込ルール・計画・定期費は残す)。
   // 取り込み直したいときのために用意。消す前にバックアップを促す。
   const clearAllEntries = () => {
+    suppressFinanceEntries(entries);
     setEntries(() => { save("entries", []); return []; });
     setClosedMonths(() => { save("closedMonths", []); return []; });
   };
@@ -170,6 +229,7 @@ export default function App() {
     if (Array.isArray(d.subs)) commitSubs(d.subs);
     if (d.plans && d.plans.lines) commitPlans(migratePlan(d.plans, Array.isArray(d.subs) ? d.subs : subs));
     if (Array.isArray(d.closedMonths)) { setClosedMonths(d.closedMonths); save("closedMonths", d.closedMonths); }
+    if (Array.isArray(d.financeSuppressed)) { const values = d.financeSuppressed.filter((value) => typeof value === "string"); setFinanceSuppressed(values); save("financeSuppressed", values); }
     if (d.theme && typeof d.theme === "object") commitTheme({ ...DEFAULT_THEME, ...d.theme });
   };
   const commitTheme = (n) => { setTheme(n); save("theme", n); };
@@ -197,9 +257,9 @@ export default function App() {
   });
   const commitImportRules = (rules) => commitConfig({ ...config, importRules: rules });
   const updateEntry = (e) => setEntries((prev) => { const n = prev.map((x) => (x.id === e.id ? e : x)); save("entries", n); return n; });
-  const removeEntry = (id) => setEntries((prev) => { const n = prev.filter((x) => x.id !== id); save("entries", n); return n; });
+  const removeEntry = (id) => { suppressFinanceEntries(entries.filter((e) => e.id === id)); setEntries((prev) => { const n = prev.filter((x) => x.id !== id); save("entries", n); return n; }); };
   const removeEntriesByIds = (ids) => { const set = new Set(ids || []); removeEntriesMatching((x) => set.has(x.id)); };
-  const removeEntriesMatching = (pred) => setEntries((prev) => { const n = prev.filter((x) => !pred(x)); save("entries", n); return n; });
+  const removeEntriesMatching = (pred) => { suppressFinanceEntries(entries.filter(pred)); setEntries((prev) => { const n = prev.filter((x) => !pred(x)); save("entries", n); return n; }); };
 
   // カード/口座/給与項目の削除は、紐づく記録も一緒に消さないと
   // 「詳細」からは消えたのに「サマリ」の集計にだけ残り続ける、というズレが起きるため
@@ -305,11 +365,13 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
+        {(tab === "today" || tab === "settings") && <FinanceFeedPanel feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onOpen={() => setTab("finance")} />}
+        {tab === "finance" && <SubScreen title="金融情報の自動更新" onBack={() => setTab("settings")}><FinanceFeedPanel expanded feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
         {tab === "today" && <Summary summary={summary} balancesNow={balancesAsOf(entries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); setTab("recurring"); }} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
         {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>
@@ -321,7 +383,7 @@ export default function App() {
         <TabBtn active={tab === "records"} onClick={() => setTab("records")} label="記録" icon="detail" />
         <TabBtn active={tab === "plan"} onClick={() => setTab("plan")} label="計画" icon="plan" />
         <TabBtn active={tab === "recurring"} onClick={() => setTab("recurring")} label="定期費" icon="recurring" />
-        <TabBtn active={tab === "settings" || tab === "design" || tab === "cards"} onClick={() => setTab("settings")} label="設定" icon="settings" />
+        <TabBtn active={tab === "settings" || tab === "design" || tab === "cards" || tab === "finance"} onClick={() => setTab("settings")} label="設定" icon="settings" />
       </nav>
 
       {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); if (cat === "import") setImportMode(""); setSheet(cat); }} />}
@@ -361,3 +423,4 @@ function SubScreen({ title, onBack, children }) {
 function TabBtn({ active, onClick, label, icon }) {
   return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><Icon name={icon} size={22} strokeWidth={active ? 2.1 : 1.8} /><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
 }
+

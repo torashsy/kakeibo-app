@@ -97,7 +97,7 @@ function CardBreakdownPanel({ rows, claims, embedded = false }) {
 
 const claimStatus = {
   paid: { label: "引落済", color: GREEN, bg: "var(--accent-soft)" },
-  confirmed: { label: "確定・未引落", color: RED, bg: "var(--expense-soft)" },
+  confirmed: { label: "確定・引落未確認", color: RED, bg: "var(--expense-soft)" },
   forecast: { label: "見込み", color: MUTED, bg: "var(--group-bg)" },
 };
 
@@ -329,4 +329,5 @@ function AccountBalances({ shown, hasBal, total, change, partialAccounts, config
     </div>
   );
 }
+
 

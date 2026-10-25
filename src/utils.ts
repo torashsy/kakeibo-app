@@ -13,6 +13,14 @@ export interface Entry {
   srcBalance?: number; // OCR明細に表示された取引後残高。摘要が揺れても同じ取引を判別する
   imp?: string;        // どの取込で入ったか。1つの明細に同じ行は2回出ないので、重複判定の拠り所になる
   date?: string;       // 取引日(YYYY-MM-DD)。手入力でも日付を持てるようにする。無ければ指紋(src)から拾う
+  autoKind?: "card_bill" | "balance";
+  autoStatus?: "confirmed";
+  autoDueDate?: string;
+  autoSourceId?: string;
+  autoLogicalKey?: string;
+  autoIssuedAt?: string;
+  autoReceivedAt?: string;
+  autoBase?: Record<string, unknown>;
 }
 
 export interface Config {
@@ -665,8 +673,11 @@ export function pendingCardClaims(monthEntries: Entry[], cards: Card[] | null | 
     : balances.map((e) => e.asOf || "").sort().pop() || "";
   return (monthEntries || []).reduce((sum, e) => {
     if (e.cat !== "card") return sum;
+    // メールの確定請求だけでは引落完了を確認できない。対象口座も特定していないため、
+    // 別口座の新しい残高を根拠に「残高へ反映済み」として差し引き対象から外さない。
+    if (e.autoKind === "card_bill" && e.autoStatus === "confirmed") return sum + Math.abs(Number(e.amount) || 0);
     const card = (cards || []).find((c) => c.name === e.item);
-    const due = entryDate(e) || cardPaymentDateForCycle(ym, card?.paymentDay, cutoffDay);
+    const due = e.autoDueDate || entryDate(e) || cardPaymentDateForCycle(ym, card?.paymentDay, cutoffDay);
     return due > coveredThrough ? sum + Math.abs(Number(e.amount) || 0) : sum;
   }, 0);
 }
@@ -718,10 +729,14 @@ export function cardClaimStates(cards: Card[] | null | undefined, debt: Record<s
     const actual = cardEntries.reduce((sum, e) => sum + Math.abs(Number(e.amount) || 0), 0);
     const debtPortion = debtValueTotal(debt && debt[card.name] && debt[card.name][ym]);
     const knownPlan = debtPortion + plannedFixedForCard(subs, cards, card.name, ym, cutoffDay);
-    const amount = actual || knownPlan;
-    const due = card.paymentDay ? cardPaymentDateForCycle(ym, card.paymentDay, cutoffDay) : "";
-    const paid = actual > 0 && (cardEntries.some((e) => Boolean(entryDate(e))) || Boolean(due && coveredThrough && due <= coveredThrough));
-    const status: CardClaimStatus = paid ? "paid" : actual > 0 ? "confirmed" : "forecast";
+    const explicitBills = cardEntries.filter((e) => e.autoKind === "card_bill" && e.autoStatus === "confirmed");
+    const hasConfirmedBill = explicitBills.length > 0;
+    const amount = hasConfirmedBill ? actual : actual || knownPlan;
+    const due = explicitBills.map((e) => e.autoDueDate || "").filter(Boolean).sort().pop()
+      || (card.paymentDay ? cardPaymentDateForCycle(ym, card.paymentDay, cutoffDay) : "");
+    // 請求通知は引落完了の証拠ではない。他口座の新しい残高でも支払済みにしない。
+    const paid = !hasConfirmedBill && actual > 0 && (cardEntries.some((e) => Boolean(entryDate(e))) || Boolean(due && coveredThrough && due <= coveredThrough));
+    const status: CardClaimStatus = paid ? "paid" : hasConfirmedBill || actual > 0 ? "confirmed" : "forecast";
     return {
       name: card.name,
       amount,
@@ -2083,3 +2098,4 @@ export function buildStructure(monthEntries: Entry[], config: Config, cards: Car
   const get = (cat: string, item: string, account?: string): StructureNode => byKey[cat + "|" + item + "|" + (account || "")] || { entries: [], cat, item, account: account || "" };
   return { byKey, totalOf, get, accounts, flowsFor, flowTypes: ALL_FLOW_TYPES };
 }
+
