@@ -2,6 +2,7 @@ import React from "react";
 import { MUTED, ACCENT } from "../theme.js";
 import { styles } from "../styles.js";
 import { yen } from "../utils";
+import { financeFreshness } from "../finance-freshness";
 
 const dateText = (value) => {
   if (!value || !Number.isFinite(Date.parse(value))) return "未確認";
@@ -13,6 +14,7 @@ const safeSource = (value) => {
 const resultLabel = { applied: "反映済み", matched: "照合済み", conflict: "要確認", pending: "未反映", superseded: "新しい通知あり" };
 
 export function FinanceFeedPanel({ feed, results = [], state, expanded = false, onOpen, onRefresh }) {
+  const freshness = financeFreshness(feed?.checkedAt);
   const visible = results.filter((r) => r.status !== "superseded");
   const conflicts = visible.filter((r) => r.status === "conflict").length;
   const pending = visible.filter((r) => r.status === "pending").length;
@@ -29,6 +31,8 @@ export function FinanceFeedPanel({ feed, results = [], state, expanded = false, 
         {conflicts > 0 && <span style={{ color: "var(--expense)" }}> · 要確認 {conflicts}件</span>}
         {pending > 0 && <span> · 未反映 {pending}件</span>}
       </p>
+      {state?.mode === "on" && freshness === "stale" && <p role="status" style={{ fontSize: 12, color: "var(--expense)", lineHeight: 1.7 }}>最終確認から24時間以上経過しています。現在の残高・入出金は未確認です。銀行側の実残高と同一とは限りません。</p>}
+      {state?.mode === "on" && (freshness === "never" || freshness === "invalid") && <p role="status" style={{ fontSize: 12, color: "var(--expense)", lineHeight: 1.7 }}>金融情報の自動確認がまだ完了していません。表示された情報を最新として扱わないでください。</p>}
       {state?.error && <p role="status" style={{ fontSize: 12, color: "var(--expense)" }}>更新を確認できません。最後に受信した情報があれば表示しています。</p>}
       {feed?.ingestion?.status === "blocked" && <p role="status" style={{ fontSize: 12, color: "var(--expense)", lineHeight: 1.7 }}>{feed.ingestion.detail || "メール到着時の自動取り込みは設定未完了です。"}</p>}
       {state?.needsSync && !state?.error && <p role="status" style={{ fontSize: 12, color: MUTED }}>クラウド同期を完了してから再読み込みすると、この端末の記録と照合できます。</p>}
