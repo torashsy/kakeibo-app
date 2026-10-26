@@ -3,6 +3,7 @@ import { MUTED, ACCENT } from "../theme.js";
 import { styles } from "../styles.js";
 import { yen } from "../utils";
 import { financeFreshness } from "../finance-freshness";
+import { BankFeed } from "./bank-feed";
 
 const dateText = (value) => {
   if (!value || !Number.isFinite(Date.parse(value))) return "未確認";
@@ -27,14 +28,14 @@ export function FinanceFeedPanel({ feed, results = [], state, expanded = false, 
         {onOpen && <button onClick={onOpen} style={{ ...styles.backLink, margin: 0 }}>詳細 ›</button>}
       </div>
       <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.7, margin: "8px 0" }}>
-        メール確認：{dateText(feed?.checkedAt)}
+        最終確認：{dateText(feed?.checkedAt)}
         {conflicts > 0 && <span style={{ color: "var(--expense)" }}> · 要確認 {conflicts}件</span>}
         {pending > 0 && <span> · 未反映 {pending}件</span>}
       </p>
       {state?.mode === "on" && freshness === "stale" && <p role="status" style={{ fontSize: 12, color: "var(--expense)", lineHeight: 1.7 }}>最終確認から24時間以上経過しています。現在の残高・入出金は未確認です。銀行側の実残高と同一とは限りません。</p>}
       {state?.mode === "on" && (freshness === "never" || freshness === "invalid") && <p role="status" style={{ fontSize: 12, color: "var(--expense)", lineHeight: 1.7 }}>金融情報の自動確認がまだ完了していません。表示された情報を最新として扱わないでください。</p>}
       {state?.error && <p role="status" style={{ fontSize: 12, color: "var(--expense)" }}>更新を確認できません。最後に受信した情報があれば表示しています。</p>}
-      {feed?.ingestion?.status === "blocked" && <p role="status" style={{ fontSize: 12, color: "var(--expense)", lineHeight: 1.7 }}>{feed.ingestion.detail || "メール到着時の自動取り込みは設定未完了です。"}</p>}
+      {(feed?.ingestion?.status === "blocked" || feed?.ingestion?.status === "partial") && <p role="status" style={{ fontSize: 12, color: "var(--expense)", lineHeight: 1.7 }}>{feed.ingestion.detail || "自動取り込みに未完了の項目があります。"}</p>}
       {state?.needsSync && !state?.error && <p role="status" style={{ fontSize: 12, color: MUTED }}>クラウド同期を完了してから再読み込みすると、この端末の記録と照合できます。</p>}
       {state?.mode === "signedOut" || state?.mode === "off" ? (
         <p style={{ color: MUTED, fontSize: 12 }}>設定の「クラウド同期」にログインすると、確認できた請求額と残高を受け取れます。</p>
@@ -66,6 +67,7 @@ export function FinanceFeedPanel({ feed, results = [], state, expanded = false, 
             </article>;
           })}
         </div>
+        <BankFeed snapshot={feed?.bankSnapshot} />
         {onRefresh && <button type="button" onClick={onRefresh} style={{ ...styles.backupBtn, marginTop: 12 }}>受信済みデータを再読込</button>}
       </>}
     </section>

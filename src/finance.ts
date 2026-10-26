@@ -1,4 +1,5 @@
 import { acctRole, cycleEndDate, cycleYm, type Card, type Config, type Entry } from "./utils";
+import type { BankSnapshot } from './bank-feed';
 
 /** Read-only observations supplied by the server; they are not transaction entries. */
 export interface FinanceObservation {
@@ -25,6 +26,7 @@ export interface FinanceFeed {
   checkedAt?: string;
   observations: Record<string, FinanceObservation>;
   sources?: unknown[];
+  bankSnapshot?: BankSnapshot;
 }
 
 export type FinanceResultStatus = "applied" | "matched" | "conflict" | "pending" | "superseded";
