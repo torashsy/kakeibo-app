@@ -15,6 +15,7 @@ import { Icon } from './icons.jsx';
 import { getSyncState, onSyncChange, onFinanceAuthChange, isFinanceSessionCurrent, readFinanceFeed } from './storage.js';
 import { mergeFinanceObservations } from './finance';
 import { FinanceFeedPanel } from './components/finance-feed.jsx';
+import { normalizeContracts, unlinkMissingSubscriptions } from './contracts';
 
 export default function App() {
   const [entries, setEntries] = useState([]);
@@ -23,6 +24,7 @@ export default function App() {
   const [debt, setDebt] = useState({});
   const [memos, setMemos] = useState([]);
   const [subs, setSubs] = useState([]);
+  const [contracts, setContracts] = useState([]);
   const [plans, setPlans] = useState(SEED_PLAN);
   const [closedMonths, setClosedMonths] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
@@ -43,7 +45,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th, mm, sb, pl, cm, fs] = await Promise.all([
+        const [e, c, cd, d, th, mm, sb, pl, cm, fs, ct] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
@@ -54,6 +56,7 @@ export default function App() {
           window.storage.get("plans", true).catch(() => null),
           window.storage.get("closedMonths", true).catch(() => null),
           window.storage.get("financeSuppressed", true).catch(() => null),
+          window.storage.get("contracts", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -80,6 +83,10 @@ export default function App() {
         const loadedSubs = Array.isArray(rawSubs) ? rawSubs : SEED_SUBS;
         const rolledSubs = rollForwardSubs(loadedSubs);
         setSubs(rolledSubs);
+        // 契約データだけが壊れていても、家計の記録を初期データへ戻さない。
+        let rawContracts = [];
+        try { rawContracts = ct && ct.value ? JSON.parse(ct.value) : []; } catch {}
+        setContracts(unlinkMissingSubscriptions(normalizeContracts(rawContracts), rolledSubs));
         // 更新日を過ぎたサブスクを自動で繰り越した場合はそのまま保存(次回起動時も同じ結果に)
         if (rolledSubs !== loadedSubs) { try { window.storage.set("subs", JSON.stringify(rolledSubs), true); } catch {} }
         const rawPlans = pl && pl.value ? JSON.parse(pl.value) : null;
@@ -184,7 +191,7 @@ export default function App() {
   const commitConfig = (n) => { setConfig(n); save("config", n); };
   // カード名は entries/debt/plans/subs/memos が文字列で参照しているため、
   // 名前を変えたときは同じidのカードを比較して旧名→新名へ一括で追従させる(参照が迷子にならないように)
-  const commitCards = (n) => {
+  const commitCards = (n, updateContractNames = true) => {
     const renames = n
       .map((c) => { const old = cards.find((x) => x.id === c.id); return old && old.name !== c.name ? { oldName: old.name, newName: c.name } : null; })
       .filter(Boolean);
@@ -195,6 +202,10 @@ export default function App() {
       setPlans((prev) => { const nl = { ...(prev.lines || {}) }; for (const r of renames) { const ok = "card|" + r.oldName, nk = "card|" + r.newName; if (nl[ok]) { nl[nk] = nl[ok]; delete nl[ok]; } } const np = { ...prev, lines: nl }; save("plans", np); return np; });
       setSubs((prev) => { const u = prev.map((s) => (renames.some((r) => r.oldName === s.card) ? { ...s, card: renameOf(s.card) } : s)); save("subs", u); return u; });
       setMemos((prev) => { const u = prev.map((m) => (renames.some((r) => r.oldName === m.linkedCard) ? { ...m, linkedCard: renameOf(m.linkedCard) } : m)); save("memos", u); return u; });
+      if (updateContractNames) {
+        const renamed = contracts.map((contract) => renames.some((r) => r.oldName === contract.paymentMethod) ? { ...contract, paymentMethod: renameOf(contract.paymentMethod) } : contract);
+        setContracts(renamed); save("contracts", renamed);
+      }
     }
     setCards(n); save("cards", n);
   };
@@ -215,7 +226,19 @@ export default function App() {
 
   const commitDebt = (n) => { setDebt(n); save("debt", n); };
   const commitMemos = (n) => { setMemos(n); save("memos", n); };
-  const commitSubs = (n) => { const rolled = rollForwardSubs(n); setSubs(rolled); save("subs", rolled); };
+  const commitSubs = (n) => {
+    const rolled = rollForwardSubs(n); setSubs(rolled); save("subs", rolled);
+    const next = unlinkMissingSubscriptions(contracts, rolled);
+    if (next !== contracts) { setContracts(next); save("contracts", next); }
+  };
+  const commitContracts = (n) => { const next = normalizeContracts(n); setContracts(next); save("contracts", next); };
+  const commitContractBundle = (next) => {
+    // 最終的な組を一度ずつ保存する。Reactのupdaterに保存の副作用を置かない。
+    const nextSubs = next.subs === subs ? subs : rollForwardSubs(next.subs);
+    const nextContracts = unlinkMissingSubscriptions(normalizeContracts(next.contracts), nextSubs);
+    if (nextSubs !== subs) { setSubs(nextSubs); save("subs", nextSubs); }
+    setContracts(nextContracts); save("contracts", nextContracts);
+  };
   const commitPlans = (n) => { setPlans(n); save("plans", n); };
   const toggleClosedMonth = (targetYm) => { const n = toggleMonthClosed(closedMonths, targetYm); setClosedMonths(n); save("closedMonths", n); };
 
@@ -223,10 +246,12 @@ export default function App() {
   const importData = (d) => {
     if (Array.isArray(d.entries)) { const m = d.entries.map(migrateEntry).filter(Boolean); setEntries(m); save("entries", m); }
     if (d.config && typeof d.config === "object") commitConfig(migrateConfig({ ...DEFAULT_CONFIG, ...d.config }));
-    if (Array.isArray(d.cards)) commitCards(d.cards.map(migrateCard));
+    if (Array.isArray(d.cards)) commitCards(d.cards.map(migrateCard), false);
     if (d.debt && typeof d.debt === "object") commitDebt(d.debt);
     if (Array.isArray(d.memos)) commitMemos(d.memos);
-    if (Array.isArray(d.subs)) commitSubs(d.subs);
+    if (Array.isArray(d.subs) && Array.isArray(d.contracts)) commitContractBundle({ subs: d.subs, contracts: d.contracts });
+    else if (Array.isArray(d.subs)) commitSubs(d.subs);
+    else if (Array.isArray(d.contracts)) commitContracts(unlinkMissingSubscriptions(normalizeContracts(d.contracts), subs));
     if (d.plans && d.plans.lines) commitPlans(migratePlan(d.plans, Array.isArray(d.subs) ? d.subs : subs));
     if (Array.isArray(d.closedMonths)) { setClosedMonths(d.closedMonths); save("closedMonths", d.closedMonths); }
     if (Array.isArray(d.financeSuppressed)) { const values = d.financeSuppressed.filter((value) => typeof value === "string"); setFinanceSuppressed(values); save("financeSuppressed", values); }
@@ -272,6 +297,7 @@ export default function App() {
     if (debt[card.name]) { const nd = { ...debt }; delete nd[card.name]; commitDebt(nd); }
     // サブスクの支払いカード・メモの紐づけも、カード削除に合わせて外す(参照先が無いまま残らないように)
     if (subs.some((s) => s.card === card.name)) commitSubs(subs.map((s) => (s.card === card.name ? { ...s, card: "" } : s)));
+    if (contracts.some((contract) => contract.paymentMethod === card.name)) commitContracts(contracts.map((contract) => contract.paymentMethod === card.name ? { ...contract, paymentMethod: "" } : contract));
     if (memos.some((m) => m.linkedCard === card.name)) commitMemos(memos.map((m) => (m.linkedCard === card.name ? { ...m, linkedCard: "" } : m)));
     if (plans && plans.lines && plans.lines["card|" + card.name]) { const nl = { ...plans.lines }; delete nl["card|" + card.name]; commitPlans({ ...plans, lines: nl }); }
   };
@@ -370,8 +396,8 @@ export default function App() {
         {tab === "today" && <Summary summary={summary} balancesNow={balancesAsOf(entries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); setTab("recurring"); }} />}
-        {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
+        {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
+        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
         {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>

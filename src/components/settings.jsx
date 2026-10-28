@@ -176,7 +176,7 @@ function ImportRulesSection({ rules, cards, accounts, onSave }) {
   );
 }
 
-export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, onToggleClosedMonth, onClearEntries, entries, cards, debt, memos, subs, plans, closedMonths, financeSuppressed = [], theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
+export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, onToggleClosedMonth, onClearEntries, entries, cards, debt, memos, subs, contracts = [], plans, closedMonths, financeSuppressed = [], theme, onImport, onOpenDesign, onOpenCards, onRemoveItem }) {
   const [c, setC] = useState(config);
   const [flash, setFlash] = useState("");
   const fileRef = useRef(null);
@@ -185,18 +185,19 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
     { key: "ownTransferKeywords", title: "自分名義キーワード" }];
   const addItem = (key) => { const name = (prompt(`新しい${groups.find((g) => g.key === key).title}の名前`) || "").trim(); if (!name) return; const next = { ...c, [key]: [...(c[key] || []), name] }; setC(next); onSave(next); };
   const removeItem = (key, i) => onRemoveItem(key, c[key][i]);
-  const exportJSON = () => { const blob = new Blob([JSON.stringify({ entries, config: c, cards, debt, memos, subs, plans, closedMonths, financeSuppressed, theme }, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); };
+  const exportJSON = () => { const blob = new Blob([JSON.stringify({ entries, config: c, cards, debt, memos, subs, contracts, plans, closedMonths, financeSuppressed, theme }, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); };
   const importJSON = (file) => {
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const d = JSON.parse(reader.result);
-        if (!d || typeof d !== "object" || (!Array.isArray(d.entries) && !d.config && !Array.isArray(d.cards))) { alert("バックアップファイルの形式が違います。"); return; }
+        if (!d || typeof d !== "object" || (!Array.isArray(d.entries) && !d.config && !Array.isArray(d.cards) && !Array.isArray(d.contracts))) { alert("バックアップファイルの形式が違います。"); return; }
         const parts = [];
         if (Array.isArray(d.entries)) parts.push(`記録${d.entries.length}件`);
         if (Array.isArray(d.cards)) parts.push(`カード${d.cards.length}枚`);
         if (Array.isArray(d.memos)) parts.push(`メモ${d.memos.length}件`);
         if (Array.isArray(d.subs)) parts.push(`サブスク${d.subs.length}件`);
+        if (Array.isArray(d.contracts)) parts.push(`契約${d.contracts.length}件`);
         if (d.plans) parts.push("計画");
         if (!window.confirm(`${parts.join("・")}を読み込みます。現在のデータは上書きされます。よろしいですか？`)) return;
         onImport(d);
