@@ -4,6 +4,7 @@ import { styles } from "../styles.js";
 import { yen } from "../utils";
 import { financeFreshness } from "../finance-freshness";
 import { BankFeed } from "./bank-feed";
+import { LatestBalances } from './latest-balances';
 
 const dateText = (value) => {
   if (!value || !Number.isFinite(Date.parse(value))) return "未確認";
@@ -14,7 +15,7 @@ const safeSource = (value) => {
 };
 const resultLabel = { applied: "反映済み", matched: "照合済み", conflict: "要確認", pending: "未反映", superseded: "新しい通知あり" };
 
-export function FinanceFeedPanel({ feed, results = [], state, expanded = false, onOpen, onRefresh }) {
+export function FinanceFeedPanel({ feed, accounts = [], results = [], state, expanded = false, onOpen, onRefresh }) {
   const freshness = financeFreshness(feed?.checkedAt);
   const visible = results.filter((r) => r.status !== "superseded");
   const conflicts = visible.filter((r) => r.status === "conflict").length;
@@ -40,6 +41,7 @@ export function FinanceFeedPanel({ feed, results = [], state, expanded = false, 
       {state?.mode === "signedOut" || state?.mode === "off" ? (
         <p style={{ color: MUTED, fontSize: 12 }}>設定の「クラウド同期」にログインすると、確認できた請求額と残高を受け取れます。</p>
       ) : !feed && <p style={{ color: MUTED, fontSize: 12 }}>取得できた金融情報はまだありません。</p>}
+      {state?.mode === 'on' && <LatestBalances feed={feed} accounts={accounts} />}
       {expanded && <>
         <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.7 }}>金額・対象・日付が確認できた請求と残高を反映します。買い物速報は請求額に加算しません。既存記録と異なる金額は、記録を残して「要確認」にします。</p>
         {sources.length > 0 && <div style={{ borderTop: "1px solid var(--border)", paddingTop: 9 }}>
