@@ -33,12 +33,12 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
 
       <MonthlyNetChart entries={entries || []} ym={ym} />
-      <details className="k-group">
-        <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
+      <section className="k-group">
+        <h3>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</h3>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
           ["支出",forecast.spending,forecast.spendingSource], ["投資振替",forecast.invest,forecast.investRecorded]].map(([label,amount,source]) =>
           <div key={label} style={alignedRow}><span>{label} <small>{typeof source === "string" ? source : source ? "実績" : "計画"}</small></span><strong style={alignedAmount}>{yen(amount)}</strong></div>)}
-      </details>
+      </section>
       <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
       <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />
       <PayrollReport slips={paySlips} />
@@ -54,16 +54,16 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   );
 }
 function CashSplit({income, expense, net}) {
-  const deficit = net < 0;
-  const total = Math.max(income, expense);
-  const parts = deficit
-    ? [["収入で賄えた分", Math.max(0,income), "var(--muted)"], ["不足", -net, RED]]
-    : [["支出", expense, "var(--muted)"], ["残り", net, GREEN]];
+  const maximum = Math.max(1, Math.abs(income), Math.abs(expense));
+  const unit = 10 ** Math.floor(Math.log10(maximum));
+  const ceiling = Math.ceil(maximum / unit) * unit;
   return <div className="cash-split">
-    <div className="cash-head"><span>{deficit ? "支出" : "収入"}</span><b>{yen(total)}</b></div>
-    <div className="cash-band" aria-hidden="true">{parts.map(([label,value,color]) =>
-      <i key={label} style={{background:color,width:total>0 ? Math.min(100,Math.max(0,value)/total*100)+"%" : 0}}/>)}</div>
-    <dl>{parts.map(([label,value,color]) => <div key={label}><dt><i style={{background:color}}/>{label}</dt><dd>{yen(value)}</dd></div>)}</dl>
+    {[["収入", income, GREEN], ["支出", expense, RED]].map(([label, amount, color]) =>
+      <div key={label}><div className="cash-head"><span>{label}</span><b>{yen(amount)}</b></div>
+        <div className="cash-band" aria-hidden="true"><i style={{background:color,width:Math.abs(amount)/ceiling*100+"%"}}/></div>
+      </div>)}
+    <div className="cash-axis"><span>¥0</span><span>{yen(ceiling)}</span></div>
+    <div className="cash-head cash-net"><span>差引</span><b>{yen(net)}</b></div>
   </div>;
 }
 function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
@@ -174,7 +174,7 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const cards = Object.values(snapshot?.investmentCardRows || {}).filter(r => cycleYm(r.date, cutoff) === ym);
   if (!bank.length && !cards.length) return null;
   const sum = rows => rows.reduce((total, r) => total + r.amount, 0);
-  return <details className="k-group"><summary>投資の内訳</summary>
+  return <details open className="k-group"><summary>投資の内訳</summary>
     {[["銀行明細で確認した振替（差引）", confirmed, sum(confirmed)], ...(manual.length ? [["その他の登録済み振替", manual, sum(manual)]] : []), ["カード積立（利用日基準）", cards, -sum(cards)]].map(([label,rows,total]) =>
       <details key={label}><summary style={{padding:"10px 0"}}>{label}　{yen(total)}（{rows.length}件）</summary>
         {rows.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(r =>
@@ -268,7 +268,7 @@ function CardClaimStatusList({ rows }) {
   );
 }
 function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   
   const nextDate = rows[0]?.date;
   const nextAmount = rows.filter(row => row.date === nextDate).reduce((sum,row) => sum + row.amount, 0);

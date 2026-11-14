@@ -90,3 +90,4 @@
 .cash-split dl {margin:0}
 .cash-split dt i {display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .cash-split dd {margin:0}
+.cash-axis {display:flex;justify-content:space-between;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.cash-net {margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
