@@ -1,5 +1,13 @@
 const retailMerchant = /amazon|アマゾン|ali\s?express|アリエクスプレス/i;
 const rules = [
+  ["コンビニ", /^cisca大手町プレイス/],
+  ["商業施設", /北海道ボールパーク fビレッジ|kitte大阪|ヨコハマハンマ[ー-]ヘツド|二重橋スクエア|エキマルシェ新大阪|^メイワン$|レイクタウンカゼ|^nusentral-tr/],
+  ["映画館", /^t[・･]ジョイ横浜/],
+  ["セクシー系", /^ラブポ[ツッ]プ[ー-]?$/],
+  ["レジャー", /マザ[ー-]ボクジヨウマキバゲ|エビスブリユワリートウキヨウ|横浜スタジアム・立売|アキタイヌステ[ー-]シヨン/],
+  ["旅行・宿泊", /隠岐の島町観光協会|メルパルク広島|明友大正ろまん館/],
+  ["交通費", /^出雲大社前駅$/],
+  ["物販", /サイモンズショッピング|^フラッグシップストア$|a-factory skipegg/],
   ["Revolutチャージ", /^r\s*\*\*(?:6007|1079)\*$/i],
   ["物販", /^イメ[ー-]ジ・マジック.*btob/i],
   ["レジャー", /^ウォット$|^仙巌園$/],
@@ -66,6 +74,7 @@ export function classifyCardRows(rows) {
       return {...row, spendingCategory:"Apple決済"};
     if (retailMerchant.test(name)) return {...row, spendingCategory: "物販"};
     if (!broad(row.spendingCategory)) return row;
+    if (name === "株式会社さん" && Math.abs(row.amount) === 1078) return {...row, spendingCategory:"サブスク"};
     const rule = rules.find(([, pattern]) => pattern.test(name));
     const previous = history.get(name);
     const category = rule?.[0] || (previous?.size === 1 && !/amazon|aliexpress|apple\.com|楽天市場/.test(name) ? [...previous][0] : null);
