@@ -1,3 +1,4 @@
+import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, cycleStartDate, addMonth, computeSummary } from '../utils';
@@ -17,7 +18,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
     .map(([acc, b]) => [acc, cycleEndDate(b.ym, config.cycleCutoffDay)]);
   const breakdown = useMemo(() => cardBreakdown(cards, debt || {}, memos, monthEntries, ym), [cards, debt, memos, monthEntries, ym]);
   const claimStates = useMemo(() => cardClaimStates(cards, debt || {}, subs, monthEntries, ym, config.cycleCutoffDay), [cards, debt, subs, monthEntries, ym, config.cycleCutoffDay]);
-  const purchases = useMemo(() => bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:")), [snapshot]);
+  const purchases = useMemo(() => classifyCardRows(bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:"))), [snapshot]);
   const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym, undefined, 30, scheduledDebits, purchases), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits, purchases]);
   const forecast = forecasts[ym];
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
@@ -108,12 +109,15 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     }
     return [...items.values()].sort((a,b) => b.amount - a.amount);
   }, [purchases, ym, cutoff]);
-  const renderGroup = group => <details key={group.label}><summary style={{padding:"8px 0"}}>{group.label}　<strong>{yen(group.amount)}</strong></summary>
+  const scale = Math.max(1, ...groups.map(group => Math.abs(group.amount)));
+  const total = groups.reduce((sum, group) => sum + group.amount, 0);
+  const renderGroup = group => <details key={group.label}><summary style={{padding:"8px 0"}}><span style={{display:"inline-flex",width:"90%",justifyContent:"space-between",gap:8}}>{group.label}<strong>{yen(group.amount)}</strong></span>
+      <span aria-hidden="true" style={{display:"block",height:9,borderRadius:5,background:"var(--group-bg)",margin:"5px 0 0 1em"}}><span style={{display:"block",height:"100%",borderRadius:5,width:Math.abs(group.amount)/scale*100+"%",background:group.amount<0 ? GREEN : group.label==="未分類" ? MUTED : ACCENT}} /></span></summary>
     {group.rows.map(row => <div key={row.id} style={styles.settingRow}><span>{row.date.slice(5)}　{row.description}</span><span>{yen(-row.amount)}</span></div>)}
   </details>;
   return <section className="k-group" style={{paddingBottom:10}} aria-label="カードの使い道">
     <h3 style={{fontSize:16}}>カードの使い道</h3>
-    {groups.length ? <><small>利用日基準・返金差引・積立除く</small>
+    {groups.length ? <><strong>{yen(total)}</strong>　<small>利用日基準・返金差引・積立除く</small>
       {groups.slice(0,3).map(renderGroup)}
       {groups.length > 3 && <details><summary>ほかの使い道（{groups.length - 3}）</summary>{groups.slice(3).map(renderGroup)}</details>}
     </> : <p>この月度のカード利用明細はまだありません。</p>}
