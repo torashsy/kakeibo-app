@@ -1087,12 +1087,14 @@ export function monthForecast(plan: Plan, subs: Sub[] | null | undefined, entrie
   const otherIncome = otherRecorded ? actual.otherIncome : plannedOtherIncome(plan, ym);
   const invest = investRecorded ? actual.invest : plannedInvest(plan, ym);
   const recordedCards = new Set(entries.filter(e => e.cat === "card").map(e => e.item));
-  const additional = bills.filter(b => b.kind === "card" && !recordedCards.has(b.label)).reduce((sum,b) => sum + b.amount, 0);
+  const pendingBills = bills.filter(b => b.kind === "card" && !recordedCards.has(b.label));
+  const additional = pendingBills.reduce((sum,b) => sum + b.amount, 0);
   const knownSpending = actual.expense + additional;
   const budget = plannedSpending(plan, subs, ym, debt, cards, cutoff);
   const spending = closed ? actual.expense : Math.max(knownSpending, budget);
   const income = salaryIncome + otherIncome;
   return {salaryIncome, otherIncome, income, spending, invest, net: income - spending, salaryRecorded, otherRecorded, investRecorded,
+    pendingBills: closed ? [] : pendingBills, budgetRemainder: closed ? 0 : Math.max(0,budget-knownSpending),
     spendingSource: closed ? "実績" : budget > knownSpending ? "月の支出計画" : additional ? "記録・引落見込み" : "実績"};
 }
 

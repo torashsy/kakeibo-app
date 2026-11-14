@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
-  num, yen, cycleYm, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
+  acctRole, num, yen, cycleYm, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
   plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
   monthForecast, plannedDebt, estimateSalaryTakeHome, plannedSalaryBreakdown,
   hasBalRecord, balTotalOf, pendingCardClaims, monthHasInput, isMonthClosed,
@@ -236,10 +236,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
-      {mode === "forecast" && months.includes(ym) && <section className="plan-focus">
-        <h3>{ymLabel(ym)}の収支{pastPeriod ? "実績" : "見通し"}</h3><strong>{yen(monthResult.net)}</strong>
-        <dl>{[["収入", monthResult.salaryIncome + monthResult.otherIncome],["支出",pastPeriod ? monthResult.expense : monthResult.spending],["投資振替",monthResult.invest]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{yen(value)}</dd></div>)}</dl>
-      </section>}
+      {mode === "forecast" && months.includes(ym) && <MonthExplanation key={ym} result={monthResult} entries={entriesByMonth[ym]} past={pastPeriod} />}
       {mode==="plan" && months.includes(ym) && <section className="month-budget"><h3>{ymLabel(ym)}の予算</h3>
         {[{label:"給与の設定",salary:true,k:"salaryIncome"}, {label:"その他の収入",editable:PLAN_OTHER_INCOME,k:"otherIncome"},
           ...variableRows.filter(row=>row.editable),{label:"投資振替",editable:PLAN_INVEST,k:"invest"}].map(row=><button key={row.k} onClick={()=>openEdit(row,ym)}>
@@ -340,4 +337,48 @@ function SalaryRulePreview({ edit }) {
       <div>交通費　4月・10月 {num(transport)}</div>
     </div>
   );
+}
+
+function MonthExplanation({result, entries, past}) {
+  const [expanded,setExpanded] = useState(false);
+  const items = new Map();
+  function add(label, amount, recorded, source="", date="") {
+    if (!amount) return;
+    const key = [label,recorded,source,date].join("|");
+    const existing = items.get(key);
+    if (existing) existing.amount += amount;
+    else items.set(key,{key,label,amount,recorded,source,date});
+  }
+  for (const e of entries) {
+    if (e.cat==="card") {
+      const bill = e.autoKind==="card_bill";
+      add(e.item,Math.abs(e.amount),!bill,bill?"請求通知":"記録");
+    } else if (e.cat==="account" && acctRole(e.item)==="out") {
+      add(e.note || e.item,Math.abs(e.amount),true,"口座記録");
+    }
+  }
+  for (const bill of result.pendingBills || []) add(bill.label,bill.amount,false,bill.fromFeed?"取得済みの引落予定":"引落見込み",bill.date);
+  add("予算の未充当分",result.budgetRemainder,false,"支出予算");
+  const ranked=[...items.values()].sort((a,b)=>b.amount-a.amount);
+  const spending=past?result.expense:result.spending;
+  const income=result.income;
+  const actualIncome=(past || result.salaryRecorded ? result.salaryIncome : 0)+(past || result.otherRecorded ? result.otherIncome : 0);
+  const actualSpend=ranked.reduce((sum,r)=>sum+(r.recorded?r.amount:0),0);
+  const scale=Math.max(1,Math.abs(income),spending);
+  const bars=[[result.otherIncome===0 && result.salaryIncome>0?"給与":"収入",income,actualIncome],["支出",spending,actualSpend]];
+  return <section className="month-explain">
+    <header><span>{past?"収支実績":"収支見込み"}</span><strong className={result.net<0?"negative":""}>{yen(result.net)}</strong></header>
+    <div className="forecast-key"><span>{!actualIncome && !actualSpend ? "記録済み 0円" : "記録済み"}</span><span>予定</span></div>
+    {bars.map(([label,value,actual])=><div key={label} className="forecast-bar"><span>{label}</span><div><i style={{width:100*Math.abs(value)/scale+"%"}}><u style={{width:(value?Math.max(0,Math.min(100,100*actual/value)):0)+"%"}}/></i></div><b>{yen(value)}</b></div>)}
+    <div className="major-heading"><h3>支出の内訳</h3><span>金額順</span></div>
+    {(expanded?ranked:ranked.slice(0,3)).map((r,i)=><div className="driver" key={r.key}>
+      <div><b>{r.label}</b><strong>{yen(r.amount)}</strong></div>
+      <div className="driver-scale"><i style={{width:100*r.amount/(spending||1)+"%",opacity:i===0?1:.55}}/></div>
+      <small>{r.date && r.date.slice(5).replace("-","/")+"　"}{r.source} · {Math.round(100*r.amount/(spending||1))}%</small>
+    </div>)}
+    <details open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="calculation"><summary>計算内訳{ranked.length>3?"・全"+ranked.length+"件":""}</summary>
+      <table><thead><tr><th></th><th>実績</th><th>予定</th></tr></thead><tbody>{bars.map(([label,value,actual])=><tr key={label}><th>{label}</th><td>{yen(actual)}</td><td>{yen(value-actual)}</td></tr>)}</tbody></table>
+      <small>投資振替　{yen(result.invest)}（収支集計外）</small>
+    </details>
+  </section>;
 }
