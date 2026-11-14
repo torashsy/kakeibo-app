@@ -121,6 +121,7 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
     const nextDate = bills[0]?.date;
     const next = bills.filter(row => row.date === nextDate);
     const afterDebit = points.find(point => point.date === nextDate);
+    const depositsBeforeDebit = events.filter(event => event.date <= nextDate && event.change > 0);
     const totals = new Map();
     for (const bill of next) {
       const name = cards?.find(card => card.name === bill.label)?.paymentAccount || "";
@@ -128,6 +129,9 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
     }
     return <section className="cash-position"><button className="all-balances" onClick={onExpand}>
       <span>口座残高 <small>{accounts.length}口座合計</small></span><b>{yen(start)}</b><span aria-hidden="true">›</span></button>
+      {depositsBeforeDebit.map((event,index)=><div className="before-debit" key={event.date+index}>
+        <span>{shortDate(event.date)}　{event.label.startsWith("給与（計画")?"給与入金見込み":event.label}</span><b>＋{yen(event.change)}</b>
+      </div>)}
       {next.length > 0 && <details className="next-claim"><summary>
         <span>{shortDate(nextDate)}　次のカード引落予定</span><b>{yen(next.reduce((sum,r)=>sum+r.amount,0))}</b></summary>
         {next.map(r=><div className="claim-row" key={r.id}><span>{r.label}</span><b>{yen(r.amount)}</b></div>)}
