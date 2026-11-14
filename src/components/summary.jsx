@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
+import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, cycleStartDate, addMonth, computeSummary } from '../utils';
 import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
@@ -29,6 +29,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}　投資振替 {yen(summary.invest)}</div>
       </div>
+      <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <details className="k-group">
         <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
@@ -50,6 +51,49 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       </details>
     </div>
   );
+}
+function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
+  const today = new Date().toLocaleDateString("sv-SE");
+  if (ym !== cycleYm(today, cutoff)) return null;
+  const accounts = Object.entries(shown);
+  if (!accounts.length) return <section className="k-group"><h3>残高の見通し</h3><p>口座残高の取得待ちです。</p></section>;
+  const start = accounts.reduce((sum, [, row]) => sum + row.amount, 0);
+  const events = upcoming.filter(row => row.kind === "card").map(row => ({
+    date: row.date, label: row.label, change: -row.amount
+  }));
+  const end = cycleEndDate(ym, cutoff);
+  const payroll = Object.values(slips || {});
+  const future = payroll.filter(row => row.date > today && row.date <= end);
+  for (const row of future) events.push({date: row.date, label: row.kind + "（明細）", change: row.net});
+  let salaryNote = "";
+  if (!future.length && !forecast.salaryRecorded && forecast.salaryIncome > 0) {
+    const counts = new Map();
+    const recent = payroll.filter(row => row.date < today && !/賞与|bonus/i.test(row.kind)).sort((a,b) => b.date.localeCompare(a.date)).slice(0,6);
+    for (const row of recent) {
+      const day = row.date.slice(8,10);
+      counts.set(day, (counts.get(day) || 0) + 1);
+    }
+    const day = [...counts].sort((a,b) => b[1] - a[1])[0]?.[0];
+    const first = cycleStartDate(ym, cutoff);
+    const date = day && [first.slice(0,7), end.slice(0,7)].map(month => month + "-" + day)
+      .find(value => value >= first && value <= end && new Date(value).toISOString().startsWith(value));
+    if (date && date > today) events.push({date, label:"給与（計画額・支給日推定）", change:forecast.salaryIncome});
+    else salaryNote = "給与計画 " + yen(forecast.salaryIncome) + " は今後の入金日が分かるまで残高見込みに含めません。";
+  }
+  let balance = start;
+  return <section className="k-group" aria-label="残高の見通し"><h3>残高の見通し</h3>
+    <details><summary>現在の登録残高　<strong>{yen(start)}</strong></summary>
+      {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
+    </details>
+    {[...new Set(events.map(row => row.date))].sort().map(date => {
+      const rows = events.filter(row => row.date === date);
+      balance += rows.reduce((sum,row) => sum + row.change, 0);
+      return <details key={date}><summary style={{padding:"10px 0"}}>{shortDate(date)}　{rows.some(r=>r.change>0) ? "入金" : ""}{rows.some(r=>r.change<0) ? " 引落" : ""}後　<strong>{yen(balance)}</strong></summary>
+        {rows.map((row,index) => <div key={index} style={styles.settingRow}><span>{row.label}</span><span>{row.change>0 ? "+" : ""}{yen(row.change)}</span></div>)}
+      </details>;
+    })}
+    <small>{shortDate(end)}までの給与・賞与とカード引落予定を反映。日々の買い物や振替は対象外です。{salaryNote}</small>
+  </section>;
 }
 function SpendingPurpose({ purchases, ym, cutoff }) {
   const groups = useMemo(() => {
