@@ -1,5 +1,7 @@
 const retailMerchant = /amazon|アマゾン|ali\s?express|アリエクスプレス/i;
 const rules = [
+  ["Revolutチャージ", /^r\s*\*\*(?:6007|1079)\*$/i],
+  ["印刷サービス", /^イメ[ー-]ジ・マジック.*btob/i],
   ["レジャー", /^ウォット$|^仙巌園$/],
   ["物販", /^トピコ さいとう$/],
   ["印刷サービス", /キンコ[ー-]ズ 池袋東口店/],
@@ -48,8 +50,20 @@ export function classifyCardRows(rows) {
     labels.add(row.spendingCategory);
     history.set(name, labels);
   }
+  const applePairs = new Map();
+  const appleKey = row => [row.account, row.date, Math.abs(row.amount)].join("|");
+  for (const row of rows) {
+    if (!/^apple[. ]com[ /]bill$/i.test(normalize(row.description)) || !row.account || !row.amount) continue;
+    const key = appleKey(row);
+    const signs = applePairs.get(key) || {charges:0, refunds:0};
+    if (row.amount < 0) signs.charges++; else signs.refunds++;
+    applePairs.set(key, signs);
+  }
   return rows.map(row => {
     const name = normalize(row.description);
+    const pair = applePairs.get(appleKey(row));
+    if (pair?.charges === 1 && pair.refunds === 1 && /^apple[. ]com[ /]bill$/i.test(name) && broad(row.spendingCategory))
+      return {...row, spendingCategory:"Apple決済"};
     if (retailMerchant.test(name)) return {...row, spendingCategory: "物販"};
     if (!broad(row.spendingCategory)) return row;
     const rule = rules.find(([, pattern]) => pattern.test(name));

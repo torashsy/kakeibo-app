@@ -114,7 +114,7 @@ const purposeGroups = [
 function SpendingPurpose({ purchases, ym, cutoff }) {
   const groups = purposeGroups.map(([label,color]) => ({label,color,amount:0,rows:[]}));
   for (const row of purchases) {
-    if (cycleYm(row.date, cutoff) !== ym || row.spendingCategory === "投資") continue;
+    if (cycleYm(row.date, cutoff) !== ym || ["投資","Revolutチャージ"].includes(row.spendingCategory)) continue;
     const idx = purposeGroups.findIndex(([, , names]) => names.includes(row.spendingCategory || "未分類"));
     const g = groups[idx < 0 ? 4 : idx];
     g.amount -= row.amount;
@@ -133,7 +133,7 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
       <div aria-hidden="true" style={{width:"100%",maxWidth:180,aspectRatio:"1",borderRadius:"50%",background:positive?"conic-gradient("+gradient+")":"#ccc",maskImage:"radial-gradient(circle,transparent 46%,black 47%)"}}/>
       <div>{visible.map(g=><details key={g.label}><summary style={{padding:"6px 0"}}><span style={{color:g.color}}>●</span> {g.label} <b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
         {g.rows.map(r=><div key={r.id} style={{fontSize:12,padding:"4px 0"}}>{shortDate(r.date)} {r.description}　{yen(-r.amount)}</div>)}</details>)}</div>
-    </div><small>返金差引　{yen(visible.reduce((sum,g)=>sum+g.amount,0))} · 積立除く{visible.some(g=>g.amount<0) && " · 円の割合は差引がプラスの項目のみ"}</small></> : <p>この月度の利用明細はまだありません。</p>}
+    </div><small>返金差引　{yen(visible.reduce((sum,g)=>sum+g.amount,0))} · 積立・チャージ除く{visible.some(g=>g.amount<0) && " · 円の割合は差引がプラスの項目のみ"}</small></> : <p>この月度の利用明細はまだありません。</p>}
     {unresolved.length>0 && <details><summary>用途未確認（全期間 {unresolved.length}件）</summary>
       <table style={{width:"100%",fontSize:12}}><caption>金額の大きい順</caption><tbody>{unresolved.map(r=><tr key={r.id}><td>{r.date}</td><td>{r.description}</td><td style={{textAlign:"right"}}>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</td></tr>)}</tbody></table></details>}
   </section>;
