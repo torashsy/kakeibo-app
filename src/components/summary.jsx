@@ -167,11 +167,26 @@ const purposeGroups = [
   ["食事", "#bf663e", ["外食","食料品","その他の食費","食費","飲み会"]],
   ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器","家具・家電","通信費","健康・医療","税・社会保障","水道・光熱費","住宅","美容院・理髪","事業経費","還元","手数料","電子マネー","寄付"]],
   ["移動・旅行", "#537fae", ["交通費","タクシー","旅行・宿泊"]],
-  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","交際費","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系","趣味・娯楽","教養・教育","Apple決済","大学関連","印刷サービス"]],
+  ["サブスク", "#857345", ["サブスク"]],
+  ["趣味・サービス", "#936bad", ["書籍・漫画","ゲーム","レジャー","交際費","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系","趣味・娯楽","教養・教育","Apple決済","大学関連","印刷サービス"]],
 
   ["物販", "#c07591", ["物販","商業施設","コンビニ","衣服"]],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
 ];
+function SubscriptionServices({ rows }) {
+  const byService = new Map();
+  for (const row of rows) {
+    const name = row.subscriptionLabel || row.description?.trim() || "利用先未確認";
+    if (!byService.has(name)) byService.set(name,{name,amount:0,rows:[]});
+    const service = byService.get(name);
+    service.amount -= row.amount;
+    service.rows.push(row);
+  }
+  return <div className="subscription-services">{[...byService.values()].sort((a,b)=>b.amount-a.amount).map(service=>
+    <details key={service.name}><summary><span>{service.name}</span><b>{yen(service.amount)}</b></summary>
+      {service.rows.map(row=><div key={row.id}><time>{shortDate(row.date)}</time><span>{row.account}</span><b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b></div>)}
+    </details>)}</div>;
+}
 function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
   const [selection, setSelection] = useState(null);
   const [basis,setBasis] = useState("category");
@@ -197,10 +212,13 @@ function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
   const positive = visible.reduce((sum,g)=>sum+Math.max(0,g.amount),0);
   const selected = selection?.ym === ym ? groups.get(selection.label) : null;
   const choose = label => setSelection(selected?.label === label ? null : {ym,label});
+  const subscription = groups.get("サブスク");
   if (compact) return <section className="spend-glance">
     <header><h3>カード利用</h3>{visible.length>0 && <strong>{yen(visible.reduce((sum,g)=>sum+g.amount,0))}</strong>}</header>
     {visible.length ? <><div className="glance-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color}}/>)}</div>
-      <div className="glance-categories">{visible.slice(0,2).map(g=><span key={g.label}><i style={{background:g.color}}/>{g.label} <b>{yen(g.amount)}</b></span>)}</div>
+      <div className="glance-categories">{visible.filter(g=>g!==subscription).slice(0,2).map(g=><span key={g.label}><i style={{background:g.color}}/>{g.label} <b>{yen(g.amount)}</b></span>)}</div>
+      {subscription && <details key={ym} className="subscription-glance"><summary><span>サブスク</span><b>{yen(subscription.amount)}</b></summary>
+        <SubscriptionServices rows={subscription.rows}/></details>}
       <button onClick={onOpen}>カード明細 ›</button></> : <p>取得済みの利用明細はありません</p>}
   </section>;
   return <section className="spend-report" aria-label="カードの使い道">
@@ -210,7 +228,7 @@ function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
     {basis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
     {(basis==="merchant" && !allMerchants ? visible.slice(0,5) : visible).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
       <i style={{background:g.color}}/><span className="spend-name">{g.label}{basis==="category" && !selected && <small>{[...new Set(g.rows.map(r=>r.description))].slice(0,2).join("・")}</small>}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
-    </button>{selected===g && <div className="spend-transactions">{g.rows.map(r=><div key={r.id}><time>{shortDate(r.date)}</time><span>{r.description}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</div>}</React.Fragment>)}
+    </button>{selected===g && basis==="category" && g.label==="サブスク" ? <SubscriptionServices rows={g.rows}/> : selected===g && <div className="spend-transactions">{g.rows.map(r=><div key={r.id}><time>{shortDate(r.date)}</time><span>{r.description}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</div>}</React.Fragment>)}
     {basis==="merchant" && visible.length>5 && <button className="merchant-more" onClick={()=>setAllMerchants(!allMerchants)}>{allMerchants?"上位5件に戻る":"全"+visible.length+"件の利用先を見る"}</button>}
   </section>;
 

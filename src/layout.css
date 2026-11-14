@@ -182,3 +182,16 @@
 .income-lines b { white-space:nowrap; }
 .income-lines span { overflow-wrap:anywhere; }
 .pay-report .pay-period { justify-content:flex-end; }
+.subscription-glance { margin-top:8px; border-top:1px solid var(--line); }
+.subscription-glance>summary, .subscription-services summary {
+  min-height:44px; display:grid; align-items:center; grid-template-columns:minmax(0,1fr) auto 1em;
+  gap:8px; cursor:pointer; list-style:none;
+}
+.subscription-glance summary::-webkit-details-marker, .subscription-services summary::-webkit-details-marker { display:none; }
+.subscription-glance>summary::after, .subscription-services summary::after { content:"＋"; color:var(--muted); }
+.subscription-glance[open]>summary::after, .subscription-services details[open]>summary::after { content:"−"; }
+.subscription-services { margin:0 0 8px 4px; padding-left:12px; border-left:2px solid var(--line); }
+.subscription-services summary { font-size:14px; }
+.subscription-services summary span { overflow-wrap:anywhere; }
+.subscription-services details>div { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; padding:4px 0; font-size:13px; }
+.subscription-services b { white-space:nowrap; font-variant-numeric:tabular-nums; }

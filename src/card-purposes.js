@@ -1,4 +1,12 @@
 const retailMerchant = /amazon|アマゾン|ali\s?express|アリエクスプレス/i;
+// A named membership charge is distinct from a purchase at the same marketplace.
+const subscriptions = [
+  ["Amazon Prime", /^(?:amazon|アマゾン)\s*(?:プライム|prime)\s*(?:会費|membership)(?:$|[ (])/i],
+  ["radiko ダブルプラン", /^(?:ラジコ|radiko)\s*ダブルプラン(?:$|[ (])/i],
+  ["radiko タイムフリー30", /^(?:ラジコ|radiko).*タイムフリ[ー-]30/i],
+  ["Netflix", /^netflix(?:\.com)?$/i],
+  ["Spotify", /^spotify(?: premium)?$/i],
+];
 const rules = [
   ["交通費", /駅\s*オートチャージ\(モバイル\)|モバイルsuica入金/],
   ["旅行・宿泊", /近畿日本ツーリストインターネット/],
@@ -36,7 +44,6 @@ const rules = [
   ["交通費", /隠岐汽船|丸文松島汽船|express rail link|札幌市電|神戸市営地下鉄/],
   ["レジャー", /dartsup|美術館|多摩六都科学館|箱根強羅公園|快活club|マンボ[ー-](?:プラス|池袋|千葉)/],
   ["ゲーム", /^nintendo (?:cb|cc|jc)\d/],
-  ["サブスク", /amazonプライム会費|ラジコ タイムフリ[ー-]30/],
   ["デジタルサービス", /アベマテイーヴイー|seedance.*seevio|elevenlabs\.io|venice\.ai|morisawa fonts|^anthropic |アドビカブシキガイシヤ/],
   ["還元", /visashop2cashback/],
   ["外食", /海鮮屋台おくまん|三代目 鳥メロ|満天酒場|ちばチャンバル|ギヨウザサカバ|リストランテ マンジャ|味ん味ん|てけてけ 高田馬場/],
@@ -46,7 +53,6 @@ const rules = [
   ["還元", /スマホ決済利用20%還元/],
   ["交通費", /市営地下鉄.*タッチ決済|小田急(?:電鉄|乗車券)|えきねっと/],
   ["携帯代", /y\.u\s*mobileサービス利用料|楽天モバイル通信料/],
-  ["サブスク", /ラジコ.*タイムフリー30/],
   ["保険", /第一ネオ生命/],
   ["書籍・漫画", /講談社friday|ヤンジャン!|ヤンマガclub/],
   ["旅行・宿泊", /klook travel|トリップドットコム|agoda|滝と蕎麦の宿/],
@@ -79,6 +85,9 @@ export function classifyCardRows(rows) {
     const pair = applePairs.get(appleKey(row));
     if (pair?.charges === 1 && pair.refunds === 1 && /^apple[. ]com[ /]bill$/i.test(name) && broad(row.spendingCategory))
       return {...row, spendingCategory:"Apple決済"};
+    const service = subscriptions.find(([,pattern])=>pattern.test(name));
+    if (service) return {...row, spendingCategory:"サブスク", subscriptionLabel:service[0]};
+    if (row.spendingCategory?.replace(/（推定）$/, "") === "サブスク") return row;
     if (retailMerchant.test(name)) return {...row, spendingCategory: "物販"};
     if (!broad(row.spendingCategory)) return row;
     if (name === "株式会社さん" && Math.abs(row.amount) === 1078) return {...row, spendingCategory:"サブスク"};
