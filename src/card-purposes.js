@@ -1,5 +1,11 @@
 const retailMerchant = /amazon|アマゾン|ali\s?express|アリエクスプレス/i;
 const rules = [
+  ["交通費", /駅\s*オートチャージ\(モバイル\)|モバイルsuica入金/],
+  ["旅行・宿泊", /近畿日本ツーリストインターネット/],
+  ["交通費", /新日本海フェリー/],
+  ["その他の食費", /coke\s*on.*apple\s*pay/],
+  ["Apple決済", /^apple[. ]com[ /]bill$/],
+  ["ドメイン費", /お名前\.com/],
   ["外食", /(?:すた丼|スタ丼|スタドン)屋/],
   ["コンビニ", /^cisca大手町プレイス/],
   ["商業施設", /北海道ボールパーク fビレッジ|kitte大阪|ヨコハマハンマ[ー-]ヘツド|二重橋スクエア|エキマルシェ新大阪|^メイワン$|レイクタウンカゼ|^nusentral-tr/],
@@ -78,7 +84,8 @@ export function classifyCardRows(rows) {
     if (name === "株式会社さん" && Math.abs(row.amount) === 1078) return {...row, spendingCategory:"サブスク"};
     const rule = rules.find(([, pattern]) => pattern.test(name));
     const previous = history.get(name);
-    const category = rule?.[0] || (previous?.size === 1 && !/amazon|aliexpress|apple\.com|楽天市場/.test(name) ? [...previous][0] : null);
+    const communication = ["インターネット","その他通信費"].includes(row.mfMinor) ? "通信費" : null;
+    const category = rule?.[0] || communication || (previous?.size === 1 && !/amazon|aliexpress|apple\.com|楽天市場/.test(name) ? [...previous][0] : null);
     return category ? {...row, spendingCategory: category} : row;
   });
 }

@@ -163,7 +163,7 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
         {positive>0 && <span><small>{visible[0].label}</small><b>{Math.round(visible[0].amount/positive*100)}%</b></span>}
       </div>
       <div>{visible.map(g=><details key={g.label}><summary className="home-category"><i style={{background:g.color}}/><span>{g.label}</span><b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
-        {g.rows.map(r=><div key={r.id} className="home-purchase"><time dateTime={r.date}>{shortDate(r.date)}</time><span>{r.description}{r.spendingCategory === "その他の分類済み" && r.mfMinor && <small>{r.mfMinor}</small>}{r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</details>)}</div>
+        {g.rows.map(r=><div key={r.id} className="home-purchase"><time dateTime={r.date}>{shortDate(r.date)}</time><span>{r.description}{r.spendingCategory && !r.spendingCategory.endsWith("（推定）") && <small>{r.spendingCategory === "その他の分類済み" ? r.mfMinor : r.spendingCategory}</small>}{r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</details>)}</div>
     </div></> : <p>利用明細なし</p>}
   </section>;
 }
