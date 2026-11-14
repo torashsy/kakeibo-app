@@ -1,4 +1,4 @@
-import { CashWaterfall } from "./cash-waterfall";
+import { CashComparison } from "./cash-comparison";
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
@@ -371,14 +371,8 @@ function MonthExplanation({result, entries, past}) {
   const returned=transfers.reduce((sum,e)=>sum+Math.max(0,e.amount),0);
   const investmentIsActual=past || result.investRecorded;
   return <section className="month-explain">
-    <h3 className="net-chart-title">{past?"収支実績":"収支見込み"}</h3>
-    <CashWaterfall income={income} expense={spending} net={result.net} actualIncome={actualIncome} actualSpend={actualSpend}/>
-    <section className="investment-flow"><header><h3>投資振替</h3><small>{investmentIsActual?"実績":"予定"} · 収支外</small></header>
-      <div className="invest-result"><span>{result.invest>0?"口座への純戻し":"投資への純振替"}</span><strong>{yen(Math.abs(result.invest))}</strong></div>
-      {investmentIsActual && outbound+returned>0 && <><div className="transfer-track" aria-hidden="true"><i style={{flex:outbound}}/><i style={{flex:returned}}/></div>
-      <div className="transfer-labels"><span>投資へ　{yen(outbound)}</span><span>口座へ　{yen(returned)}</span></div></>}
-    </section>
-    <div className="major-heading"><h3>{expanded?"支出の内訳":ranked.length?"最大の支出":"支出の記録なし"}</h3></div>
+    <CashComparison title={past?"月の収支実績":"月の収支見込み"} income={income} expense={spending} net={result.net} actualIncome={actualIncome} actualSpend={actualSpend}/>
+    <div className="major-heading"><h3>{expanded?"支出の内訳":ranked[0]?.date && !ranked[0].recorded?"最大の引落予定":ranked.length?"支出の最大項目":"支出の記録なし"}</h3></div>
     {(expanded?ranked:ranked.slice(0,1)).map((r,i)=><div className="driver" key={r.key}>
       <div><b>{r.label}</b><strong>{yen(r.amount)}</strong></div>
       <div className="driver-scale"><i style={{width:100*r.amount/(spending||1)+"%",opacity:i===0?1:.55}}/></div>
@@ -388,5 +382,10 @@ function MonthExplanation({result, entries, past}) {
       <table><thead><tr><th></th><th>実績</th><th>予定</th></tr></thead><tbody>{bars.map(([label,value,actual])=><tr key={label}><th>{label}</th><td>{yen(actual)}</td><td>{yen(value-actual)}</td></tr>)}</tbody></table>
 
     </details>
+    <section className="investment-flow"><header><h3>投資振替</h3><small>{investmentIsActual?"実績":"予定"} · 収支外</small></header>
+      <div className="invest-result"><span>{result.invest>0?"口座への純戻し":"投資への純振替"}</span><strong>{yen(Math.abs(result.invest))}</strong></div>
+      {investmentIsActual && outbound+returned>0 && <><div className="transfer-track" aria-hidden="true"><i style={{flex:outbound}}/><i style={{flex:returned}}/></div>
+      <div className="transfer-labels"><span>投資へ　{yen(outbound)}</span><span>口座へ　{yen(returned)}</span></div></>}
+    </section>
   </section>;
 }

@@ -103,3 +103,63 @@
 .month-explain{--chart:var(--ink);--hatch:repeating-linear-gradient(120deg,var(--muted) 0 2px,transparent 2px 5px);font-variant-numeric:tabular-nums}.month-explain header{display:grid;gap:2px}.month-explain header span,.major-heading span,.driver small,.forecast-key{color:var(--muted);font-size:13px}.month-explain header strong{font:650 clamp(32px,8vw,42px)/1.2 var(--num-font)}.month-explain .negative{color:var(--expense)}.forecast-key{display:flex;justify-content:flex-end;gap:12px}.forecast-key span:before{content:"";display:inline-block;width:14px;height:9px;background:var(--chart);margin-right:5px}.forecast-key span+span:before,.forecast-bar i{background:var(--hatch)}.forecast-bar{display:grid;grid-template-columns:2.5em minmax(0,1fr) auto;align-items:center;gap:8px;padding:5px 0}.forecast-bar i,.forecast-bar u{display:block;height:12px}.forecast-bar u{background:var(--chart)}.forecast-bar b,.driver strong{white-space:nowrap}.major-heading,.driver>div:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.major-heading{margin-top:20px;border-top:1px solid var(--line);padding-top:13px}.major-heading h3{margin:0;font-size:16px}.driver{padding:9px 0 4px}.driver-scale{height:5px;background:var(--line);margin:5px 0}.driver-scale i{display:block;height:100%;background:var(--income)}.calculation summary{min-height:44px;padding:12px 0;cursor:pointer;color:var(--income)}.calculation table{width:100%;text-align:right;font-variant-numeric:tabular-nums}.calculation th:first-child{text-align:left}.driver b{overflow-wrap:anywhere}
 .month-flows{display:grid;gap:12px;margin:16px 0}.month-flow-line{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:4px}.month-flow-line span small{font-size:12px;margin-left:8px;color:var(--muted)}.flow-track{grid-column:1/-1}.flow-track i,.flow-track u{display:block;height:9px}.flow-track i{background:var(--hatch)}.flow-track u{background:var(--ink)}.investment-flow{padding:14px 0;border-top:1px solid var(--line)}.month-explain .investment-flow header,.invest-result,.transfer-labels{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.investment-flow h3{margin:0;font-size:16px}.investment-flow small,.transfer-labels{color:var(--muted);font-size:12px}.invest-result{margin-top:6px;font-size:14px}.invest-result strong{font-size:20px}.transfer-track{display:flex;height:5px;gap:2px;margin:7px 0}.transfer-track i:first-child{background:var(--income)}.transfer-track i:last-child{background:var(--muted)}.month-explain .major-heading{margin-top:0}
 .net-chart-title{margin:6px 0 0;font-size:17px}.net-bridge{margin:10px auto 18px;max-width:420px}.net-bridge svg{display:block;width:100%;height:auto}.net-bridge figcaption{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));text-align:center}.net-bridge figcaption span,.net-bridge figcaption b{display:block}.net-bridge figcaption small{font-size:11px;color:var(--muted)}.net-bridge figcaption b{font-size:clamp(13px,3.8vw,18px);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+
+/* Monthly reading order and amount scale */
+.report-sections {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+.report-sections button, .result-actions button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.report-sections button[aria-current] {
+  color: var(--ink);
+  font-weight: 650;
+  box-shadow: inset 0 -2px currentColor;
+}
+.cash-comparison { margin: 20px 0 22px; color: var(--ink); }
+.cash-comparison figcaption { font-size: 15px; font-weight: 600; }
+.cash-comparison figcaption strong {
+  display: block;
+  margin: 4px 0 18px;
+  font: 600 clamp(32px, 8vw, 42px)/1.2 var(--num-font);
+  font-variant-numeric: tabular-nums;
+}
+.cash-comparison figcaption small { font: 600 16px var(--font); margin-left: 6px; }
+.cash-comparison strong[data-deficit="true"] { color: var(--expense); }
+.cash-line { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin-top: 10px; }
+.cash-line small { font-size: 12px; color: var(--muted); }
+.cash-line b, .driver strong, .entry-value strong { font-family: var(--num-font); font-variant-numeric: tabular-nums; }
+.cash-scale { grid-column: 1/-1; display: flex; height: 8px; border-left: 1px solid var(--ink); }
+.cash-scale i { background: var(--muted); }
+.cash-scale .cash-gap {
+  color: var(--income);
+  border-left: 2px solid var(--paper);
+  box-sizing: border-box;
+  background: repeating-linear-gradient(128deg, currentColor 0 2px, transparent 2px 4px);
+}
+.cash-gap[data-deficit="true"] { color: var(--expense); }
+.result-actions { display: flex; justify-content: space-between; }
+.result-actions button { color: var(--income); padding: 0 4px; }
+.overview-result .cash-comparison { margin: 12px 0 0; }
+.ledger-app .take-home { color: var(--ink); background: none; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.pay-report .deduction-list h4 { margin: 16px 0 8px; }
+.ledger-app .journal-row { grid-template-columns: minmax(0,1fr) auto; padding: 11px 0; }
+.journal-row .entry-value { white-space: nowrap; }
+.journal-name small { font-size: 12px; }
+.after-debit { display:flex; justify-content:space-between; align-items:center; padding:8px 0 12px; gap:10px; }
+.after-debit small { display:block; color:var(--muted); font-size:12px; }
+.after-debit b { font:600 19px var(--num-font); font-variant-numeric:tabular-nums; }
+.invest-directions { display:grid; grid-template-columns:1fr; gap:14px; padding:16px 0; border-block:1px solid var(--line); }
+.invest-directions>div { display:grid; grid-template-columns:1fr auto; gap:4px; align-items:baseline; }
+.invest-directions span { padding:0; font-size:15px; color:var(--ink); }
+.invest-directions i { grid-column:1/-1; height:7px; background:var(--income); }
+.invest-directions>div:last-child i { background:var(--muted); }
+
+.invest-directions b { font:600 18px var(--num-font); font-variant-numeric:tabular-nums; }

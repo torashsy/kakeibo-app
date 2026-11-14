@@ -38,10 +38,10 @@ export function PayrollReport({ slips, ym }) {
       <div aria-hidden="true"><i style={{width:(100*total("net")/total("gross"))+"%"}}/></div>
       <small>手取り {Math.round(100*total("net")/total("gross"))}%</small><small>控除 {yen(total("gross")-total("net"))}</small>
     </div>}
-    <details className="deduction-list"><summary>控除の内訳を見る</summary>
+    <section className="deduction-list"><h4>控除の内訳</h4>
     {[...deductions].filter(([,v])=>v).sort((a,b)=>b[1]-a[1]).map(([name,value])=><div className="statement-line deduction" key={name}><span>{name}</span><b>{value>0?"−":"＋"}{yen(Math.abs(value))}</b></div>)}
 
-    </details><details className="pay-breakdown"><summary>支給日別の明細を見る</summary>
+    </section><details className="pay-breakdown"><summary>支給日別の明細を見る</summary>
     <table className="pay-list"><caption>支給日別の明細（金額は円）</caption>
       <thead><tr><th>支給日</th><th>支給額</th><th>控除額</th><th>手取り</th></tr></thead><tbody>
       {active.map(s=>{const id=s.date+s.kind;return <React.Fragment key={id}><tr>

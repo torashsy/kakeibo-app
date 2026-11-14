@@ -1,4 +1,4 @@
-import { CashWaterfall } from "./cash-waterfall";
+import { CashComparison } from "./cash-comparison";
 import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
@@ -28,22 +28,27 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
-      <div className="report-picker"><select aria-label="家計の表示切替" value={section} onChange={e=>setSection(e.target.value)}>
-        {[["month","月の家計"],["spend","カード利用の詳細"],["flow","収支の詳細"],["funds","残高・予定"],["invest","投資"],["pay","給与"]].map(([id,label])=><option key={id} value={id}>{label}</option>)}
-      </select>{section!=="month" && <button onClick={()=>setSection("month")}>‹ ホームへ</button>}</div>
+      <nav className="report-sections" aria-label="家計の表示切替">
+        {[["month","家計"],["funds","残高"],["invest","投資"],["pay","給与"]].map(([id,label])=>
+          <button key={id} aria-current={(section===id || (id==="month" && ["flow","spend"].includes(section)))?"page":undefined} onClick={()=>setSection(id)}>{label}</button>)}
+      </nav>
       {section === "month" && <>
+      <section className="overview-result">
+        <CashComparison title={showOutlook ? "月の収支見込み" : "月の収支実績"}
+          income={showOutlook ? forecast.income : summary.income} expense={showOutlook ? forecast.spending : summary.expense}
+          net={showOutlook ? forecast.net : summary.net}/>
+        <div className="result-actions"><button onClick={()=>setSection("flow")}>実績の内訳 ›</button>{showOutlook && <button onClick={onOpenPlan}>見込みの内訳 ›</button>}</div>
+      </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
       <SpendingPurpose compact onOpen={()=>setSection("spend")} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
-      <button className="flow-link" onClick={()=>setSection("flow")}><span>収入<b>{yen(summary.income)}</b></span><span>支出<b>{yen(summary.expense)}</b></span><span aria-hidden="true">›</span></button>
       </>}
       {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
       {section === "flow" && <>
       <section className="home-flow" aria-label="選択月の収入と支出">
-        <header><h3>月の収支</h3></header>
-        <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
+        <CashComparison title="月の収支実績" income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
-      <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
+      <details open className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
       </details>
@@ -115,6 +120,7 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
     const bills = upcoming.filter(row => row.kind === "card" && row.amount > 0);
     const nextDate = bills[0]?.date;
     const next = bills.filter(row => row.date === nextDate);
+    const afterDebit = points.find(point => point.date === nextDate);
     const totals = new Map();
     for (const bill of next) {
       const name = cards?.find(card => card.name === bill.label)?.paymentAccount || "";
@@ -130,7 +136,9 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
           return name && bal ? <div key={name} className="claim-account"><span>{name} · {bal.asOf || bal.ym+"月度"} 残高</span><b>{yen(bal.amount)}</b><span>この請求を引いた残額</span><strong>{yen(bal.amount-amount)}</strong></div> :
             <div key={name} className="claim-row">{name ? name+"の残高未取得" : "引落口座は未登録"}{!name && <button onClick={onOpenCards}>カード管理 ›</button>}</div>;
         })}
-      </details>}</section>;
+      </details>}
+      {afterDebit && <div className="after-debit"><span>{shortDate(nextDate)} 引落後の見込み<small>{accounts.length}口座合計{salaryNote ? " · 給与未算入" : ""}</small></span><b>{yen(afterDebit.amount)}</b></div>}
+    </section>;
 
   }
   return <section className="k-group home-balance" aria-label="残高の見通し">
@@ -222,15 +230,18 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   if (!groups.size) return <p>この月の投資記録はありません。</p>;
   const ranked = [...groups.values()].sort((a,b)=> b.invested-a.invested);
   const total = ranked.reduce((sum,g)=>sum+g.invested,0);
-  return <section className="statement portfolio"><h3>投資に回した額</h3><strong className="statement-total">{yen(total)}</strong>
+  const returned = ranked.reduce((sum,g)=>sum+g.returned,0);
+  return <section className="statement portfolio"><h3>投資への純振替</h3><strong className="statement-total">{yen(total-returned)}</strong>
+    <div className="invest-directions">{[["投資へ",total],["口座へ戻った額",returned]].map(([label,amount])=>
+      <div key={label}><span>{label}</span><b>{yen(amount)}</b><i aria-hidden="true" style={{width:100*amount/Math.max(total,returned,1)+"%"}}/></div>)}</div>
     <h4 className="list-heading">振替先別</h4>
     {ranked.map(g=><details className="destination" key={g.name}><summary>
-      <span>{g.name}<small>{total ? Math.round(100*g.invested/total) : 0}%</small></span><b>{yen(g.invested)}</b>
+      <span>{g.name}{ranked.length>1 && <small>{total ? Math.round(100*g.invested/total) : 0}%</small>}</span><b>{yen(g.invested)}</b>
       <small className="action-caption">明細 {g.rows.length}件 ›</small>
-      <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>
+      {ranked.length>1 && <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>}
     </summary>{g.rows.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(r=><div className="statement-line" key={r.id}><span>{r.date?.slice(5)}　{r.method}{r.amount<0?"・戻し":""}</span><b>{yen(r.amount)}</b></div>)}
     </details>)}
-    {ranked.filter(g=>g.returned>0).map(g=><div key={g.name} className="statement-line"><span>{g.name}からの戻り</span><b>{yen(g.returned)}</b></div>)}
+    {ranked.filter(g=>ranked.length>1 && g.returned>0).map(g=><div key={g.name} className="statement-line"><span>{g.name}からの戻り</span><b>{yen(g.returned)}</b></div>)}
   </section>;
 }
 const alignedRow = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", padding: "11px 14px", borderBottom: `1px solid ${LINE}` };
