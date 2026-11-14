@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { bankTransactions } from '../bank-feed';
 import { yen } from '../utils';
 
-const categories = ['サブスク', '携帯代', '外食', '食料品', 'その他の食費', 'その他の分類済み', '未分類'];
+const categories = ['サブスク', '携帯代', '交通費', '外食', '投資', '食料品', 'その他の食費', 'その他の分類済み', '未分類'];
 
 export function MonthlyCardSpending({ snapshot }) {
   const rows = useMemo(() => bankTransactions(snapshot).filter(row => row.id.startsWith('mf-card:')), [snapshot]);
