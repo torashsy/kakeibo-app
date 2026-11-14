@@ -25,9 +25,16 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
+      <section className="home-flow" aria-label="選択月の収入と支出">
+        <header><h3>収支</h3><strong>{summary.net > 0 ? "+" : ""}{yen(summary.net)}</strong></header>
+        {[["収入",summary.income,GREEN],["支出",summary.expense,RED]].map(([label,value,color]) =>
+          <div className="home-flow-row" key={label}>
+            <span>{label}</span><div aria-hidden="true"><i style={{background:color,width:Math.abs(value)/Math.max(1,Math.abs(summary.income),Math.abs(summary.expense))*100+"%"}}/></div><b>{yen(value)}</b>
+          </div>)}
+      </section>
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
-      <div className="home-month"><span>{ymLabel(ym)}の収支</span><strong>{yen(summary.net)}</strong><small>収入 {yen(summary.income)}　支出 {yen(summary.expense)}</small></div>
+
       <details className="k-group"><summary>月度の詳細</summary>
       <details className="k-group">
         <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
