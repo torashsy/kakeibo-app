@@ -77,7 +77,7 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
     const date = day && [first.slice(0,7), end.slice(0,7)].map(month => month + "-" + day)
       .find(value => value >= first && value <= end && new Date(value).toISOString().startsWith(value));
     if (date && date > today) events.push({date, label:"給与（計画額・支給日推定）", change:forecast.salaryIncome});
-    else salaryNote = "給与計画 " + yen(forecast.salaryIncome) + " は今後の入金日が分かるまで残高見込みに含めません。";
+    else salaryNote = "給与未算入 · 入金日未定";
   }
   const byDate = new Map();
   for (const event of events) {
@@ -119,14 +119,16 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
           })}
         </svg>
       </figure>
-      <div className="home-next"><span>次の入出金　{shortDate(points[1].date)}</span><strong>{points[1].rows.map(row=>row.label).join("・")}</strong><b>{yen(points[1].amount-start)}</b></div>
-      <details><summary>予定をすべて見る（{events.length}件）</summary>
+      <details className="home-schedule"><summary>
+        <span>次の入出金</span><time dateTime={points[1].date}>{shortDate(points[1].date)}</time>
+        <strong>{points[1].amount > start ? "+" : ""}{yen(points[1].amount-start)}</strong>
+      </summary>
         {points.slice(1).map(({date, rows, amount}) => <div key={date} style={{padding:"8px 0"}}>
           <b>{shortDate(date)}　予定反映後 {yen(amount)}</b>
           {rows.map((row,index) => <div key={index} style={styles.settingRow}><span>{row.label}</span><span>{row.change>0 ? "+" : ""}{yen(row.change)}</span></div>)}
         </div>)}
       </details>
-    </> : <p>締め日までに金額と日付が分かっている入出金予定はありません。</p>}
+    </> : <p>登録予定なし</p>}
     {salaryNote && <small>{salaryNote}</small>}
   </section>;
 }
@@ -155,15 +157,13 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     const from=edge; edge+=100*g.amount/positive;
     return g.color+" "+from+"% "+edge+"%";
   }).join(",");
-  const unresolved = [...groups.at(-1).rows].sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
+  groups.at(-1).rows.sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
   return <section className="k-group home-spending" aria-label="カードの使い道"><header><h3>カードの使い道</h3><strong>{visible.length ? yen(visible.reduce((sum,g)=>sum+g.amount,0)) : ""}</strong></header>
     {visible.length ? <><div className="home-chart">
       <div aria-hidden="true" style={{width:"100%",maxWidth:180,aspectRatio:"1",borderRadius:"50%",background:positive?"conic-gradient("+gradient+")":"#ccc",maskImage:"radial-gradient(circle,transparent 46%,black 47%)"}}/>
       <div>{visible.map(g=><details key={g.label}><summary className="home-category"><i style={{background:g.color}}/><span>{g.label}</span><b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
-        {g.rows.map(r=><div key={r.id} style={{fontSize:12,padding:"4px 0"}}>{shortDate(r.date)} {r.description}　{yen(-r.amount)} {r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</div>)}</details>)}</div>
-    </div></> : <p>この月度の利用明細はまだありません。</p>}
-    {unresolved.length>0 && <details><summary>この月度の用途未確認（{unresolved.length}件）</summary>
-      <table style={{width:"100%",fontSize:12}}><caption>金額の大きい順</caption><tbody>{unresolved.map(r=><tr key={r.id}><td>{r.date}</td><td>{r.description}</td><td style={{textAlign:"right"}}>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</td></tr>)}</tbody></table></details>}
+        {g.rows.map(r=><div key={r.id} className="home-purchase"><time dateTime={r.date}>{shortDate(r.date)}</time><span>{r.description}{r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</details>)}</div>
+    </div></> : <p>利用明細なし</p>}
   </section>;
 }
 function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
