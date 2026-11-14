@@ -8,6 +8,7 @@ import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
 
 export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
+  const [section, setSection] = useState("month");
   const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
@@ -26,31 +27,41 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
+      <nav className="report-index" aria-label="ホームの表示">
+        {[["month","月の収支"],["funds","残高・予定"],["invest","投資"],["pay","給与"]].map(([id,label]) =>
+          <button key={id} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}
+      </nav>
+      {section === "month" && <>
       <section className="home-flow" aria-label="選択月の収入と支出">
         <header><h3>{ymLabel(ym)}の収支</h3></header>
         <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
-      {showOutlook && <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
+      <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
+      <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
+      <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
+      </details>
 
       <MonthlyNetChart entries={entries || []} ym={ym} />
+      </>}
+      {section === "funds" && <>
+      {showOutlook && <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
+
+      {!showOutlook && !hasBal && <p>この月の口座残高は未登録です。</p>}
+      {!showOutlook && <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />}
+      {showOutlook && <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
       {showOutlook && <section className="k-group">
         <h3>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</h3>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
           ["支出",forecast.spending,forecast.spendingSource], ["投資振替",forecast.invest,forecast.investRecorded]].map(([label,amount,source]) =>
           <div key={label} style={alignedRow}><span>{label} <small>{typeof source === "string" ? source : source ? "実績" : "計画"}</small></span><strong style={alignedAmount}>{yen(amount)}</strong></div>)}
       </section>}
-      {showOutlook && <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
-      <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />
-      <PayrollReport slips={paySlips} />
-      <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
-      <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
-      <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
-      </details>
-
       {showOutlook && <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />}
       {showOutlook && <AnnualOutlookCard forecasts={forecasts} plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />}
 
+      </>}
+      {section === "invest" && <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />}
+      {section === "pay" && <PayrollReport slips={paySlips} />}
     </div>
   );
 }
@@ -186,7 +197,7 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const confirmed = bank.filter(e => e.mfInvestmentId || e.id?.startsWith("mf-invest:"));
   const manual = bank.filter(e => !confirmed.includes(e));
   const cards = Object.values(snapshot?.investmentCardRows || {}).filter(r => cycleYm(r.date, cutoff) === ym);
-  if (!bank.length && !cards.length) return null;
+  if (!bank.length && !cards.length) return <p>この月の投資記録はありません。</p>;
   const sum = rows => rows.reduce((total, r) => total + r.amount, 0);
   const groups = [
     {label:"銀行振替", rows:confirmed, factor:1, color:"#357c72"},
@@ -358,7 +369,7 @@ function BreakdownGroup({ label, total, rows, valueKey, open, onToggle, showMemo
 }
 
 function MonthlyNetChart({ entries, ym }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const months = useMemo(() => Array.from({ length: 6 }, (_, i) => addMonth(ym, i - 5)), [ym]);
   const points = useMemo(() => months.map((mo) => ({
     mo,

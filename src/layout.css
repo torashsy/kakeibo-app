@@ -39,3 +39,7 @@
 .net-months h4{margin:12px 0}.net-columns{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:3px}
 .net-columns button{padding:0;border:0;background:none;color:inherit;cursor:pointer}.net-columns button:disabled{opacity:.4}.net-columns button[aria-pressed=true] small{font-weight:800;text-decoration:underline}
 .net-column{height:92px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:flex-end;padding:0 15%}.net-column i{display:block}.net-key{justify-content:flex-start;flex-wrap:wrap;margin:10px 0;font-size:12px}.net-key span:before{content:"";background:#378575;display:inline-block;width:8px;height:8px;margin-right:4px}.net-key span+span:before{background:#bc8747}
+.report-index {display:flex;border-bottom:1px solid var(--line);gap:clamp(8px,3vw,22px)}
+.report-index button {font:inherit;font-size:14px;cursor:pointer;color:var(--muted);padding:10px 2px;background:transparent;border:0;border-bottom:2px solid transparent}
+.report-index button[aria-pressed=true] {color:var(--ink);border-bottom-color:currentColor;font-weight:700}
+.ledger-app .home-overview>.home-flow,.ledger-app .home-overview>.home-spending,.ledger-app .home-overview>.home-balance {border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0 18px}

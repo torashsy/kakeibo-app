@@ -19,7 +19,7 @@ export function PayrollReport({ slips }) {
   const [expanded, setExpanded] = useState("");
   const all = Object.values(slips || {}).sort((a,b) => b.date.localeCompare(a.date) || a.kind.localeCompare(b.kind));
   const years = [...new Set(all.map(s => s.date.slice(0,4)))];
-  if (!years.length) return null;
+  if (!years.length) return <p>給与明細はまだありません。</p>;
   const year = years.includes(choice) ? choice : years[0];
   const rows = all.filter(s => s.date.startsWith(year)).map(s => {
     const groups = { 税金: 0, 社会保険: 0, その他控除: 0 };
