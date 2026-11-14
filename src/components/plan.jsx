@@ -3,7 +3,7 @@ import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
   num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
   plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
-  plannedDebt, estimateSalaryTakeHome, plannedSalaryBreakdown,
+  monthForecast, plannedDebt, estimateSalaryTakeHome, plannedSalaryBreakdown,
   hasBalRecord, balTotalOf, pendingCardClaims, monthHasInput, isMonthClosed,
   PLAN_OTHER_INCOME, PLAN_VARIABLE, PLAN_INVEST,
 } from '../utils';
@@ -16,7 +16,7 @@ import { AnnualMatrix } from './annual-matrix.jsx';
 //  - 見通し: 入力が始まった/締めた月は実績、それ以外は計画。残高は実績を引き継いで先へ試算。
 //  - 計画: セルをタップして収入・変動費・投資を編集(この月/毎月の標準)。固定費は定期費から自動表示。
 //  - 差異: 実績−計画。
-export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym, closedMonths, onToggleClosedMonth, onOpenRecurring }) {
+export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries, config, ym, closedMonths, onToggleClosedMonth, onOpenRecurring }) {
   const [mode, setMode] = useState("forecast"); // forecast | plan | diff
   const [edit, setEdit] = useState(null);
   const [salaryEdit, setSalaryEdit] = useState(null);
@@ -54,7 +54,12 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
                   : k === "net" ? plannedNet(plans, subs, mo, debt, cards, config?.cycleCutoffDay || 0) : 0
   );
   const isActualMonth = (mo) => isMonthClosed(closedMonths, mo) || (entriesByMonth[mo] || []).length > 0;
-  const forecastOf = (k, mo) => (isActualMonth(mo) ? actualOf(k, mo) : planOf(k, mo));
+  const projected = useMemo(() => Object.fromEntries(months.map(mo => [mo, forecasts?.[mo] ||
+    monthForecast(plans, subs, entriesByMonth[mo], mo, isMonthClosed(closedMonths, mo), debt, cards, config?.cycleCutoffDay)])),
+    [months, forecasts, plans, subs, entriesByMonth, closedMonths, debt, cards, config?.cycleCutoffDay]);
+  const forecastOf = (k, mo) => k.startsWith("salaryItem|")
+    ? (projected[mo].salaryRecorded ? actualOf(k, mo) : planOf(k, mo))
+    : projected[mo][k] ?? planOf(k, mo);
   // 差異は実績が入力済み（または記録なしで確定済み）の月だけ表示する。
   const cellOf = (k, mo) => (mode === "diff" ? (isActualMonth(mo) ? actualOf(k, mo) - planOf(k, mo) : 0) : mode === "plan" ? planOf(k, mo) : forecastOf(k, mo));
 
@@ -69,7 +74,7 @@ export function PlanView({ plans, onSave, subs, cards, debt, entries, config, ym
       res[mo] = { bal, anchored: hasBalRecord(es) };
     }
     return res;
-  }, [entries, months, entriesByMonth, plans, subs, cards, debt, mode, config?.cycleCutoffDay]);
+  }, [entries, months, entriesByMonth, plans, subs, cards, debt, projected, closedMonths, mode, config?.cycleCutoffDay]);
 
   const diffColor = (k, v) => (v === 0 ? MUTED : k === "spending" ? (v > 0 ? RED : GREEN) : k === "invest" ? MUTED : (v > 0 ? GREEN : RED));
   const cellText = (v) => (v === 0 ? "" : (mode === "diff" && v > 0 ? "+" + num(v) : num(v)));

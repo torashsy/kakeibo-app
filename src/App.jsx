@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, cycleEndDate, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migrateCard, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { bankTransactions } from "./bank-feed";
+import { monthForecast, upcomingDebits, cycleStartDate, fyStartOf, planMonths, ymLabel, uid, cycleEndDate, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migrateCard, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -388,6 +389,17 @@ export default function App() {
   const summary = useMemo(() => computeSummary(reportMonth), [reportMonth]);
   const prevBalTotal = useMemo(() => balTotalAsOf(reportEntries, addMonth(ym, -1)), [reportEntries, ym]);
 
+  const forecasts = useMemo(() => {
+    const snapshot = financeCanApply ? financeFeed?.bankSnapshot : null;
+    const purchases = bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:"));
+    const cutoff = config.cycleCutoffDay || 0;
+    return Object.fromEntries(planMonths(fyStartOf(ym)).map(month => {
+      const rows = reportEntries.filter(e => e.ym === month);
+      const bills = upcomingDebits(rows, cards, debt, subs, cutoff, month, cycleStartDate(month, cutoff), 30, snapshot?.upcomingCardDebits, purchases);
+      return [month, monthForecast(plans, subs, rows, month, closedMonths.includes(month), debt, cards, cutoff, bills)];
+    }));
+  }, [ym, reportEntries, financeCanApply, financeFeed, plans, subs, cards, debt, closedMonths, config.cycleCutoffDay]);
+
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
   return (
@@ -409,9 +421,9 @@ export default function App() {
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
         {tab === "today" && <FinanceFeedPanel accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onOpen={() => setTab("finance")} />}
         {tab === "finance" && <SubScreen title="明細・照合" onBack={() => setTab("today")}><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
-        {tab === "today" && <Summary paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} />}
+        {tab === "today" && <Summary forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
-        {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); setTab("recurring"); }} />}
+        {tab === "plan" && <PlanView forecasts={forecasts} plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); setTab("recurring"); }} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}

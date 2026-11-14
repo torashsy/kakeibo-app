@@ -5,7 +5,7 @@ import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
 
-export function Summary({ paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
+export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
   const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
@@ -19,6 +19,7 @@ export function Summary({ paySlips, snapshot, scheduledDebits, summary, balances
   const claimStates = useMemo(() => cardClaimStates(cards, debt || {}, subs, monthEntries, ym, config.cycleCutoffDay), [cards, debt, subs, monthEntries, ym, config.cycleCutoffDay]);
   const purchases = useMemo(() => bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:")), [snapshot]);
   const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym, undefined, 30, scheduledDebits, purchases), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits, purchases]);
+  const forecast = forecasts[ym];
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div style={{ padding: "4px 2px" }}>
@@ -28,6 +29,12 @@ export function Summary({ paySlips, snapshot, scheduledDebits, summary, balances
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}　投資振替 {yen(summary.invest)}</div>
       </div>
+      <details className="k-group">
+        <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
+        {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
+          ["支出",forecast.spending,forecast.spendingSource], ["投資振替",forecast.invest,forecast.investRecorded]].map(([label,amount,source]) =>
+          <div key={label} style={alignedRow}><span>{label} <small>{typeof source === "string" ? source : source ? "実績" : "計画"}</small></span><strong style={alignedAmount}>{yen(amount)}</strong></div>)}
+      </details>
       <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
       <PayrollReport slips={paySlips} />
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
@@ -36,7 +43,7 @@ export function Summary({ paySlips, snapshot, scheduledDebits, summary, balances
       </details>
       <details className="k-group"><summary>予算・年間の見通し</summary>
       <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
-      <AnnualOutlookCard plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />
+      <AnnualOutlookCard forecasts={forecasts} plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />
       <MonthlyNetChart entries={entries || []} ym={ym} />
       </details>
     </div>
@@ -288,8 +295,8 @@ function SpendingMeter({ plans, subs, cards, debt, monthEntries, ym, startDay })
 }
 
 // 今年の着地見込み。年度末の収支(累計)と残高の見込みを一目で。タップで計画タブへ。
-function AnnualOutlookCard({ plans, subs, cards, debt, entries, closedMonths, config, ym, onOpenPlan }) {
-  const o = useMemo(() => annualOutlook(plans, subs, entries || [], closedMonths, ym, debt, cards, config?.cycleCutoffDay || 0), [plans, subs, cards, debt, entries, closedMonths, config?.cycleCutoffDay, ym]);
+function AnnualOutlookCard({ forecasts, plans, subs, cards, debt, entries, closedMonths, config, ym, onOpenPlan }) {
+  const o = useMemo(() => annualOutlook(plans, subs, entries || [], closedMonths, ym, debt, cards, config?.cycleCutoffDay || 0, forecasts), [forecasts, plans, subs, cards, debt, entries, closedMonths, config?.cycleCutoffDay, ym]);
   return (
     <button style={{ ...styles.detailCard, ...alignedRow, border: `1px solid ${LINE}`, borderRadius: "var(--radius)", background: "var(--card-bg)", marginBottom: 10, fontFamily: "inherit", cursor: onOpenPlan ? "pointer" : "default", textAlign: "left" }} onClick={() => onOpenPlan && onOpenPlan()}>
       <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={styles.chev}>›</span>年度末見込み</span>

@@ -1075,6 +1075,26 @@ export function planVsActualForMonth(plan: Plan, subs: Sub[] | null | undefined,
   return { planIncome, actualIncome, planSpending, actualSpending, planNet, actualNet, diff: actualNet - planNet };
 }
 
+export function monthForecast(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], ym: string, closed: boolean,
+  debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoff = 0, bills: UpcomingDebit[] = []) {
+  const actual = computeSummary(entries);
+  const hasRole = (role: string) => entries.some(e => e.cat === "account" && acctRole(e.item) === role);
+  const salaryRecorded = closed || entries.some(e => e.cat === "salary");
+  const otherRecorded = closed || hasRole("in");
+  const investRecorded = closed || hasRole("transfer");
+  const salaryIncome = salaryRecorded ? actual.salaryIncome : plannedSalaryIncome(plan, ym);
+  const otherIncome = otherRecorded ? actual.otherIncome : plannedOtherIncome(plan, ym);
+  const invest = investRecorded ? actual.invest : plannedInvest(plan, ym);
+  const recordedCards = new Set(entries.filter(e => e.cat === "card").map(e => e.item));
+  const additional = bills.filter(b => b.kind === "card" && !recordedCards.has(b.label)).reduce((sum,b) => sum + b.amount, 0);
+  const knownSpending = actual.expense + additional;
+  const budget = plannedSpending(plan, subs, ym, debt, cards, cutoff);
+  const spending = closed ? actual.expense : Math.max(knownSpending, budget);
+  const income = salaryIncome + otherIncome;
+  return {salaryIncome, otherIncome, income, spending, invest, net: income - spending + invest, salaryRecorded, otherRecorded, investRecorded,
+    spendingSource: closed ? "実績" : budget > knownSpending ? "月の支出計画" : additional ? "記録・引落見込み" : "実績"};
+}
+
 export interface AnnualOutlook {
   fyStart: number;       // 年度開始年(4月)
   netForecast: number;   // 年度の収支(累計)見込み: 実績が入った月は実績、未入力の月は計画
@@ -1085,7 +1105,7 @@ export interface AnnualOutlook {
 
 // 今の月(ym)が属する年度について、年度末の収支(累計)と残高の見込みを算出する。
 // 入力が始まった/締めた月は実績、未入力の月は計画。残高は実績記録があればアンカーし、無ければ収支で試算。
-export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): AnnualOutlook {
+export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entries: Entry[], closedMonths: string[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0, forecasts?: Record<string, ReturnType<typeof monthForecast>>): AnnualOutlook {
   const fyStart = fyStartOf(ym);
   const months = planMonths(fyStart);
   const byMonth: Record<string, Entry[]> = {}; for (const m of months) byMonth[m] = [];
@@ -1096,9 +1116,9 @@ export function annualOutlook(plan: Plan, subs: Sub[] | null | undefined, entrie
   for (const mo of months) {
     const es = byMonth[mo];
     const isActual = isMonthClosed(closedMonths, mo) || es.length > 0;
-    const net = isActual ? computeSummary(es).net : plannedNet(plan, subs, mo, debt, cards, cutoffDay);
+    const net = (forecasts?.[mo] || monthForecast(plan, subs, es, mo, isMonthClosed(closedMonths, mo), debt, cards, cutoffDay)).net;
     netForecast += net;
-    if (isActual) actualNet += net;
+    if (isActual) actualNet += computeSummary(es).net;
     if (hasBalRecord(es)) bal = balTotalOf(es) - pendingCardClaims(es, cards, mo, cutoffDay); else bal += net;
   }
   return { fyStart, netForecast, actualNet, balStart, balEnd: bal };
