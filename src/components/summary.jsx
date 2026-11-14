@@ -26,14 +26,17 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   return (
     <div className="home-overview">
       <section className="home-flow" aria-label="選択月の収入と支出">
-        <header><h3>収支</h3><strong>{summary.net > 0 ? "+" : ""}{yen(summary.net)}</strong></header>
-        {[["収入",summary.income,GREEN],["支出",summary.expense,RED]].map(([label,value,color]) =>
-          <div className="home-flow-row" key={label}>
-            <span>{label}</span><div aria-hidden="true"><i style={{background:color,width:Math.abs(value)/Math.max(1,Math.abs(summary.income),Math.abs(summary.expense))*100+"%"}}/></div><b>{yen(value)}</b>
-          </div>)}
+        <header><h3>月間収支</h3><span>{ymLabel(ym)}</span></header>
+        <strong className="flow-net">{summary.net > 0 ? "+" : ""}{yen(summary.net)}</strong>
+        <div className="flow-comparison">
+          {[["収入",summary.income,GREEN],["支出",summary.expense,RED]].map(([label,value,color]) =>
+            <div key={label}><span>{label}</span><b>{yen(value)}</b>
+              <div className="flow-track" aria-hidden="true"><i style={{background:color,width:Math.abs(value)/Math.max(1,Math.abs(summary.income),Math.abs(summary.expense))*100+"%"}}/></div>
+            </div>)}
+        </div>
       </section>
-      <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
 
       <details className="k-group"><summary>月度の詳細</summary>
       <details className="k-group">
@@ -97,6 +100,7 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
     const change = rows.reduce((sum, row) => sum + row.change, 0);
     points.push({date, rows, amount:points.at(-1).amount + change});
   }
+  const nextDebit = points.find(point => point.rows.some(row => row.change < 0));
   const lowest = points.reduce((min, point) => point.amount < min.amount ? point : min);
   const high = Math.max(...points.map(point => point.amount));
   const span = Math.max(86400000, Date.parse(end) - Date.parse(today));
@@ -109,14 +113,11 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
     return index ? `H ${x} V ${y}` : `M ${x} ${y}`;
   }).join(" ") + " H 292";
   return <section className="k-group home-balance" aria-label="残高の見通し">
-    <details className="home-accounts"><summary><span>口座残高</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
+    <h3>これからの残高</h3><details className="home-accounts"><summary><span>現在</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
     </details>
     {points.length > 1 ? <>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:14}}>
-        <div><small>最低残高 · {lowest === points[0] ? "現在" : shortDate(lowest.date)}</small><br/><strong style={{color:lowest.amount < 0 ? RED : ACCENT}}>{yen(lowest.amount)}</strong></div>
-        <div><small>締め日 · {shortDate(end)}</small><br/><strong>{yen(points.at(-1).amount)}</strong></div>
-      </div>
+      {nextDebit && <div className="balance-milestone"><span>{shortDate(nextDebit.date)} 引落日の見込み残高</span><strong>{yen(nextDebit.amount)}</strong></div>}
       <figure style={{margin:"8px 0"}}>
         <svg viewBox="0 0 302 76" role="img" aria-label="登録残高から締め日までの残高見込み" style={{width:"100%",height:90}}>
           <path d={line} fill="none" stroke={ACCENT} strokeWidth="3"/>
@@ -125,6 +126,7 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
             return <circle key={i} cx={x} cy={y} r={point === lowest ? 4 : 3} fill={point === lowest && point.amount < 0 ? RED : ACCENT}><title>{point.date}　{yen(point.amount)}</title></circle>;
           })}
         </svg>
+        <figcaption className="balance-axis"><span>最低　{shortDate(lowest.date)}<b>{yen(lowest.amount)}</b></span><span>締め日　{shortDate(end)}<b>{yen(points.at(-1).amount)}</b></span></figcaption>
       </figure>
       <details className="home-schedule"><summary>
         <span>次の入出金</span><time dateTime={points[1].date}>{shortDate(points[1].date)}</time>
@@ -167,7 +169,9 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
   groups.at(-1).rows.sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
   return <section className="k-group home-spending" aria-label="カードの使い道"><header><h3>カードの使い道</h3><strong>{visible.length ? yen(visible.reduce((sum,g)=>sum+g.amount,0)) : ""}</strong></header>
     {visible.length ? <><div className="home-chart">
-      <div aria-hidden="true" style={{width:"100%",maxWidth:180,aspectRatio:"1",borderRadius:"50%",background:positive?"conic-gradient("+gradient+")":"#ccc",maskImage:"radial-gradient(circle,transparent 46%,black 47%)"}}/>
+      <div className="purpose-ring" style={{"--ring-fill":positive?"conic-gradient("+gradient+")":"var(--line)"}} aria-hidden="true">
+        {positive>0 && <span><small>{visible[0].label}</small><b>{Math.round(visible[0].amount/positive*100)}%</b></span>}
+      </div>
       <div>{visible.map(g=><details key={g.label}><summary className="home-category"><i style={{background:g.color}}/><span>{g.label}</span><b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
         {g.rows.map(r=><div key={r.id} className="home-purchase"><time dateTime={r.date}>{shortDate(r.date)}</time><span>{r.description}{r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</details>)}</div>
     </div></> : <p>利用明細なし</p>}

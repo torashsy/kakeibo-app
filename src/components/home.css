@@ -44,3 +44,25 @@
 .home-flow-row div {background:var(--border)}
 .home-flow-row i {display:block}
 .home-flow-row b {text-align:right}
+.home-overview {font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;line-height:1.45;letter-spacing:.005em}
+.home-flow {background:linear-gradient(125deg,var(--accent-soft),var(--card-bg) 85%);padding:20px}
+.home-flow header {margin-bottom:2px}
+.home-flow header span,.flow-comparison span,.balance-axis,.balance-milestone span {font-size:13px;color:var(--muted)}
+.flow-net {display:block;font-size:clamp(32px,9vw,44px);line-height:1.2;letter-spacing:-.045em;font-weight:700}
+.flow-comparison {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}
+.flow-comparison b,.balance-axis b {display:block;color:var(--ink);font-size:17px}
+.flow-track {margin-top:6px;background:var(--line)}
+.flow-track,.flow-track i {height:7px;border-radius:5px}
+.flow-track i {display:block}
+.home-balance h3 {margin:0 0 12px;font-size:17px}
+.home-accounts>summary strong {font-size:22px}
+.balance-milestone {display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:12px 0 0;border-top:1px solid var(--line)}
+.balance-milestone strong {font-size:22px}
+.balance-axis {display:flex;justify-content:space-between;gap:8px}
+.balance-axis span:last-child {text-align:right}
+.purpose-ring {display:grid;place-items:center;align-self:center;justify-self:center;width:100%;max-width:155px;aspect-ratio:1;border-radius:50%;background:var(--ring-fill);position:relative}
+.purpose-ring:before {content:"";position:absolute;inset:15%;border-radius:50%;background:var(--card-bg)}
+.purpose-ring span {position:relative;text-align:center}
+.purpose-ring small,.purpose-ring b {display:block}
+.purpose-ring small {font-size:11px}
+.purpose-ring b {font-size:clamp(17px,5vw,24px);line-height:1.15}
