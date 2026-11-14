@@ -1,11 +1,11 @@
 import { bankTransactions } from './bank-feed';
-import { cardPaymentDate, cycleYm } from './utils';
+import { cardPaymentDate, cycleYm, debtValueTotal } from './utils';
 
 const norm = value => String(value || '').normalize('NFKC').trim().toLowerCase();
 const aliases = { view: 'view card', epos: 'epos card' };
 const account = name => aliases[norm(name)] || norm(name);
 
-export function compareManual(snapshot, entries, cards, memos, cutoff) {
+export function compareManual(snapshot, entries, cards, memos, cutoff, debt) {
   const purchases = bankTransactions(snapshot).filter(t => t.id.startsWith('mf-card:'));
   const manual = entries.filter(e => e.cat === 'card' && !e.src && !e.autoKind && !e.imp);
   const bills = manual.map(e => {
@@ -21,7 +21,8 @@ export function compareManual(snapshot, entries, cards, memos, cutoff) {
     const settlement = proof && candidates.length === 1 && proof.card === e.item &&
       proof.month === e.ym && proof.amount === Math.abs(e.amount) &&
       cycleYm(proof.date, cutoff) === e.ym ? proof : null;
-    return { settlement, name: e.item, month: e.ym, amount: Math.abs(e.amount), sum, count: items.length,
+    const installments = debtValueTotal(debt?.[e.item]?.[e.ym]);
+    return { installments, settlement, name: e.item, month: e.ym, amount: Math.abs(e.amount), sum, count: items.length,
       status: !items.length ? '対応明細なし' : candidates.length !== 1 ? '請求が複数・要確認' : sum === Math.abs(e.amount) ? '合計一致' : '差額あり' };
   });
   const keys = new Map();
