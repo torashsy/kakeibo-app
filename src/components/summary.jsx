@@ -2,6 +2,7 @@ import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, cycleStartDate, addMonth, computeSummary } from '../utils';
+import "./home.css";
 import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
@@ -23,15 +24,10 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   const forecast = forecasts[ym];
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
-    <div style={{ padding: "4px 2px" }}>
-      <div style={styles.heroCard}>
-        <div style={styles.heroLabel}>今月の収支</div>
-        <div
-          style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
-        <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
-      </div>
+    <div className="home-overview">
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      <div className="home-month"><span>{ymLabel(ym)}の収支</span><strong>{yen(summary.net)}</strong><small>収入 {yen(summary.income)}　支出 {yen(summary.expense)}</small></div>
       <details className="k-group">
         <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
@@ -40,7 +36,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       </details>
       <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
       <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />
-      <PayrollReport slips={paySlips} />
+      {Object.keys(paySlips || {}).length > 0 && <details className="k-group"><summary>給与・賞与の明細</summary><PayrollReport slips={paySlips} /></details>}
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
@@ -103,8 +99,8 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
     const {x,y} = position(point);
     return index ? `H ${x} V ${y}` : `M ${x} ${y}`;
   }).join(" ") + " H 292";
-  return <section className="k-group" aria-label="残高の見通し"><h3>残高の見通し</h3>
-    <details><summary>現在の登録残高　<strong>{yen(start)}</strong></summary>
+  return <section className="k-group home-balance" aria-label="残高の見通し">
+    <details className="home-accounts"><summary><span>口座残高</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
     </details>
     {points.length > 1 ? <>
@@ -121,7 +117,8 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
           })}
         </svg>
       </figure>
-      <details><summary>入出金予定（{events.length}件）</summary>
+      <div className="home-next"><span>次の入出金　{shortDate(points[1].date)}</span><strong>{points[1].rows.map(row=>row.label).join("・")}</strong><b>{yen(points[1].amount-start)}</b></div>
+      <details><summary>予定をすべて見る（{events.length}件）</summary>
         {points.slice(1).map(({date, rows, amount}) => <div key={date} style={{padding:"8px 0"}}>
           <b>{shortDate(date)}　予定反映後 {yen(amount)}</b>
           {rows.map((row,index) => <div key={index} style={styles.settingRow}><span>{row.label}</span><span>{row.change>0 ? "+" : ""}{yen(row.change)}</span></div>)}
@@ -157,12 +154,12 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     return g.color+" "+from+"% "+edge+"%";
   }).join(",");
   const unresolved = purchases.filter(r=>["未分類","通販（商品不明）"].includes(r.spendingCategory || "未分類")).sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
-  return <section className="k-group" aria-label="カードの使い道"><h3>カードの使い道</h3>
-    {visible.length ? <><div style={{display:"grid",gridTemplateColumns:"minmax(104px, 2fr) minmax(130px, 3fr)",gap:14,alignItems:"center"}}>
+  return <section className="k-group home-spending" aria-label="カードの使い道"><header><h3>カードの使い道</h3><strong>{visible.length ? yen(visible.reduce((sum,g)=>sum+g.amount,0)) : ""}</strong></header>
+    {visible.length ? <><div className="home-chart">
       <div aria-hidden="true" style={{width:"100%",maxWidth:180,aspectRatio:"1",borderRadius:"50%",background:positive?"conic-gradient("+gradient+")":"#ccc",maskImage:"radial-gradient(circle,transparent 46%,black 47%)"}}/>
-      <div>{visible.map(g=><details key={g.label}><summary style={{padding:"6px 0"}}><span style={{color:g.color}}>●</span> {g.label} <b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
+      <div>{visible.map(g=><details key={g.label}><summary className="home-category"><i style={{background:g.color}}/><span>{g.label}</span><b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
         {g.rows.map(r=><div key={r.id} style={{fontSize:12,padding:"4px 0"}}>{shortDate(r.date)} {r.description}　{yen(-r.amount)} {r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</div>)}</details>)}</div>
-    </div><small>返金差引　{yen(visible.reduce((sum,g)=>sum+g.amount,0))} · 積立・チャージ除く{visible.some(g=>g.amount<0) && " · 円の割合は差引がプラスの項目のみ"}</small></> : <p>この月度の利用明細はまだありません。</p>}
+    </div><small>返金差引・積立とチャージを除く{visible.some(g=>g.amount<0) && " · 円の割合は差引がプラスの項目のみ"}</small></> : <p>この月度の利用明細はまだありません。</p>}
     {unresolved.length>0 && <details><summary>用途未確認（全期間 {unresolved.length}件）</summary>
       <table style={{width:"100%",fontSize:12}}><caption>金額の大きい順</caption><tbody>{unresolved.map(r=><tr key={r.id}><td>{r.date}</td><td>{r.description}</td><td style={{textAlign:"right"}}>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</td></tr>)}</tbody></table></details>}
   </section>;
@@ -268,7 +265,7 @@ function CardClaimStatusList({ rows }) {
   );
 }
 function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   
   const nextDate = rows[0]?.date;
   const nextAmount = rows.filter(row => row.date === nextDate).reduce((sum,row) => sum + row.amount, 0);
