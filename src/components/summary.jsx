@@ -54,16 +54,24 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   );
 }
 function CashSplit({income, expense, net}) {
-  const maximum = Math.max(1, Math.abs(income), Math.abs(expense));
-  const unit = 10 ** Math.floor(Math.log10(maximum));
-  const ceiling = Math.ceil(maximum / unit) * unit;
+  const deficit = net < 0;
+  const covered = Math.max(0, Math.min(income, expense));
+  const difference = Math.abs(net);
+  const total = covered + difference;
+  const share = total ? Math.round(100 * difference / total) : 0;
   return <div className="cash-split">
-    {[["収入", income, GREEN], ["支出", expense, RED]].map(([label, amount, color]) =>
-      <div key={label}><div className="cash-head"><span>{label}</span><b>{yen(amount)}</b></div>
-        <div className="cash-band" aria-hidden="true"><i style={{background:color,width:Math.abs(amount)/ceiling*100+"%"}}/></div>
-      </div>)}
-    <div className="cash-axis"><span>¥0</span><span>{yen(ceiling)}</span></div>
-    <div className="cash-head cash-net"><span>差引</span><b>{yen(net)}</b></div>
+    <div className="cash-result"><span>差引</span>
+      <strong style={{color: net === 0 ? undefined : deficit ? RED : GREEN}}>{net > 0 ? "+" : ""}{yen(net)}</strong>
+    </div>
+    <div className="cash-amounts">
+      <span>収入 <b>{yen(income)}</b></span><span>支出 <b>{yen(expense)}</b></span>
+    </div>
+    {income >= 0 && expense >= 0 && total > 0 && <>
+      <div className="cash-band" aria-hidden="true">
+        <i style={{flexGrow:covered}}/><i style={{flexGrow:difference,background:deficit ? RED : GREEN}}/>
+      </div>
+      <div className="cash-key"><span>{deficit ? "収入でカバー" : "支出"}</span><span>{deficit ? "不足" : "差引"} {share}%</span></div>
+    </>}
   </div>;
 }
 function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {

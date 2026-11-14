@@ -83,11 +83,11 @@
 .flow-ledger dd {margin:0;text-align:right;font-size:19px}
 .flow-ledger>div:last-child {border-top:1px solid var(--line);margin-top:5px;padding-top:9px;font-weight:600}
 .home-overview :is(.flow-ledger dd,.home-category b,.home-category small,.home-purchase b,.purpose-ring b,.home-accounts strong,.balance-axis b,.balance-events td:last-child,.balance-events b,.home-spending header strong) {font-family:var(--num-font);font-variant-numeric:tabular-nums;letter-spacing:0}
-.cash-head,.cash-split dl>div {display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.cash-head b,.cash-split dd {font-family:var(--num-font);font-variant-numeric:tabular-nums}
-.cash-head b {font-size:23px}
-.cash-band {display:flex;height:14px;overflow:hidden;border-radius:4px;background:var(--line);margin:9px 0}
-.cash-split dl {margin:0}
-.cash-split dt i {display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.cash-split dd {margin:0}
-.cash-axis {display:flex;justify-content:space-between;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.cash-net {margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+.cash-result,.cash-amounts,.cash-key {display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.cash-result strong,.cash-amounts b,.cash-key {font-family:var(--num-font);font-variant-numeric:tabular-nums}
+.cash-result strong {font-size:clamp(24px,7vw,34px);line-height:1.2}
+.cash-amounts {margin-top:14px;font-size:14px}
+.cash-amounts b {white-space:nowrap}
+.cash-band {display:flex;height:14px;border-radius:4px;overflow:hidden;margin:8px 0 5px}
+.cash-band i {flex-basis:0;background:var(--muted)}
+.cash-key {font-size:12px;color:var(--muted)}
