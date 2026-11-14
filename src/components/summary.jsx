@@ -1,3 +1,4 @@
+import { CashWaterfall } from "./cash-waterfall";
 import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
@@ -69,32 +70,6 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       {section === "pay" && <PayrollReport key={ym} slips={paySlips} ym={ym} />}
     </div>
   );
-}
-function CashWaterfall({income, expense, net}) {
-  const high = Math.max(0, income, net);
-  const low = Math.min(0, income, net);
-  const y = value => 14 + (high - value) / (high - low || 1) * 102;
-  const steps = [
-    {label:"収入", from:0, to:income, value:income},
-    {label:"支出", from:income, to:net, value:-expense},
-    {label:"差引", from:0, to:net, value:net},
-  ];
-  return <div className="cash-waterfall">
-    <svg viewBox="0 0 300 130" role="img" aria-label={steps.map(s => s.label + yen(s.value)).join("、")}>
-      <line x1="0" x2="300" y1={y(0)} y2={y(0)} stroke="var(--line)" />
-      {steps.map(({label, from, to, value}, i) => {
-        const x = i * 100 + 24;
-        const top = Math.min(y(from), y(to));
-        return <g key={label}>
-          {i < 2 && <line x1={x+52} x2={x+100} y1={y(to)} y2={y(to)} stroke="var(--muted)" strokeDasharray="3 3" />}
-          <rect x={x} y={top} width="52" height={Math.abs(y(to)-y(from))} rx="2" fill={value < 0 ? RED : GREEN} />
-        </g>;
-      })}
-      <text x="2" y={y(0)>20 ? y(0)-4 : y(0)+13} fill="var(--muted)" fontSize="10">0円</text>
-    </svg>
-    <div className="cash-waterfall-labels">{steps.map(({label,value}) =>
-      <div key={label}><span>{label}</span><strong>{label === "差引" && value > 0 ? "+" : ""}{yen(value)}</strong></div>)}</div>
-  </div>;
 }
 function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcoming, slips, forecast, ym, cutoff }) {
   const today = new Date().toLocaleDateString("sv-SE");

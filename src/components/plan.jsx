@@ -1,3 +1,4 @@
+import { CashWaterfall } from "./cash-waterfall";
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
@@ -364,18 +365,14 @@ function MonthExplanation({result, entries, past}) {
   const income=result.income;
   const actualIncome=(past || result.salaryRecorded ? result.salaryIncome : 0)+(past || result.otherRecorded ? result.otherIncome : 0);
   const actualSpend=ranked.reduce((sum,r)=>sum+(r.recorded?r.amount:0),0);
-  const scale=Math.max(1,Math.abs(income),spending);
   const bars=[["収入",income,actualIncome],["支出",spending,actualSpend]];
   const transfers=entries.filter(e=>e.cat==="account" && acctRole(e.item)==="transfer");
   const outbound=transfers.reduce((sum,e)=>sum+Math.max(0,-e.amount),0);
   const returned=transfers.reduce((sum,e)=>sum+Math.max(0,e.amount),0);
   const investmentIsActual=past || result.investRecorded;
   return <section className="month-explain">
-    <header><span>{past?"収支実績":"収支見込み"}</span><strong className={result.net<0?"negative":""}>{yen(result.net)}</strong></header>
-    <div className="month-flows">{bars.map(([label,value,actual])=><div className="month-flow-line" key={label}>
-      <span>{label}<small>{actual===value && value!==0 ? "実績" : actual===0 ? (value===0?"—":"予定") : "実績＋予定"}</small></span>
-      <b>{yen(value)}</b><div className="flow-track"><i style={{width:100*Math.abs(value)/scale+"%"}}><u style={{width:(value?Math.max(0,Math.min(100,100*actual/value)):0)+"%"}}/></i></div>
-    </div>)}</div>
+    <h3 className="net-chart-title">{past?"収支実績":"収支見込み"}</h3>
+    <CashWaterfall income={income} expense={spending} net={result.net} actualIncome={actualIncome} actualSpend={actualSpend}/>
     <section className="investment-flow"><header><h3>投資振替</h3><small>{investmentIsActual?"実績":"予定"} · 収支外</small></header>
       <div className="invest-result"><span>{result.invest>0?"口座への純戻し":"投資への純振替"}</span><strong>{yen(Math.abs(result.invest))}</strong></div>
       {investmentIsActual && outbound+returned>0 && <><div className="transfer-track" aria-hidden="true"><i style={{flex:outbound}}/><i style={{flex:returned}}/></div>
