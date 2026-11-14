@@ -32,12 +32,13 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
           <button key={id} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}
       </nav>
       {section === "month" && <>
+      {showOutlook && <BalanceTimeline compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
+
       <section className="home-flow" aria-label="選択月の収入と支出">
-        <header><h3>収支差額</h3><strong className="net-result">{summary.net>0?"+":""}{yen(summary.net)}</strong></header>
+        <header><h3>月の収支</h3></header>
         <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
-      {showOutlook && <BalanceTimeline compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
@@ -134,7 +135,8 @@ function BalanceTimeline({ compact, onExpand, shown, upcoming, slips, forecast, 
   const lowest = points.reduce((min, point) => point.amount < min.amount ? point : min);
   if (compact) {
     const debit = points.find(p => p.rows.some(r => r.change < 0));
-    return <button className="next-balance" onClick={onExpand}><span>{debit ? shortDate(debit.date)+" 引き落とし後の見込み" : "現在の口座残高"}<b>{yen(debit?.amount ?? start)}</b></span><span aria-hidden="true">→</span></button>;
+    return <section className="account-stage"><button onClick={onExpand}><span>口座残高</span><strong>{yen(start)}</strong><small>口座別・入出金予定　→</small></button>
+      {debit && <div><span>{shortDate(debit.date)} 引き落とし後</span><b>{yen(debit.amount)}</b></div>}</section>;
   }
   return <section className="k-group home-balance" aria-label="残高の見通し">
     <h3>これからの残高</h3><details className="home-accounts"><summary><span>現在</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
@@ -164,6 +166,8 @@ const purposeGroups = [
 ];
 function SpendingPurpose({ purchases, ym, cutoff }) {
   const [selection, setSelection] = useState(null);
+  const [basis,setBasis] = useState("category");
+  const [allMerchants,setAllMerchants] = useState(false);
   const groups = new Map();
   for (const row of purchases) {
     if (cycleYm(row.date, cutoff) !== ym || ["投資","Revolutチャージ"].includes(row.spendingCategory)) continue;
@@ -174,7 +178,8 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     const preset = purposeGroups.find(([, , names]) => names.includes(category))
       || purposeGroups.find(([, , names]) => names.includes(row.mfMajor))
       || ["雑費・調整", "#8e8170", []];
-    const [label, color] = preset;
+    const label = basis === "merchant" ? row.description?.trim() || "利用先未確認" : preset[0];
+    const color = basis === "merchant" ? "var(--income)" : preset[1];
     if (!groups.has(label)) groups.set(label, {label,color,amount:0,rows:[]});
     const g = groups.get(label);
     g.amount -= row.amount;
@@ -187,10 +192,12 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
   return <section className="spend-report" aria-label="カードの使い道">
     <header><h3>カードの使い道</h3>{visible.length > 0 && <b>{yen(visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>
     {!visible.length && <p>利用明細なし</p>}
-    {positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
-    {visible.map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
+    {visible.length > 0 && <div className="spend-filter">{[["category","用途別"],["merchant","利用先別"]].map(([id,label])=><button key={id} aria-pressed={basis===id} onClick={()=>{setBasis(id);setSelection(null);setAllMerchants(false);}}>{label}</button>)}</div>}
+    {basis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
+    {(basis==="merchant" && !allMerchants ? visible.slice(0,5) : visible).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
       <i style={{background:g.color}}/><span>{g.label}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
     </button>{selected===g && <div className="spend-transactions">{g.rows.map(r=><div key={r.id}><time>{shortDate(r.date)}</time><span>{r.description}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</div>}</React.Fragment>)}
+    {basis==="merchant" && visible.length>5 && <button className="merchant-more" onClick={()=>setAllMerchants(!allMerchants)}>{allMerchants?"上位5件に戻る":"全"+visible.length+"件の利用先を見る"}</button>}
   </section>;
 
 }
