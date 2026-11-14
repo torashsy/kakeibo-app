@@ -29,6 +29,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}　投資振替 {yen(summary.invest)}</div>
       </div>
+      <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <details className="k-group">
         <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
@@ -50,13 +51,39 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
     </div>
   );
 }
+function SpendingPurpose({ purchases, ym, cutoff }) {
+  const groups = useMemo(() => {
+    const items = new Map();
+    for (const row of purchases) {
+      if (cycleYm(row.date, cutoff) !== ym || row.spendingCategory === "投資") continue;
+      const label = row.spendingCategory === "その他の分類済み" ? row.description : row.spendingCategory || "未分類";
+      const group = items.get(label) || { label, amount: 0, rows: [] };
+      group.amount -= row.amount;
+      group.rows.push(row);
+      items.set(label, group);
+    }
+    return [...items.values()].sort((a,b) => b.amount - a.amount);
+  }, [purchases, ym, cutoff]);
+  const renderGroup = group => <details key={group.label}><summary style={{padding:"8px 0"}}>{group.label}　<strong>{yen(group.amount)}</strong></summary>
+    {group.rows.map(row => <div key={row.id} style={styles.settingRow}><span>{row.date.slice(5)}　{row.description}</span><span>{yen(-row.amount)}</span></div>)}
+  </details>;
+  return <section className="k-group" style={{paddingBottom:10}} aria-label="カードの使い道">
+    <h3 style={{fontSize:16}}>カードの使い道</h3>
+    {groups.length ? <><small>利用日基準・返金差引・積立除く</small>
+      {groups.slice(0,3).map(renderGroup)}
+      {groups.length > 3 && <details><summary>ほかの使い道（{groups.length - 3}）</summary>{groups.slice(3).map(renderGroup)}</details>}
+    </> : <p>この月度のカード利用明細はまだありません。</p>}
+  </section>;
+}
 function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const bank = entries.filter(e => e.cat === "account" && acctRole(e.item) === "transfer");
+  const confirmed = bank.filter(e => e.mfInvestmentId || e.id?.startsWith("mf-invest:"));
+  const manual = bank.filter(e => !confirmed.includes(e));
   const cards = Object.values(snapshot?.investmentCardRows || {}).filter(r => cycleYm(r.date, cutoff) === ym);
   if (!bank.length && !cards.length) return null;
   const sum = rows => rows.reduce((total, r) => total + r.amount, 0);
   return <details className="k-group"><summary>投資の内訳</summary>
-    {[["銀行の投資振替（差引）", bank, sum(bank)], ["カード積立（利用日基準）", cards, -sum(cards)]].map(([label,rows,total]) =>
+    {[["銀行明細で確認した振替（差引）", confirmed, sum(confirmed)], ...(manual.length ? [["その他の登録済み振替", manual, sum(manual)]] : []), ["カード積立（利用日基準）", cards, -sum(cards)]].map(([label,rows,total]) =>
       <details key={label}><summary style={{padding:"10px 0"}}>{label}　{yen(total)}（{rows.length}件）</summary>
         {rows.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(r =>
           <div key={r.id} style={{...styles.settingRow, gap:8}}><span>{r.date?.slice(5) || "日付未登録"}　{r.broker || r.note || r.account}</span><strong>{yen(label.startsWith("カード") ? -r.amount : r.amount)}</strong></div>)}
@@ -151,6 +178,8 @@ function CardClaimStatusList({ rows }) {
 function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
   const [open, setOpen] = useState(true);
   
+  const nextDate = rows[0]?.date;
+  const nextAmount = rows.filter(row => row.date === nextDate).reduce((sum,row) => sum + row.amount, 0);
   const total = rows.reduce((sum, row) => sum + row.amount, 0);
   return (
     <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
@@ -159,6 +188,7 @@ function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
         <span style={{ ...alignedAmount, color: rows.length ? RED : MUTED, fontWeight: 600 }}>{rows.length ? yen(-total) : "予定額未確認"}</span>
       </button>
       {open && <div style={{ paddingBottom: 4 }}>
+        {nextDate && <p><strong>{shortDate(nextDate)} の引落予定　{yen(nextAmount)}</strong></p>}
         <p style={{fontSize:12}}>カード分の合計　{rows.some(r => r.kind === "card") ? yen(rows.filter(r => r.kind === "card").reduce((sum,r) => sum + r.amount, 0)) : "金額未確認"}</p>
         {rows.map((row) => {
           const state = claimStatus[row.status];
