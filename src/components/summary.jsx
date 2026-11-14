@@ -27,7 +27,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
     <div className="home-overview">
       <section className="home-flow" aria-label="選択月の収入と支出">
         <header><h3>{ymLabel(ym)}の収支</h3></header>
-        <CashSplit income={summary.income} expense={summary.expense} net={summary.net}/>
+        <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
@@ -53,25 +53,30 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
     </div>
   );
 }
-function CashSplit({income, expense, net}) {
-  const deficit = net < 0;
-  const covered = Math.max(0, Math.min(income, expense));
-  const difference = Math.abs(net);
-  const total = covered + difference;
-  const share = total ? Math.round(100 * difference / total) : 0;
-  return <div className="cash-split">
-    <div className="cash-result"><span>差引</span>
-      <strong style={{color: net === 0 ? undefined : deficit ? RED : GREEN}}>{net > 0 ? "+" : ""}{yen(net)}</strong>
-    </div>
-    <div className="cash-amounts">
-      <span>収入 <b>{yen(income)}</b></span><span>支出 <b>{yen(expense)}</b></span>
-    </div>
-    {income >= 0 && expense >= 0 && total > 0 && <>
-      <div className="cash-band" aria-hidden="true">
-        <i style={{flexGrow:covered}}/><i style={{flexGrow:difference,background:deficit ? RED : GREEN}}/>
-      </div>
-      <div className="cash-key"><span>{deficit ? "収入でカバー" : "支出"}</span><span>{deficit ? "不足" : "差引"} {share}%</span></div>
-    </>}
+function CashWaterfall({income, expense, net}) {
+  const high = Math.max(0, income, net);
+  const low = Math.min(0, income, net);
+  const y = value => 14 + (high - value) / (high - low || 1) * 102;
+  const steps = [
+    {label:"収入", from:0, to:income, value:income},
+    {label:"支出", from:income, to:net, value:-expense},
+    {label:"差引", from:0, to:net, value:net},
+  ];
+  return <div className="cash-waterfall">
+    <svg viewBox="0 0 300 130" role="img" aria-label={steps.map(s => s.label + yen(s.value)).join("、")}>
+      <line x1="0" x2="300" y1={y(0)} y2={y(0)} stroke="var(--line)" />
+      {steps.map(({label, from, to, value}, i) => {
+        const x = i * 100 + 24;
+        const top = Math.min(y(from), y(to));
+        return <g key={label}>
+          {i < 2 && <line x1={x+52} x2={x+100} y1={y(to)} y2={y(to)} stroke="var(--muted)" strokeDasharray="3 3" />}
+          <rect x={x} y={top} width="52" height={Math.abs(y(to)-y(from))} rx="2" fill={value < 0 ? RED : GREEN} />
+        </g>;
+      })}
+      <text x="2" y={y(0)>20 ? y(0)-4 : y(0)+13} fill="var(--muted)" fontSize="10">0円</text>
+    </svg>
+    <div className="cash-waterfall-labels">{steps.map(({label,value}) =>
+      <div key={label}><span>{label}</span><strong>{label === "差引" && value > 0 ? "+" : ""}{yen(value)}</strong></div>)}</div>
   </div>;
 }
 function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
