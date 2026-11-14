@@ -722,7 +722,7 @@ const plannedFixedForCard = (subs: Sub[] | null | undefined, cards: Card[] | nul
 };
 
 // 入力済み請求・口座残高の基準日・既知の計画額から、カードごとの支払状態を作る。
-export function cardClaimStates(cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, cutoffDay: number = 0): CardClaimState[] {
+export function cardClaimStates(cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, cutoffDay: number = 0, includeEmpty = false): CardClaimState[] {
   const coveredThrough = balanceCoveredThrough(monthEntries, ym, cutoffDay);
   return (cards || []).map((card) => {
     const cardEntries = (monthEntries || []).filter((e) => e.cat === "card" && e.item === card.name);
@@ -745,7 +745,7 @@ export function cardClaimStates(cards: Card[] | null | undefined, debt: Record<s
       debtPortion: Math.min(amount, debtPortion),
       otherPortion: Math.max(0, amount - debtPortion),
     };
-  }).filter((row) => row.amount > 0);
+  }).filter((row) => includeEmpty || row.amount > 0);
 }
 
 export interface UpcomingDebit {
@@ -792,7 +792,7 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
   for (let offset = 0; offset < cardMonthCount; offset++) {
     const ym = addMonth(startYm, offset);
     const monthEntries = (entries || []).filter((e) => e.ym === ym);
-    for (const row of cardClaimStates(cards, debt, subs, monthEntries, ym, cutoffDay)) {
+    for (const row of cardClaimStates(cards, debt, subs, monthEntries, ym, cutoffDay, true)) {
       const observed = Array.isArray(scheduled) && scheduled.find(s => s?.card === row.name && validDate(s.date) && cycleYm(s.date, cutoffDay) === ym && Number.isSafeInteger(s.amount) && s.amount >= 0);
       if (observed) {
         if (row.status !== "paid" && observed.date >= start && observed.date <= end)
