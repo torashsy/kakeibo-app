@@ -210,6 +210,7 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
   const exportCSV = () => { const lines = ["ym,cat,item,account,amount"]; for (const e of entries) lines.push([e.ym, e.cat, `"${e.item || ""}"`, `"${e.account || ""}"`, e.amount].join(",")); const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `kakeibo_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url); };
   return (
     <div style={{ padding: "4px 2px 8px" }}>
+      <SyncSection />
       {/* カード管理への導線 */}
       <button style={styles.navRow} onClick={onOpenCards}>
         <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -227,6 +228,7 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
         <span style={{ color: MUTED, fontSize: 20 }}>›</span>
       </button>
 
+      <details className="k-group"><summary>締め日・口座・項目</summary>
       {/* 月の締め日(サイクル) */}
       <div style={{ marginBottom: 18 }}>
         <div style={styles.detailHead}><span>月の締め日</span></div>
@@ -248,6 +250,8 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
           <div style={styles.detailCard}>{(c[g.key] || []).map((name, i) => <div key={i} style={styles.settingRow}><span>{name}</span><button style={styles.removeBtn} onClick={() => removeItem(g.key, i)}>削除</button></div>)}</div>
         </div>
       ))}
+      </details>
+      <details className="k-group"><summary>照合・取り込みルール</summary>
       {/* 口座間の振替を後から探す。振替の判定は取込時にしか走らないので、
           機能を入れる前に取り込んだ記録や手入力の記録は入金/出金のまま残る。 */}
       <CycleVerifier entries={entries} config={c} closedMonths={closedMonths} onClose={onToggleClosedMonth} />
@@ -257,7 +261,8 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
         onIgnore={(keys) => { const next = { ...c, dupIgnored: keys }; setC(next); onSave(next); }} />
 
       <ImportRulesSection rules={c.importRules} cards={cards} accounts={c.accounts} onSave={(rules) => { const next = { ...c, importRules: rules }; setC(next); onSave(next); }} />
-      <SyncSection />
+      </details>
+      <details className="k-group"><summary>バックアップ・データ管理</summary>
 
       {/* どの版が動いているかを表示する(古いキャッシュのままか、直っていないのかの切り分け用) */}
       <div style={{ fontSize: 11, color: MUTED, textAlign: "center", padding: "4px 0 14px" }}>
@@ -292,6 +297,7 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
           <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) importJSON(f); e.target.value = ""; }} />
         </div>
       </div>
+      </details>
     </div>
   );
 }

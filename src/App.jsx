@@ -407,9 +407,9 @@ export default function App() {
       </header>
 
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
-        {(tab === "today" || tab === "settings") && <FinanceFeedPanel accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onOpen={() => setTab("finance")} />}
-        {tab === "finance" && <SubScreen title="金融情報の自動更新" onBack={() => setTab("settings")}><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
-        {tab === "today" && <Summary paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
+        {tab === "today" && <FinanceFeedPanel accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onOpen={() => setTab("finance")} />}
+        {tab === "finance" && <SubScreen title="明細・照合" onBack={() => setTab("today")}><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
+        {tab === "today" && <Summary paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); setTab("recurring"); }} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
@@ -418,14 +418,14 @@ export default function App() {
         {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>
 
-      {(tab === "today" || tab === "records") && <button style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
+      {(tab === "today" || tab === "records") && <button aria-label="記録を追加・取り込み" style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
 
       <nav style={styles.tabs}>
-        <TabBtn active={tab === "today"} onClick={() => setTab("today")} label="今月" icon="summary" />
+        <TabBtn active={tab === "today" || tab === "finance"} onClick={() => setTab("today")} label="今月" icon="summary" />
         <TabBtn active={tab === "records"} onClick={() => setTab("records")} label="記録" icon="detail" />
         <TabBtn active={tab === "plan"} onClick={() => setTab("plan")} label="計画" icon="plan" />
         <TabBtn active={tab === "recurring"} onClick={() => setTab("recurring")} label="定期費" icon="recurring" />
-        <TabBtn active={tab === "settings" || tab === "design" || tab === "cards" || tab === "finance"} onClick={() => setTab("settings")} label="設定" icon="settings" />
+        <TabBtn active={tab === "settings" || tab === "design" || tab === "cards"} onClick={() => setTab("settings")} label="設定" icon="settings" />
       </nav>
 
       {sheet === "pick" && <PickCategory onClose={() => setSheet(null)} onPick={(cat) => { setEditing(null); if (cat === "import") setImportMode(""); setSheet(cat); }} />}

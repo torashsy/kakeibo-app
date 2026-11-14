@@ -100,7 +100,7 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
 
 export function DetailCards({ S, config, cards, onEdit }) {
   const [open, setOpen] = useState({});
-  const [sections, setSections] = useState({ salary: true, card: true });
+  const [sections, setSections] = useState({ salary: false, card: false });
   const toggle = (key) => setOpen((o) => ({ ...o, [key]: !o[key] }));
   const toggleSection = (key) => setSections((value) => ({ ...value, [key]: !value[key] }));
   const rowProps = { open, toggle, onEdit };

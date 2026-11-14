@@ -32,6 +32,7 @@ export function PayrollReport({ slips }) {
     <header><h3>給与・賞与</h3><select aria-label="支給年" value={year} onChange={e=>{setChoice(e.target.value);setExpanded("");}}>{years.map(y=><option key={y} value={y}>{y}年</option>)}</select></header>
     <div className="pay-hero"><small>年間手取り</small><strong>{yen(total("net"))}</strong>
     <small>{rows.at(-1).date.slice(5).replace("-","/")}〜{rows[0].date.slice(5).replace("-","/")} 支給分 · 明細{rows.length}件</small></div>
+    <details className="pay-breakdown"><summary>税金・社会保険料と支給明細</summary>
     <dl>{metrics.map(([label,key])=><div key={key}><dt>{label}</dt><dd>{yen(total(key))}</dd></div>)}</dl>
     <table className="pay-list"><caption>支給日別の明細（金額は円）</caption>
       <thead><tr><th>支給日</th><th>支給額</th><th>控除額</th><th>手取り</th></tr></thead><tbody>
@@ -40,5 +41,6 @@ export function PayrollReport({ slips }) {
         <td>{money(s.gross)}</td><td>{money(s.deductions)}</td><td><b>{money(s.net)}</b></td></tr>
         {expanded===id && <tr><td colSpan={4} className="pay-detail"><AmountTable title="支給内訳" items={s.earnings} total={s.gross}/><AmountTable title="控除内訳" items={s.withholdings} total={s.deductions}/>{s.overtimeHours!=null && <p>時間外割増時間　{s.overtimeHours}時間</p>}</td></tr>}</React.Fragment>})}
     </tbody></table>
+    </details>
   </section>;
 }
