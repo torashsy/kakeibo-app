@@ -5,7 +5,7 @@
 .home-overview .home-balance,.home-overview .home-spending {padding:16px;border-radius:18px}
 .home-accounts>summary {display:grid;grid-template-columns:1fr auto;align-items:center;min-height:50px;list-style:none}
 .home-accounts>summary span {font-size:13px}
-.home-accounts>summary strong {grid-row:2;font-size:clamp(27px,8vw,38px);line-height:1.2;letter-spacing:-.04em}
+.home-accounts>summary strong {grid-row:2;font-size:clamp(27px,8vw,38px);line-height:1.2;letter-spacing:normal}
 .home-accounts>summary small {grid-row:1/3;grid-column:2;border:1px solid var(--border);border-radius:18px;padding:7px 10px}
 .home-accounts>summary::-webkit-details-marker,.home-category::-webkit-details-marker {display:none}
 .home-balance>small,.home-spending>small {display:block;font-size:12px;line-height:1.6;margin-top:6px}
@@ -44,12 +44,12 @@
 .home-flow-row div {background:var(--border)}
 .home-flow-row i {display:block}
 .home-flow-row b {text-align:right}
-.home-overview {font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;line-height:1.45;letter-spacing:.005em}
+.home-overview {font-family:var(--font);line-height:1.45;letter-spacing:.005em}
 .home-flow {background:linear-gradient(125deg,var(--accent-soft),var(--card-bg) 85%);padding:20px}
 .home-flow header {margin-bottom:2px}
 .home-flow header span,.flow-comparison span,.balance-axis,.balance-milestone span {font-size:13px;color:var(--muted)}
-.flow-net {display:block;font-size:clamp(32px,9vw,44px);line-height:1.2;letter-spacing:-.045em;font-weight:700}
-.flow-comparison {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}
+.flow-net {display:block;font-size:clamp(28px,7vw,34px);line-height:1.2;letter-spacing:normal;font-weight:600}
+.flow-comparison {display:grid;gap:10px;margin-top:14px}
 .flow-comparison b,.balance-axis b {display:block;color:var(--ink);font-size:17px}
 .flow-track {margin-top:6px;background:var(--line)}
 .flow-track,.flow-track i {height:7px;border-radius:5px}
@@ -66,3 +66,15 @@
 .purpose-ring small,.purpose-ring b {display:block}
 .purpose-ring small {font-size:11px}
 .purpose-ring b {font-size:clamp(17px,5vw,24px);line-height:1.15}
+
+.flow-comparison>div {display:grid;grid-template-columns:2.5em minmax(0,1fr) 11ch;align-items:center;gap:8px}
+.flow-comparison .flow-track {grid-column:2;grid-row:1;margin:0}
+.flow-comparison b {grid-column:3;grid-row:1;text-align:right;font-weight:600}
+.balance-events {width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+.balance-events th,.balance-events td {text-align:left;padding:8px 4px;vertical-align:top;border-bottom:1px solid var(--line)}
+.balance-events thead th {color:var(--muted);font-weight:500}
+.balance-events th:first-child,.balance-events td:last-child {white-space:nowrap}
+.balance-events td:last-child,.balance-events th:last-child {text-align:right}
+.balance-events td span,.balance-events td b {display:block;overflow-wrap:anywhere}
+.balance-events td b {font-weight:500}
+.balance-events td div+div {margin-top:6px}

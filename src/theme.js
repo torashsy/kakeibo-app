@@ -5,7 +5,7 @@ export const LINE = "var(--line)", MUTED = "var(--muted)", RED = "var(--expense)
 
 
 // 全体で使う1つのフォントスタック(以前の「フォント選択」機能は廃止)
-const FONT_STACK = "'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif";
+const FONT_STACK = "system-ui,-apple-system,'Hiragino Sans',Meiryo,sans-serif";
 
 
 // ユーザーが選べるのは「アクセント色」と「ダークモード」だけ。

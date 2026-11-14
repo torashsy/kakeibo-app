@@ -26,7 +26,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   return (
     <div className="home-overview">
       <section className="home-flow" aria-label="選択月の収入と支出">
-        <header><h3>月間収支</h3><span>{ymLabel(ym)}</span></header>
+        <header><h3>{ymLabel(ym)}の収支</h3></header>
         <strong className="flow-net">{summary.net > 0 ? "+" : ""}{yen(summary.net)}</strong>
         <div className="flow-comparison">
           {[["収入",summary.income,GREEN],["支出",summary.expense,RED]].map(([label,value,color]) =>
@@ -100,43 +100,20 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
     const change = rows.reduce((sum, row) => sum + row.change, 0);
     points.push({date, rows, amount:points.at(-1).amount + change});
   }
-  const nextDebit = points.find(point => point.rows.some(row => row.change < 0));
   const lowest = points.reduce((min, point) => point.amount < min.amount ? point : min);
-  const high = Math.max(...points.map(point => point.amount));
-  const span = Math.max(86400000, Date.parse(end) - Date.parse(today));
-  const position = point => ({
-    x:8 + 284 * (Date.parse(point.date) - Date.parse(today)) / span,
-    y:high === lowest.amount ? 36 : 66 - 56 * (point.amount - lowest.amount) / (high - lowest.amount)
-  });
-  const line = points.map((point, index) => {
-    const {x,y} = position(point);
-    return index ? `H ${x} V ${y}` : `M ${x} ${y}`;
-  }).join(" ") + " H 292";
   return <section className="k-group home-balance" aria-label="残高の見通し">
     <h3>これからの残高</h3><details className="home-accounts"><summary><span>現在</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
     </details>
     {points.length > 1 ? <>
-      {nextDebit && <div className="balance-milestone"><span>{shortDate(nextDebit.date)} 引落日の見込み残高</span><strong>{yen(nextDebit.amount)}</strong></div>}
-      <figure style={{margin:"8px 0"}}>
-        <svg viewBox="0 0 302 76" role="img" aria-label="登録残高から締め日までの残高見込み" style={{width:"100%",height:90}}>
-          <path d={line} fill="none" stroke={ACCENT} strokeWidth="3"/>
-          {points.map((point,i) => {
-            const {x,y} = position(point);
-            return <circle key={i} cx={x} cy={y} r={point === lowest ? 4 : 3} fill={point === lowest && point.amount < 0 ? RED : ACCENT}><title>{point.date}　{yen(point.amount)}</title></circle>;
-          })}
-        </svg>
-        <figcaption className="balance-axis"><span>最低　{shortDate(lowest.date)}<b>{yen(lowest.amount)}</b></span><span>締め日　{shortDate(end)}<b>{yen(points.at(-1).amount)}</b></span></figcaption>
-      </figure>
-      <details className="home-schedule"><summary>
-        <span>次の入出金</span><time dateTime={points[1].date}>{shortDate(points[1].date)}</time>
-        <strong>{points[1].amount > start ? "+" : ""}{yen(points[1].amount-start)}</strong>
-      </summary>
-        {points.slice(1).map(({date, rows, amount}) => <div key={date} style={{padding:"8px 0"}}>
-          <b>{shortDate(date)}　予定反映後 {yen(amount)}</b>
-          {rows.map((row,index) => <div key={index} style={styles.settingRow}><span>{row.label}</span><span>{row.change>0 ? "+" : ""}{yen(row.change)}</span></div>)}
-        </div>)}
-      </details>
+      <table className="balance-events"><thead><tr><th>日付</th><th>入出金予定</th><th>残る額</th></tr></thead>
+        <tbody>{points.slice(1).map(({date,rows,amount}) => <tr key={date}>
+          <th scope="row">{shortDate(date)}</th>
+          <td>{rows.map((row,i) => <div key={i}><span>{row.label}</span><b>{row.change>0 ? "+" : ""}{yen(row.change)}</b></div>)}</td>
+          <td>{yen(amount)}</td>
+        </tr>)}</tbody>
+      </table>
+      <div className="balance-axis"><span>最低 · {shortDate(lowest.date)}<b>{yen(lowest.amount)}</b></span><span>締め日 · {shortDate(end)}<b>{yen(points.at(-1).amount)}</b></span></div>
     </> : <p>登録予定なし</p>}
     {salaryNote && <small>{salaryNote}</small>}
   </section>;
