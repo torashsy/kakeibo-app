@@ -52,7 +52,7 @@ export function classifyCardRows(rows) {
   const history = new Map();
   const broad = category => !category || ["未分類","その他の分類済み"].includes(category);
   for (const row of rows) {
-    if (broad(row.spendingCategory)) continue;
+    if (broad(row.spendingCategory) || row.spendingCategory.endsWith("（推定）")) continue;
     const name = normalize(row.description);
     const labels = history.get(name) || new Set();
     labels.add(row.spendingCategory);

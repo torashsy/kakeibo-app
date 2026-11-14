@@ -106,7 +106,7 @@ const purposeGroups = [
   ["食事", "#bf663e", ["外食","食料品","その他の食費"]],
   ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器"]],
   ["移動・旅行", "#537fae", ["交通費","タクシー","旅行・宿泊"]],
-  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系"]],
+  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系"]],
   ["その他", "#aa925a", []],
   ["物販", "#c07591", ["物販","商業施設","コンビニ"]],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
@@ -115,7 +115,7 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
   const groups = purposeGroups.map(([label,color]) => ({label,color,amount:0,rows:[]}));
   for (const row of purchases) {
     if (cycleYm(row.date, cutoff) !== ym || ["投資","Revolutチャージ"].includes(row.spendingCategory)) continue;
-    const idx = purposeGroups.findIndex(([, , names]) => names.includes(row.spendingCategory || "未分類"));
+    const idx = purposeGroups.findIndex(([, , names]) => names.includes((row.spendingCategory || "未分類").replace(/（推定）$/, "")));
     const g = groups[idx < 0 ? 4 : idx];
     g.amount -= row.amount;
     g.rows.push(row);
@@ -132,7 +132,7 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     {visible.length ? <><div style={{display:"grid",gridTemplateColumns:"minmax(104px, 2fr) minmax(130px, 3fr)",gap:14,alignItems:"center"}}>
       <div aria-hidden="true" style={{width:"100%",maxWidth:180,aspectRatio:"1",borderRadius:"50%",background:positive?"conic-gradient("+gradient+")":"#ccc",maskImage:"radial-gradient(circle,transparent 46%,black 47%)"}}/>
       <div>{visible.map(g=><details key={g.label}><summary style={{padding:"6px 0"}}><span style={{color:g.color}}>●</span> {g.label} <b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
-        {g.rows.map(r=><div key={r.id} style={{fontSize:12,padding:"4px 0"}}>{shortDate(r.date)} {r.description}　{yen(-r.amount)}</div>)}</details>)}</div>
+        {g.rows.map(r=><div key={r.id} style={{fontSize:12,padding:"4px 0"}}>{shortDate(r.date)} {r.description}　{yen(-r.amount)} {r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</div>)}</details>)}</div>
     </div><small>返金差引　{yen(visible.reduce((sum,g)=>sum+g.amount,0))} · 積立・チャージ除く{visible.some(g=>g.amount<0) && " · 円の割合は差引がプラスの項目のみ"}</small></> : <p>この月度の利用明細はまだありません。</p>}
     {unresolved.length>0 && <details><summary>用途未確認（全期間 {unresolved.length}件）</summary>
       <table style={{width:"100%",fontSize:12}}><caption>金額の大きい順</caption><tbody>{unresolved.map(r=><tr key={r.id}><td>{r.date}</td><td>{r.description}</td><td style={{textAlign:"right"}}>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</td></tr>)}</tbody></table></details>}
