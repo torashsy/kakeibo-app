@@ -85,12 +85,13 @@ export function classifyCardRows(rows) {
     const pair = applePairs.get(appleKey(row));
     if (pair?.charges === 1 && pair.refunds === 1 && /^apple[. ]com[ /]bill$/i.test(name) && broad(row.spendingCategory))
       return {...row, spendingCategory:"Apple決済"};
+    if (name === "株式会社さん" && Math.abs(row.amount) === 1078)
+      return {...row, spendingCategory:"サブスク", subscriptionLabel:"音読さん"};
     const service = subscriptions.find(([,pattern])=>pattern.test(name));
     if (service) return {...row, spendingCategory:"サブスク", subscriptionLabel:service[0]};
     if (row.spendingCategory?.replace(/（推定）$/, "") === "サブスク") return row;
     if (retailMerchant.test(name)) return {...row, spendingCategory: "物販"};
     if (!broad(row.spendingCategory)) return row;
-    if (name === "株式会社さん" && Math.abs(row.amount) === 1078) return {...row, spendingCategory:"サブスク"};
     const rule = rules.find(([, pattern]) => pattern.test(name));
     const previous = history.get(name);
     const communication = ["インターネット","その他通信費"].includes(row.mfMinor) ? "通信費" : null;
