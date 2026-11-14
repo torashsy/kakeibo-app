@@ -32,7 +32,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
 
-      <details className="k-group"><summary>月度の詳細</summary>
+      <MonthlyNetChart entries={entries || []} ym={ym} />
       <details className="k-group">
         <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
@@ -41,17 +41,15 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       </details>
       <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
       <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />
-      {Object.keys(paySlips || {}).length > 0 && <details className="k-group"><summary>給与・賞与の明細</summary><PayrollReport slips={paySlips} /></details>}
+      <PayrollReport slips={paySlips} />
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
       </details>
-      <details className="k-group"><summary>予算・年間の見通し</summary>
+
       <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
       <AnnualOutlookCard forecasts={forecasts} plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />
-      <MonthlyNetChart entries={entries || []} ym={ym} />
-      </details>
-      </details>
+
     </div>
   );
 }
@@ -59,8 +57,8 @@ function CashSplit({income, expense, net}) {
   const deficit = net < 0;
   const total = Math.max(income, expense);
   const parts = deficit
-    ? [["収入で賄った額", Math.max(0,income), GREEN], ["不足", -net, RED]]
-    : [["支出", expense, RED], ["残り", net, GREEN]];
+    ? [["収入で賄えた分", Math.max(0,income), "var(--muted)"], ["不足", -net, RED]]
+    : [["支出", expense, "var(--muted)"], ["残り", net, GREEN]];
   return <div className="cash-split">
     <div className="cash-head"><span>{deficit ? "支出" : "収入"}</span><b>{yen(total)}</b></div>
     <div className="cash-band" aria-hidden="true">{parts.map(([label,value,color]) =>
@@ -126,12 +124,12 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
   </section>;
 }
 const purposeGroups = [
-  ["食事", "#bf663e", ["外食","食料品","その他の食費","食費"]],
-  ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器","家具・家電","通信費","健康・医療","税・社会保障","水道・光熱費","住宅","還元","手数料","電子マネー","寄付"]],
+  ["食事", "#bf663e", ["外食","食料品","その他の食費","食費","飲み会"]],
+  ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器","家具・家電","通信費","健康・医療","税・社会保障","水道・光熱費","住宅","美容院・理髪","事業経費","還元","手数料","電子マネー","寄付"]],
   ["移動・旅行", "#537fae", ["交通費","タクシー","旅行・宿泊"]],
-  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系","趣味・娯楽","教養・教育","Apple決済","大学関連","印刷サービス"]],
+  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","交際費","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系","趣味・娯楽","教養・教育","Apple決済","大学関連","印刷サービス"]],
 
-  ["物販", "#c07591", ["物販","商業施設","コンビニ"]],
+  ["物販", "#c07591", ["物販","商業施設","コンビニ","衣服"]],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
 ];
 function SpendingPurpose({ purchases, ym, cutoff }) {
@@ -144,7 +142,7 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     }
     const preset = purposeGroups.find(([, , names]) => names.includes(category))
       || purposeGroups.find(([, , names]) => names.includes(row.mfMajor))
-      || purposeGroups.at(-1);
+      || ["雑費・調整", "#8e8170", []];
     const [label, color] = preset;
     if (!groups.has(label)) groups.set(label, {label,color,amount:0,rows:[]});
     const g = groups.get(label);
@@ -340,7 +338,7 @@ function BreakdownGroup({ label, total, rows, valueKey, open, onToggle, showMemo
 }
 
 function MonthlyNetChart({ entries, ym }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const months = useMemo(() => Array.from({ length: 6 }, (_, i) => addMonth(ym, i - 5)), [ym]);
   const points = useMemo(() => months.map((mo) => ({
     mo,

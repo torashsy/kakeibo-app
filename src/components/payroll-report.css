@@ -21,3 +21,9 @@
 .k-group {background:var(--card-bg);border:1px solid var(--border);border-radius:12px;margin:0 0 10px;padding:0 12px}
 .k-group>summary,.pay-breakdown>summary,.bank-balances>summary {cursor:pointer;font-size:14px;font-weight:600;padding:12px 0}
 .k-group[open]>summary,.pay-breakdown[open]>summary {border-bottom:1px solid var(--border);margin-bottom:10px}
+.pay-composition {padding:8px 0}
+.pay-composition>div {display:grid;grid-template-columns:5em minmax(10px,1fr) 12ch;align-items:center;gap:8px;padding:4px 0;font-size:13px}
+.pay-composition b {font-family:var(--num-font);text-align:right}
+.pay-track,.pay-track i {height:7px;border-radius:4px}
+.pay-track {background:var(--line)}
+.pay-track i {display:block}

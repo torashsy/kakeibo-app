@@ -32,6 +32,10 @@ export function PayrollReport({ slips }) {
     <header><h3>給与・賞与</h3><select aria-label="支給年" value={year} onChange={e=>{setChoice(e.target.value);setExpanded("");}}>{years.map(y=><option key={y} value={y}>{y}年</option>)}</select></header>
     <div className="pay-hero"><small>年間手取り</small><strong>{yen(total("net"))}</strong>
     <small>{rows.at(-1).date.slice(5).replace("-","/")}〜{rows[0].date.slice(5).replace("-","/")} 支給分 · 明細{rows.length}件</small></div>
+    <div className="pay-composition" aria-label="手取り・税金・社会保険・その他控除">
+      {[["手取り",total("net"),"#368476"],["税金",total("税金"),"#b77645"],["社会保険",total("社会保険"),"#597daa"],["その他控除",total("その他控除"),"#867990"]].map(([label,amount,color]) =>
+        <div key={label}><span>{label}</span><div className="pay-track"><i style={{width:Math.min(100,100*Math.max(0,amount)/Math.max(1,total("gross")))+"%",background:color}}/></div><b>{yen(amount)}</b></div>)}
+    </div>
     <details className="pay-breakdown"><summary>税金・社会保険料と支給明細</summary>
     <dl>{metrics.map(([label,key])=><div key={key}><dt>{label}</dt><dd>{yen(total(key))}</dd></div>)}</dl>
     <table className="pay-list"><caption>支給日別の明細（金額は円）</caption>
