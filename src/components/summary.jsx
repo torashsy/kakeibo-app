@@ -27,14 +27,17 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
-      <nav className="report-index" aria-label="ホームの表示">
-        {[["month","月の収支"],["funds","残高・予定"],["invest","投資"],["pay","給与"]].map(([id,label]) =>
-          <button key={id} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}
-      </nav>
+      <div className="report-picker"><select aria-label="家計の表示切替" value={section} onChange={e=>setSection(e.target.value)}>
+        {[["month","月の家計"],["spend","カード利用の詳細"],["flow","収支の詳細"],["funds","残高・予定"],["invest","投資"],["pay","給与"]].map(([id,label])=><option key={id} value={id}>{label}</option>)}
+      </select>{section!=="month" && <button onClick={()=>setSection("month")}>‹ ホームへ</button>}</div>
       {section === "month" && <>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
-      <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      <SpendingPurpose compact onOpen={()=>setSection("spend")} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      <button className="flow-link" onClick={()=>setSection("flow")}><span>収入<b>{yen(summary.income)}</b></span><span>支出<b>{yen(summary.expense)}</b></span><span aria-hidden="true">›</span></button>
+      </>}
+      {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
+      {section === "flow" && <>
       <section className="home-flow" aria-label="選択月の収入と支出">
         <header><h3>月の収支</h3></header>
         <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
@@ -181,7 +184,7 @@ const purposeGroups = [
   ["物販", "#c07591", ["物販","商業施設","コンビニ","衣服"]],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
 ];
-function SpendingPurpose({ purchases, ym, cutoff }) {
+function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
   const [selection, setSelection] = useState(null);
   const [basis,setBasis] = useState("category");
   const [allMerchants,setAllMerchants] = useState(false);
@@ -206,6 +209,12 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
   const positive = visible.reduce((sum,g)=>sum+Math.max(0,g.amount),0);
   const selected = selection?.ym === ym ? groups.get(selection.label) : null;
   const choose = label => setSelection(selected?.label === label ? null : {ym,label});
+  if (compact) return <section className="spend-glance">
+    <header><h3>カード利用</h3>{visible.length>0 && <strong>{yen(visible.reduce((sum,g)=>sum+g.amount,0))}</strong>}</header>
+    {visible.length ? <><div className="glance-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color}}/>)}</div>
+      <div className="glance-categories">{visible.slice(0,2).map(g=><span key={g.label}><i style={{background:g.color}}/>{g.label} <b>{yen(g.amount)}</b></span>)}</div>
+      <button onClick={onOpen}>利用明細を見る　›</button></> : <p>取得済みの利用明細はありません</p>}
+  </section>;
   return <section className="spend-report" aria-label="カードの使い道">
     <header><h3>{Number(ym.slice(5))}月度のカード利用</h3>{visible.length > 0 && <b>{yen(visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>
     {!visible.length && <p>利用明細なし</p>}
