@@ -28,7 +28,7 @@ export function FinanceFeedPanel({ feed, ledger, accounts = [], results = [], st
     if (state?.error || feed?.ingestion?.status === "blocked") status = "更新できません";
     else if (state?.mode === "on" && freshness === "stale") status = "更新待ち";
     else if (state?.needsSync || feed?.ingestion?.status === "partial") status = "同期未完了";
-    else if (state?.mode === "on" && freshness !== "fresh") status = "最終確認待ち";
+    else if (state?.mode === "on" && freshness !== "recent") status = "最終確認待ち";
     return <button type="button" onClick={onOpen} style={{...styles.collapseRow, minHeight:44}}>
       <span>明細・同期</span><span>{status} ›</span>
     </button>;
