@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
-import { ymLabel, uid, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migrateCard, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
+import { ymLabel, uid, cycleEndDate, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migrateCard, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
 import { Summary } from './components/summary.jsx';
 import { Detail } from './components/detail.jsx';
@@ -370,10 +370,23 @@ export default function App() {
   const months = useMemo(() => { const s = new Set(entries.map((e) => e.ym)); s.add(ym); return Array.from(s).sort(); }, [entries, ym]);
   const monthEntries = useMemo(() => entries.filter((e) => e.ym === ym), [entries, ym]);
 
-  const summary = useMemo(() => computeSummary(monthEntries), [monthEntries]);
-
-  // 前月末の残高。その月に記録が無ければ、記録のある直近の月から引き継ぐ
-  const prevBalTotal = useMemo(() => balTotalAsOf(entries, addMonth(ym, -1)), [entries, ym]);
+  // Keep dated ledger entries intact. Use reconciled closing balances only in reports.
+  const reportEntries = useMemo(() => {
+    const closes = financeCanApply && financeFeed?.bankSnapshot?.closingBalances;
+    if (!Array.isArray(closes)) return entries;
+    let rows = entries;
+    for (const close of closes) {
+      if (!/^\d{4}-\d{2}$/.test(close?.ym || "") || !config.accounts.includes(close.account) ||
+          !Number.isSafeInteger(close.amount) || close.asOf !== cycleEndDate(close.ym, config.cycleCutoffDay || 0)) continue;
+      const same = e => e.ym === close.ym && e.cat === "account" && acctRole(e.item) === "bal" && e.account === close.account;
+      if (rows.some(e => same(e) && (!e.asOf || e.asOf >= close.asOf))) continue;
+      rows = rows.filter(e => !same(e)).concat({ ...close, id: "closing:" + close.ym + ":" + close.account, cat: "account", item: "残高" });
+    }
+    return rows;
+  }, [entries, financeCanApply, financeFeed, config]);
+  const reportMonth = useMemo(() => reportEntries.filter(e => e.ym === ym), [reportEntries, ym]);
+  const summary = useMemo(() => computeSummary(reportMonth), [reportMonth]);
+  const prevBalTotal = useMemo(() => balTotalAsOf(reportEntries, addMonth(ym, -1)), [reportEntries, ym]);
 
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
@@ -396,7 +409,7 @@ export default function App() {
       <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
         {(tab === "today" || tab === "settings") && <FinanceFeedPanel accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onOpen={() => setTab("finance")} />}
         {tab === "finance" && <SubScreen title="金融情報の自動更新" onBack={() => setTab("settings")}><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
-        {tab === "today" && <Summary summary={summary} balancesNow={balancesAsOf(entries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={monthEntries} entries={entries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
+        {tab === "today" && <Summary summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} onOpenClose={() => setSheet("close")} onOpenImport={(mode) => { setImportMode(mode); setSheet("import"); }} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); setTab("recurring"); }} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
