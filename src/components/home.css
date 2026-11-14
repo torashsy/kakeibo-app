@@ -83,3 +83,10 @@
 .flow-ledger dd {margin:0;text-align:right;font-size:19px}
 .flow-ledger>div:last-child {border-top:1px solid var(--line);margin-top:5px;padding-top:9px;font-weight:600}
 .home-overview :is(.flow-ledger dd,.home-category b,.home-category small,.home-purchase b,.purpose-ring b,.home-accounts strong,.balance-axis b,.balance-events td:last-child,.balance-events b,.home-spending header strong) {font-family:var(--num-font);font-variant-numeric:tabular-nums;letter-spacing:0}
+.cash-head,.cash-split dl>div {display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.cash-head b,.cash-split dd {font-family:var(--num-font);font-variant-numeric:tabular-nums}
+.cash-head b {font-size:23px}
+.cash-band {display:flex;height:14px;overflow:hidden;border-radius:4px;background:var(--line);margin:9px 0}
+.cash-split dl {margin:0}
+.cash-split dt i {display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.cash-split dd {margin:0}

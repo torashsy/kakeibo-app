@@ -27,10 +27,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
     <div className="home-overview">
       <section className="home-flow" aria-label="選択月の収入と支出">
         <header><h3>{ymLabel(ym)}の収支</h3></header>
-        <dl className="flow-ledger">
-          {[["収入", summary.income], ["支出", summary.expense], ["差引", summary.net]].map(([label, amount]) =>
-            <div key={label}><dt>{label}</dt><dd>{label === "差引" && amount > 0 ? "+" : ""}{yen(amount)}</dd></div>)}
-        </dl>
+        <CashSplit income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
@@ -57,6 +54,19 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       </details>
     </div>
   );
+}
+function CashSplit({income, expense, net}) {
+  const deficit = net < 0;
+  const total = Math.max(income, expense);
+  const parts = deficit
+    ? [["収入で賄った額", Math.max(0,income), GREEN], ["不足", -net, RED]]
+    : [["支出", expense, RED], ["残り", net, GREEN]];
+  return <div className="cash-split">
+    <div className="cash-head"><span>{deficit ? "支出" : "収入"}</span><b>{yen(total)}</b></div>
+    <div className="cash-band" aria-hidden="true">{parts.map(([label,value,color]) =>
+      <i key={label} style={{background:color,width:total>0 ? Math.min(100,Math.max(0,value)/total*100)+"%" : 0}}/>)}</div>
+    <dl>{parts.map(([label,value,color]) => <div key={label}><dt><i style={{background:color}}/>{label}</dt><dd>{yen(value)}</dd></div>)}</dl>
+  </div>;
 }
 function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
   const today = new Date().toLocaleDateString("sv-SE");
@@ -116,10 +126,10 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
   </section>;
 }
 const purposeGroups = [
-  ["食事", "#bf663e", ["外食","食料品","その他の食費"]],
-  ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器"]],
+  ["食事", "#bf663e", ["外食","食料品","その他の食費","食費"]],
+  ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器","家具・家電","通信費","健康・医療","税・社会保障","水道・光熱費","住宅","還元","手数料","電子マネー","寄付"]],
   ["移動・旅行", "#537fae", ["交通費","タクシー","旅行・宿泊"]],
-  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系"]],
+  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系","趣味・娯楽","教養・教育","Apple決済","大学関連","印刷サービス"]],
 
   ["物販", "#c07591", ["物販","商業施設","コンビニ"]],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
@@ -130,15 +140,12 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     if (cycleYm(row.date, cutoff) !== ym || ["投資","Revolutチャージ"].includes(row.spendingCategory)) continue;
     let category = (row.spendingCategory || "未分類").replace(/（推定）$/, "");
     if (category === "その他の分類済み") {
-      const major = row.mfMajor;
-      category = (major && !["未分類","その他"].includes(major)) ? major : row.mfMinor || row.description;
-      if (["未分類","雑費","その他"].includes(category)) category = row.description;
+      category = row.mfMinor || row.mfMajor;
     }
-    const preset = purposeGroups.find(([, , names]) => names.includes(category));
-    const majorGroups = {"食費":"食事","通信費":"暮らし","健康・医療":"暮らし","趣味・娯楽":"趣味・サービス","教養・教育":"趣味・サービス"};
-    let label = preset?.[0] || majorGroups[category] || category;
-    if (["現金・カード","特別な支出","収入"].includes(label)) label = row.mfMinor || row.description;
-    const color = preset?.[1] || purposeGroups.find(([name]) => name === label)?.[1] || ["#927844","#577787","#94708a"][label.length % 3];
+    const preset = purposeGroups.find(([, , names]) => names.includes(category))
+      || purposeGroups.find(([, , names]) => names.includes(row.mfMajor))
+      || purposeGroups.at(-1);
+    const [label, color] = preset;
     if (!groups.has(label)) groups.set(label, {label,color,amount:0,rows:[]});
     const g = groups.get(label);
     g.amount -= row.amount;
