@@ -108,6 +108,7 @@ const purposeGroups = [
   ["移動・旅行", "#537fae", ["交通費","旅行・宿泊"]],
   ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","カメラ用品","ドメイン費","試験料","デジタルサービス"]],
   ["その他", "#aa925a", []],
+  ["物販", "#c07591", ["物販"]],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
 ];
 function SpendingPurpose({ purchases, ym, cutoff }) {
@@ -126,7 +127,7 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     const from=edge; edge+=100*g.amount/positive;
     return g.color+" "+from+"% "+edge+"%";
   }).join(",");
-  const unresolved = purchases.filter(r=>purposeGroups[5][2].includes(r.spendingCategory || "未分類")).sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
+  const unresolved = purchases.filter(r=>["未分類","通販（商品不明）"].includes(r.spendingCategory || "未分類")).sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
   return <section className="k-group" aria-label="カードの使い道"><h3>カードの使い道</h3>
     {visible.length ? <><div style={{display:"grid",gridTemplateColumns:"minmax(104px, 2fr) minmax(130px, 3fr)",gap:14,alignItems:"center"}}>
       <div aria-hidden="true" style={{width:"100%",maxWidth:180,aspectRatio:"1",borderRadius:"50%",background:positive?"conic-gradient("+gradient+")":"#ccc",maskImage:"radial-gradient(circle,transparent 46%,black 47%)"}}/>

@@ -1,3 +1,4 @@
+const retailMerchant = /amazon|アマゾン|ali\s?express|アリエクスプレス/i;
 const rules = [
   ["外食", /成吉思汗だるま|イタリア料理|俺のイタリアン|farm diner|大衆酒場|shokudo pastavola|出雲そば|麺屋雪風|俺流塩らーめん|焼きあご塩ら|麺屋武蔵|壱角堂|元祖串八珍|大阪王将|サブウェイ 南池袋|天文館むじゃき|松屋 徳島|マリオンクレ[ー-]プ/],
   ["交通費", /隠岐汽船|丸文松島汽船|express rail link|札幌市電|神戸市営地下鉄/],
@@ -19,7 +20,6 @@ const rules = [
   ["旅行・宿泊", /klook travel|トリップドットコム|agoda|滝と蕎麦の宿/],
   ["外食", /ロイヤルココナッツガ[ー-]デン|ど・みそ丸ノ内店|^福園(?:\s|\/|$)/],
   ["ゲーム", /steamgames\.com/],
-  ["通販（商品不明）", /amazon market\s*place|aliexpress/],
   ["還元", /visamobile2cashback|visatransit3cashback/],
 ];
 export function classifyCardRows(rows) {
@@ -34,8 +34,9 @@ export function classifyCardRows(rows) {
     history.set(name, labels);
   }
   return rows.map(row => {
-    if (!broad(row.spendingCategory)) return row;
     const name = normalize(row.description);
+    if (retailMerchant.test(name)) return {...row, spendingCategory: "物販"};
+    if (!broad(row.spendingCategory)) return row;
     const rule = rules.find(([, pattern]) => pattern.test(name));
     const previous = history.get(name);
     const category = rule?.[0] || (previous?.size === 1 && !/amazon|aliexpress|apple\.com|楽天市場/.test(name) ? [...previous][0] : null);
