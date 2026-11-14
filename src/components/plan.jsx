@@ -231,20 +231,19 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
 
   return (
     <div style={{ marginTop: 4 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 10 }}>
-        <button aria-label="前の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o - 1)}>‹</button>
-        <span style={{ fontSize: 15, fontWeight: 700, minWidth: 88, textAlign: "center" }}>{fyStart}年度</span>
-        <button aria-label="次の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o + 1)}>›</button>
-        {fyOffset !== 0 && <button style={{ ...styles.chipGhost, marginLeft: 4 }} onClick={() => setFyOffset(0)}>今年度に戻す</button>}
-      </div>
       <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
-        {[["forecast", "見通し"], ["plan", "計画"], ["diff", "差異"]].map(([v, l]) => (
+        {[["forecast", "見通し"], ["plan", "予算を編集"], ["diff", "実績と比較"]].map(([v, l]) => (
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
       {mode === "forecast" && months.includes(ym) && <section className="plan-focus">
         <h3>{ymLabel(ym)}の収支{pastPeriod ? "実績" : "見通し"}</h3><strong>{yen(monthResult.net)}</strong>
         <dl>{[["収入", monthResult.salaryIncome + monthResult.otherIncome],["支出",pastPeriod ? monthResult.expense : monthResult.spending],["投資振替",monthResult.invest]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{yen(value)}</dd></div>)}</dl>
+      </section>}
+      {mode==="plan" && months.includes(ym) && <section className="month-budget"><h3>{ymLabel(ym)}の予算</h3>
+        {[{label:"給与の設定",salary:true,k:"salaryIncome"}, {label:"その他の収入",editable:PLAN_OTHER_INCOME,k:"otherIncome"},
+          ...variableRows.filter(row=>row.editable),{label:"投資振替",editable:PLAN_INVEST,k:"invest"}].map(row=><button key={row.k} onClick={()=>openEdit(row,ym)}>
+          <span>{row.label.replace(/^・/,"")}</span><b>{yen(planOf(row.k,ym))}</b><small>編集 ›</small></button>)}
       </section>}
       {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
       {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (
@@ -255,7 +254,14 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
           <button style={{ ...styles.chipGhost, flexShrink: 0 }} onClick={() => onToggleClosedMonth(ym)}>{isMonthClosed(closedMonths, ym) ? "解除" : "確定"}</button>
         </div>
       )}
-      <AnnualMatrix columns={matrixColumns} rows={matrixRows} currentKey={ym} />
+      <details className="year-sheet" key={mode} open={mode==="diff" || !months.includes(ym)}><summary>年度別の表を見る</summary>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 10 }}>
+        <button aria-label="前の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o - 1)}>‹</button>
+        <span style={{ fontSize: 15, fontWeight: 700, minWidth: 88, textAlign: "center" }}>{fyStart}年度</span>
+        <button aria-label="次の年度" style={styles.monthArrow} onClick={() => setFyOffset((o) => o + 1)}>›</button>
+        {fyOffset !== 0 && <button style={{ ...styles.chipGhost, marginLeft: 4 }} onClick={() => setFyOffset(0)}>今年度に戻す</button>}
+      </div>
+      <AnnualMatrix columns={matrixColumns} rows={matrixRows} currentKey={ym} /></details>
 
       {mode === "plan" && spendingExpanded && (
         <div style={{ margin: "12px 4px 0" }}>

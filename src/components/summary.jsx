@@ -248,11 +248,12 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const ranked = [...groups.values()].sort((a,b)=> b.invested-a.invested);
   const total = ranked.reduce((sum,g)=>sum+g.invested,0);
   return <section className="statement portfolio"><h3>投資に回した額</h3><strong className="statement-total">{yen(total)}</strong>
-    <div className="statement-label"><span>振替先</span><span>投資額</span></div>
+    <h4 className="list-heading">振替先別</h4>
     {ranked.map(g=><details className="destination" key={g.name}><summary>
       <span>{g.name}<small>{total ? Math.round(100*g.invested/total) : 0}%</small></span><b>{yen(g.invested)}</b>
+      <small className="action-caption">明細 {g.rows.length}件 ›</small>
       <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>
-    </summary>{g.rows.map(r=><div className="statement-line" key={r.id}><span>{r.date?.slice(5)}　{r.method}</span><span>{yen(r.amount)}</span></div>)}
+    </summary>{g.rows.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(r=><div className="statement-line" key={r.id}><span>{r.date?.slice(5)}　{r.method}{r.amount<0?"・戻し":""}</span><b>{yen(r.amount)}</b></div>)}
     </details>)}
     {ranked.filter(g=>g.returned>0).map(g=><div key={g.name} className="statement-line"><span>{g.name}からの戻り</span><b>{yen(g.returned)}</b></div>)}
   </section>;

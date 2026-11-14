@@ -18,7 +18,7 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, onSave
         <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
         <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
       </div>
-      {view === "list" && <DetailList monthEntries={monthEntries} onEdit={onEdit} />}
+      {view === "list" && <DetailList key={ym} monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}
       {view === "year" && <YearTable entries={entries} ym={ym} config={config} cards={cards} />}
       {view === "memo" && <MemoList memos={memos} onSave={onSaveMemos} cards={cards} config={config} ym={ym} />}
@@ -27,6 +27,7 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, onSave
 }
 
 export function DetailList({ monthEntries, onEdit }) {
+  const [limit,setLimit] = useState(5);
   const [query,setQuery] = useState("");
   const catLabel = { salary: "給与系", card: "カード", account: "口座" };
 
@@ -46,19 +47,20 @@ export function DetailList({ monthEntries, onEdit }) {
   const filtered = list.filter(({e,d,desc})=>[e.item,e.account,e.amount,d,desc,e.note].some(value=>normalize(value).includes(needle)));
   return (
     <div>
-      <input className="record-search" type="search" aria-label="記録を検索" placeholder="店名・口座・金額で検索" value={query} onChange={e=>setQuery(e.target.value)} />
+      <input className="record-search" type="search" aria-label="記録を検索" placeholder="店名・口座・金額で検索" value={query} onChange={e=>{setQuery(e.target.value);setLimit(5);}} />
       {!filtered.length && <p>一致する記録はありません</p>}
       <div style={styles.detailCard}>
-        {filtered.map(({ e, d, desc }, index) => (
+        {filtered.slice(0,limit).map(({ e, d, desc }, index) => (
           <React.Fragment key={e.id}>
             {(index === 0 || filtered[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
           <button className="journal-row" onClick={() => onEdit(e)}>
             <span className="journal-mark" aria-hidden="true">{e.cat==="salary"?"給":e.cat==="card"?"カ":"口"}</span>
-            <span className="journal-name"><b>{desc || e.item}</b><small>{[catLabel[e.cat], e.account, desc && e.item].filter(Boolean).join(" · ")}</small></span>
-            <strong>{yen(e.amount)}</strong>
+            <span className="journal-name"><b>{desc || e.note || e.item}</b><small>{[catLabel[e.cat], e.account, (desc || e.note) && e.item].filter(Boolean).join(" · ")}</small></span>
+            <span className="entry-value"><strong>{yen(e.amount)}</strong><small>編集 ›</small></span>
           </button>
           </React.Fragment>
         ))}
+        {filtered.length>limit && <button className="plain-action" onClick={()=>setLimit(limit+10)}>以前の記録を表示（残り{filtered.length-limit}件）</button>}
       </div>
     </div>
   );
