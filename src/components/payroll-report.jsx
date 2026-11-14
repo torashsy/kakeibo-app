@@ -32,10 +32,7 @@ export function PayrollReport({ slips }) {
     <header><h3>給与・賞与</h3><select aria-label="支給年" value={year} onChange={e=>{setChoice(e.target.value);setExpanded("");}}>{years.map(y=><option key={y} value={y}>{y}年</option>)}</select></header>
     <div className="pay-hero"><small>年間手取り</small><strong>{yen(total("net"))}</strong>
     <small>{rows.at(-1).date.slice(5).replace("-","/")}〜{rows[0].date.slice(5).replace("-","/")} 支給分 · 明細{rows.length}件</small></div>
-    <div className="pay-composition" aria-label="手取り・税金・社会保険・その他控除">
-      {[["手取り",total("net"),"#368476"],["税金",total("税金"),"#b77645"],["社会保険",total("社会保険"),"#597daa"],["その他控除",total("その他控除"),"#867990"]].map(([label,amount,color]) =>
-        <div key={label}><span>{label}</span><div className="pay-track"><i style={{width:Math.min(100,100*Math.max(0,amount)/Math.max(1,total("gross")))+"%",background:color}}/></div><b>{yen(amount)}</b></div>)}
-    </div>
+    <MonthlyTakeHome key={year} rows={rows} />
     <details className="pay-breakdown"><summary>税金・社会保険料と支給明細</summary>
     <dl>{metrics.map(([label,key])=><div key={key}><dt>{label}</dt><dd>{yen(total(key))}</dd></div>)}</dl>
     <table className="pay-list"><caption>支給日別の明細（金額は円）</caption>
@@ -46,5 +43,24 @@ export function PayrollReport({ slips }) {
         {expanded===id && <tr><td colSpan={4} className="pay-detail"><AmountTable title="支給内訳" items={s.earnings} total={s.gross}/><AmountTable title="控除内訳" items={s.withholdings} total={s.deductions}/>{s.overtimeHours!=null && <p>時間外割増時間　{s.overtimeHours}時間</p>}</td></tr>}</React.Fragment>})}
     </tbody></table>
     </details>
+  </section>;
+}
+
+function MonthlyTakeHome({ rows }) {
+  const months = Array.from({length:12}, (_, i) => {
+    const slips = rows.filter(row => Number(row.date.slice(5,7)) === i+1);
+    const net = slips.reduce((sum,row) => sum + row.net, 0);
+    const bonus = slips.filter(row => /賞与|ボーナス|bonus/i.test(row.kind)).reduce((sum,row) => sum + row.net, 0);
+    return { month:i+1, net, bonus, count:slips.length };
+  });
+  const [selected, select] = useState(Number(rows[0].date.slice(5,7))-1);
+  const current = months[selected];
+  const maximum = Math.max(1,...months.map(m => m.net));
+  return <section className="net-months"><header><h4>月別手取り</h4><span>{current.month}月　<b>{yen(current.net)}</b></span></header>
+    <div className="net-columns">{months.map((m,i) => <button key={i} disabled={!m.count} aria-pressed={selected===i}
+      aria-label={m.month+"月 "+(m.count ? yen(m.net) : "明細なし")} onClick={()=>select(i)}>
+      <span className="net-column"><i style={{height:100*Math.max(0,m.bonus)/maximum+"%",background:"#bc8747"}}/><i style={{height:100*Math.max(0,m.net-m.bonus)/maximum+"%",background:"#378575"}}/></span>
+      <small>{m.month}</small></button>)}</div>
+    <div className="net-key"><span>給与　{yen(current.net-current.bonus)}</span><span>賞与　{yen(current.bonus)}</span></div>
   </section>;
 }

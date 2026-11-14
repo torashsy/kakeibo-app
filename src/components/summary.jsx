@@ -22,6 +22,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   const purchases = useMemo(() => classifyCardRows(bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:"))), [snapshot]);
   const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym, undefined, 30, scheduledDebits, purchases), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits, purchases]);
   const forecast = forecasts[ym];
+  const showOutlook = ym >= cycleYm(new Date().toLocaleDateString('sv-SE'), config.cycleCutoffDay) && !closedMonths.includes(ym);
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
@@ -30,16 +31,16 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
         <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
-      <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
+      {showOutlook && <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
       <MonthlyNetChart entries={entries || []} ym={ym} />
-      <section className="k-group">
+      {showOutlook && <section className="k-group">
         <h3>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</h3>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
           ["支出",forecast.spending,forecast.spendingSource], ["投資振替",forecast.invest,forecast.investRecorded]].map(([label,amount,source]) =>
           <div key={label} style={alignedRow}><span>{label} <small>{typeof source === "string" ? source : source ? "実績" : "計画"}</small></span><strong style={alignedAmount}>{yen(amount)}</strong></div>)}
-      </section>
-      <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
+      </section>}
+      {showOutlook && <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
       <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />
       <PayrollReport slips={paySlips} />
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
@@ -47,8 +48,8 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
       </details>
 
-      <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
-      <AnnualOutlookCard forecasts={forecasts} plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />
+      {showOutlook && <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />}
+      {showOutlook && <AnnualOutlookCard forecasts={forecasts} plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />}
 
     </div>
   );
@@ -187,14 +188,20 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const cards = Object.values(snapshot?.investmentCardRows || {}).filter(r => cycleYm(r.date, cutoff) === ym);
   if (!bank.length && !cards.length) return null;
   const sum = rows => rows.reduce((total, r) => total + r.amount, 0);
-  return <details open className="k-group"><summary>投資の内訳</summary>
-    {[["銀行明細で確認した振替（差引）", confirmed, sum(confirmed)], ...(manual.length ? [["その他の登録済み振替", manual, sum(manual)]] : []), ["カード積立（利用日基準）", cards, -sum(cards)]].map(([label,rows,total]) =>
-      <details key={label}><summary style={{padding:"10px 0"}}>{label}　{yen(total)}（{rows.length}件）</summary>
-        {rows.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(r =>
-          <div key={r.id} style={{...styles.settingRow, gap:8}}><span>{r.date?.slice(5) || "日付未登録"}　{r.broker || r.note || r.account}</span><strong>{yen(label.startsWith("カード") ? -r.amount : r.amount)}</strong></div>)}
-      </details>)}
-    <p style={{fontSize:12}}>カード積立はカード請求の内訳です。収支への追加計上はありません。</p>
-  </details>;
+  const groups = [
+    {label:"銀行振替", rows:confirmed, factor:1, color:"#357c72"},
+    {label:"その他の振替", rows:manual, factor:1, color:"#6786a4"},
+    {label:"カード積立", rows:cards, factor:-1, color:"#ae763f"},
+  ].filter(g => g.rows.length).map(g => ({...g, amount:g.factor * sum(g.rows)}))
+    .sort((a,b) => Math.abs(b.amount) - Math.abs(a.amount));
+  const max = Math.max(1, ...groups.map(g => Math.abs(g.amount)));
+  return <section className="k-group"><h3>投資の内訳</h3>
+    {groups.map(g => <details key={g.label} className="investment-group"><summary>
+      <span>{g.label}</span><b>{yen(g.amount)}</b>
+      <span className="investment-track"><i style={{width:Math.abs(g.amount)/max*100+"%",background:g.color}} /></span>
+    </summary>{g.rows.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(r =>
+      <div key={r.id} style={styles.settingRow}><span>{r.date?.slice(5)}　{r.broker || r.note || r.account}</span><b>{yen(g.factor*r.amount)}</b></div>)}</details>)}
+  </section>;
 }
 const alignedRow = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", padding: "11px 14px", borderBottom: `1px solid ${LINE}` };
 const alignedAmount = { textAlign: "right", whiteSpace: "nowrap", fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)", fontSize: "var(--num-size)" };
