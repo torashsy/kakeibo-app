@@ -81,7 +81,7 @@ export const themeVars = (t) => {
     "--num-align": "right", "--label-align": "left",
     "--radius": "14px", "--row-pad": "12px", "--num-size": "15px",
     "--hero-bg": accent, "--hero-text": "#FFFFFF",
-    "--font": FONT_STACK, "--num-font": FONT_STACK,
+    "--font": FONT_STACK, "--num-font": "ui-monospace, SFMono-Regular, Consolas, monospace",
     "--base-size": "15px", "--heavy": 600, "--tracking": "0px",
     "--tab-bg": p.tabBg, "--tab-active": accent,
     "--num-variant": "tabular-nums",

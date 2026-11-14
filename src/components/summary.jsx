@@ -27,13 +27,10 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
     <div className="home-overview">
       <section className="home-flow" aria-label="選択月の収入と支出">
         <header><h3>{ymLabel(ym)}の収支</h3></header>
-        <strong className="flow-net">{summary.net > 0 ? "+" : ""}{yen(summary.net)}</strong>
-        <div className="flow-comparison">
-          {[["収入",summary.income,GREEN],["支出",summary.expense,RED]].map(([label,value,color]) =>
-            <div key={label}><span>{label}</span><b>{yen(value)}</b>
-              <div className="flow-track" aria-hidden="true"><i style={{background:color,width:Math.abs(value)/Math.max(1,Math.abs(summary.income),Math.abs(summary.expense))*100+"%"}}/></div>
-            </div>)}
-        </div>
+        <dl className="flow-ledger">
+          {[["収入", summary.income], ["支出", summary.expense], ["差引", summary.net]].map(([label, amount]) =>
+            <div key={label}><dt>{label}</dt><dd>{label === "差引" && amount > 0 ? "+" : ""}{yen(amount)}</dd></div>)}
+        </dl>
       </section>
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
@@ -123,34 +120,45 @@ const purposeGroups = [
   ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器"]],
   ["移動・旅行", "#537fae", ["交通費","タクシー","旅行・宿泊"]],
   ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","チケット代","映画館","カメラ用品","ドメイン費","試験料","デジタルサービス","セクシー系"]],
-  ["その他", "#aa925a", []],
+
   ["物販", "#c07591", ["物販","商業施設","コンビニ"]],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
 ];
 function SpendingPurpose({ purchases, ym, cutoff }) {
-  const groups = purposeGroups.map(([label,color]) => ({label,color,amount:0,rows:[]}));
+  const groups = new Map();
   for (const row of purchases) {
     if (cycleYm(row.date, cutoff) !== ym || ["投資","Revolutチャージ"].includes(row.spendingCategory)) continue;
-    const idx = purposeGroups.findIndex(([, , names]) => names.includes((row.spendingCategory || "未分類").replace(/（推定）$/, "")));
-    const g = groups[idx < 0 ? 4 : idx];
+    let category = (row.spendingCategory || "未分類").replace(/（推定）$/, "");
+    if (category === "その他の分類済み") {
+      const major = row.mfMajor;
+      category = (major && !["未分類","その他"].includes(major)) ? major : row.mfMinor || row.description;
+      if (["未分類","雑費","その他"].includes(category)) category = row.description;
+    }
+    const preset = purposeGroups.find(([, , names]) => names.includes(category));
+    const majorGroups = {"食費":"食事","通信費":"暮らし","健康・医療":"暮らし","趣味・娯楽":"趣味・サービス","教養・教育":"趣味・サービス"};
+    let label = preset?.[0] || majorGroups[category] || category;
+    if (["現金・カード","特別な支出","収入"].includes(label)) label = row.mfMinor || row.description;
+    const color = preset?.[1] || purposeGroups.find(([name]) => name === label)?.[1] || ["#927844","#577787","#94708a"][label.length % 3];
+    if (!groups.has(label)) groups.set(label, {label,color,amount:0,rows:[]});
+    const g = groups.get(label);
     g.amount -= row.amount;
     g.rows.push(row);
   }
-  const visible = groups.filter(g => g.rows.length).sort((a,b)=>b.amount-a.amount);
+  const visible = [...groups.values()].sort((a,b)=>b.amount-a.amount);
   const positive = visible.reduce((sum,g)=>sum+Math.max(0,g.amount),0);
   let edge = 0;
   const gradient = visible.filter(g=>g.amount>0).map(g=>{
     const from=edge; edge+=100*g.amount/positive;
     return g.color+" "+from+"% "+edge+"%";
   }).join(",");
-  groups.at(-1).rows.sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
+  groups.get("用途未確認")?.rows.sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
   return <section className="k-group home-spending" aria-label="カードの使い道"><header><h3>カードの使い道</h3><strong>{visible.length ? yen(visible.reduce((sum,g)=>sum+g.amount,0)) : ""}</strong></header>
     {visible.length ? <><div className="home-chart">
       <div className="purpose-ring" style={{"--ring-fill":positive?"conic-gradient("+gradient+")":"var(--line)"}} aria-hidden="true">
         {positive>0 && <span><small>{visible[0].label}</small><b>{Math.round(visible[0].amount/positive*100)}%</b></span>}
       </div>
       <div>{visible.map(g=><details key={g.label}><summary className="home-category"><i style={{background:g.color}}/><span>{g.label}</span><b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
-        {g.rows.map(r=><div key={r.id} className="home-purchase"><time dateTime={r.date}>{shortDate(r.date)}</time><span>{r.description}{r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</details>)}</div>
+        {g.rows.map(r=><div key={r.id} className="home-purchase"><time dateTime={r.date}>{shortDate(r.date)}</time><span>{r.description}{r.spendingCategory === "その他の分類済み" && r.mfMinor && <small>{r.mfMinor}</small>}{r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</details>)}</div>
     </div></> : <p>利用明細なし</p>}
   </section>;
 }
