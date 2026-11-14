@@ -68,3 +68,17 @@
 .next-balance,.sync-link{display:flex;justify-content:space-between;align-items:center;border:0;border-block:1px solid var(--line);padding:12px 0;background:transparent;color:var(--ink);text-align:left;font:inherit}.next-balance{cursor:pointer}.next-balance b{display:block;font-size:24px;font-variant-numeric:tabular-nums}.sync-link button{background:none;border:0;color:inherit;padding:12px;cursor:pointer}
 .ledger-nav .ledger-tab[aria-current]{background:transparent;color:var(--ink);box-shadow:inset 0 3px var(--income)}.ledger-nav .ledger-tab{font-size:12px}
 @media(min-width:860px){.ledger-app{--sheet-width:960px;padding-left:148px}.ledger-nav{width:148px;left:max(0px,calc((100vw - 960px)/2))}.ledger-nav .ledger-tab[aria-current]{box-shadow:inset 3px 0 var(--income)}}
+.ledger-app .ledger-header{border-top:0;padding-top:18px;padding-bottom:4px}
+.ledger-app .ledger-heading h1{font-weight:650;letter-spacing:-.04em}
+.ledger-app .report-index{border-top:0}
+.ledger-app .home-flow .cash-waterfall{display:block;margin-top:8px}
+.ledger-app .cash-waterfall svg{height:86px;width:100%}
+.ledger-app .cash-waterfall-labels{display:flex;justify-content:center;gap:0}
+.ledger-app .cash-waterfall-labels>div{width:min(33.333%,66px);flex-direction:column;align-items:center;gap:1px}
+.ledger-app .cash-waterfall-labels strong{font-size:11px}
+.spend-report header,.spend-row,.spend-transactions>div{display:flex;align-items:baseline;gap:8px}
+.spend-report header{justify-content:space-between}.spend-report h3{margin:0;font-size:18px}.spend-report header b{font-size:20px}
+.spend-strip{display:flex;gap:2px;height:14px;margin:12px 0}.spend-strip i{min-width:1px}
+.spend-row{width:100%;padding:11px 0;min-height:44px;border:0;border-bottom:1px solid var(--line);color:var(--ink);background:transparent;font:inherit;text-align:left;cursor:pointer}
+.spend-row i{align-self:center;width:6px;height:12px}.spend-row small{margin-left:auto;color:var(--muted)}.spend-row b{min-width:8ch;text-align:right}.spend-row span:last-child{font-size:13px;color:var(--muted)}
+.spend-transactions{border-left:2px solid var(--line);margin:4px 0 8px 2px;padding-left:10px}.spend-transactions>div{font-size:13px;padding:7px 0}.spend-transactions time{color:var(--muted)}.spend-transactions b{margin-left:auto;white-space:nowrap}

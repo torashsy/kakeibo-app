@@ -163,6 +163,7 @@ const purposeGroups = [
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
 ];
 function SpendingPurpose({ purchases, ym, cutoff }) {
+  const [selection, setSelection] = useState(null);
   const groups = new Map();
   for (const row of purchases) {
     if (cycleYm(row.date, cutoff) !== ym || ["投資","Revolutチャージ"].includes(row.spendingCategory)) continue;
@@ -181,21 +182,17 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
   }
   const visible = [...groups.values()].sort((a,b)=>b.amount-a.amount);
   const positive = visible.reduce((sum,g)=>sum+Math.max(0,g.amount),0);
-  let edge = 0;
-  const gradient = visible.filter(g=>g.amount>0).map(g=>{
-    const from=edge; edge+=100*g.amount/positive;
-    return g.color+" "+from+"% "+edge+"%";
-  }).join(",");
-  groups.get("用途未確認")?.rows.sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
-  return <section className="k-group home-spending" aria-label="カードの使い道"><header><h3>カードの使い道</h3><strong>{visible.length ? yen(visible.reduce((sum,g)=>sum+g.amount,0)) : ""}</strong></header>
-    {visible.length ? <><div className="home-chart">
-      <div className="purpose-ring" style={{"--ring-fill":positive?"conic-gradient("+gradient+")":"var(--line)"}} aria-hidden="true">
-        {positive>0 && <span><small>{visible[0].label}</small><b>{Math.round(visible[0].amount/positive*100)}%</b></span>}
-      </div>
-      <div>{visible.map(g=><details key={g.label}><summary className="home-category"><i style={{background:g.color}}/><span>{g.label}</span><b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
-        {g.rows.map(r=><div key={r.id} className="home-purchase"><time dateTime={r.date}>{shortDate(r.date)}</time><span>{r.description}{r.spendingCategory && !r.spendingCategory.endsWith("（推定）") && <small>{r.spendingCategory === "その他の分類済み" ? r.mfMinor : r.spendingCategory}</small>}{r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</details>)}</div>
-    </div></> : <p>利用明細なし</p>}
+  const selected = selection?.ym === ym ? groups.get(selection.label) : null;
+  const choose = label => setSelection(selected?.label === label ? null : {ym,label});
+  return <section className="spend-report" aria-label="カードの使い道">
+    <header><h3>カードの使い道</h3>{visible.length > 0 && <b>{yen(visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>
+    {!visible.length && <p>利用明細なし</p>}
+    {positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
+    {visible.map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
+      <i style={{background:g.color}}/><span>{g.label}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
+    </button>{selected===g && <div className="spend-transactions">{g.rows.map(r=><div key={r.id}><time>{shortDate(r.date)}</time><span>{r.description}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</div>}</React.Fragment>)}
   </section>;
+
 }
 function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const bank = entries.filter(e => e.cat === "account" && acctRole(e.item) === "transfer");
