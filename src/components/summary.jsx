@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
+import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
+import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
 
@@ -27,20 +28,8 @@ export function Summary({ paySlips, snapshot, scheduledDebits, summary, balances
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}　投資振替 {yen(summary.invest)}</div>
       </div>
-      {Object.values(paySlips || {}).filter(slip => cycleYm(slip.date, config.cycleCutoffDay) === ym)
-        .sort((a, b) => a.date.localeCompare(b.date)).map(slip => (
-        <details key={slip.date + slip.kind} style={{ ...styles.detailCard, padding: 12, marginBottom: 8 }}>
-          <summary>{slip.date.slice(5).replace("-", "/")}　{slip.kind}明細　手取り {yen(slip.net)}</summary>
-          {[["支給", slip.gross, slip.earnings], ["控除", slip.deductions, slip.withholdings]].map(([label, total, items]) => (
-            <section key={label}>
-              <h4>{label}合計　{yen(total)}</h4>
-              {Object.entries(items).map(([name, amount]) => <div key={name}>{name}　{yen(amount)}</div>)}
-            </section>
-          ))}
-          {slip.overtimeHours != null && <p>時間外割増時間　{slip.overtimeHours}時間</p>}
-        </details>
-      ))}
       <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
+      <PayrollReport slips={paySlips} />
       {onOpenImport && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <button style={{ ...styles.closeCta, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}`, margin: 0 }} onClick={() => onOpenImport("csv")}>

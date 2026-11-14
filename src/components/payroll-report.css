@@ -1,0 +1,19 @@
+.pay-report {padding:16px; margin-bottom:12px; font-variant-numeric:tabular-nums}
+.pay-report header,.pay-report dl>div {display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pay-report h3 {margin:0;font-size:17px}
+.pay-report select,.pay-list button {color:inherit;background:var(--card-bg);font:inherit}
+.pay-report select {border:1px solid var(--border);border-radius:6px;padding:4px}
+.pay-hero {display:grid;gap:3px;margin:14px 0}
+.pay-hero strong {font-size:clamp(24px,6vw,32px)}
+.pay-report small,.pay-report dt {font-size:12px}
+.pay-report dl {margin:0 0 16px}
+.pay-report dl>div {border-bottom:1px solid var(--border);padding:5px 0}
+.pay-report dd {margin:0;font-weight:600}
+.pay-report table {width:100%;border-collapse:collapse;font-size:clamp(11px,3vw,14px)}
+.pay-report caption {text-align:left;font-weight:650;padding:6px 0}
+.pay-report th,.pay-report td {padding:7px 2px;border-bottom:1px solid var(--border);text-align:right}
+.pay-report th:first-child,.pay-report .pay-detail {text-align:left}
+.pay-list button {display:grid;border:0;padding:3px 0;text-align:left;cursor:pointer}
+.pay-items th {font-weight:400}
+.pay-items tfoot {font-weight:700}
+.pay-report .pay-detail {padding:8px 12px;background:var(--bg)}
