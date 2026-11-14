@@ -1,3 +1,4 @@
+import "./layout.css";
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
 import { bankTransactions } from "./bank-feed";
@@ -403,22 +404,22 @@ export default function App() {
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
   return (
-    <div style={{ ...styles.app, ...themeVars(theme) }}>
-      <header style={styles.header}>
-        <div style={styles.brandRow}><span style={styles.brand}>家計簿</span><CloudBadge /></div>
+    <div className="ledger-app" style={{ ...themeVars(theme) }}>
+      <header className="ledger-header">
+        <div className="ledger-heading"><h1>{{ today:"今月の家計", records:"記録", plan:"計画", recurring:"定期費", settings:"設定", finance:"明細・同期", design:"表示設定", cards:"カード管理" }[tab]}</h1><CloudBadge /></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
-          <div style={styles.monthPicker}>
-            <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, -1))}>‹</button>
-            <select value={ym} onChange={(e) => setYm(e.target.value)} style={styles.monthSelect}>{months.map((m) => <option key={m} value={m}>{periodLabel(m, config.cycleCutoffDay)}</option>)}</select>
-            <button style={styles.monthArrow} onClick={() => setYm(addMonth(ym, 1))}>›</button>
+          <div className="ledger-month">
+            <button aria-label="前の月" onClick={() => setYm(addMonth(ym, -1))}>‹</button>
+            <select value={ym} onChange={(e) => setYm(e.target.value)} aria-label="表示する月">{months.map((m) => <option key={m} value={m}>{periodLabel(m, config.cycleCutoffDay)}</option>)}</select>
+            <button aria-label="次の月" onClick={() => setYm(addMonth(ym, 1))}>›</button>
           </div>
         )}
         {(tab === "today" || tab === "records" || tab === "plan") && periodRange(ym, config.cycleCutoffDay) && (
-          <div style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 2 }}>{periodRange(ym, config.cycleCutoffDay)}</div>
+          <div className="ledger-period">{periodRange(ym, config.cycleCutoffDay)}</div>
         )}
       </header>
 
-      <main style={{ ...styles.main, ...((tab === "today" || tab === "records") ? { padding: "12px 16px calc(106px + env(safe-area-inset-bottom))" } : {}) }}>
+      <main className="ledger-main" data-view={tab}>
         {tab === "finance" && <SubScreen title="明細・照合" onBack={() => setTab("today")}><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
         {tab === "today" && <Summary forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} />}
         {tab === "today" && <FinanceFeedPanel accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onOpen={() => setTab("finance")} />}
@@ -430,9 +431,9 @@ export default function App() {
         {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>
 
-      {(tab === "today" || tab === "records") && <button aria-label="記録を追加・取り込み" style={styles.fab} onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
+      {(tab === "today" || tab === "records") && <button aria-label="記録を追加・取り込み" className="ledger-add" onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
 
-      <nav style={styles.tabs}>
+      <nav className="ledger-nav" aria-label="メインメニュー">
         <TabBtn active={tab === "today" || tab === "finance"} onClick={() => setTab("today")} label="今月" icon="summary" />
         <TabBtn active={tab === "records"} onClick={() => setTab("records")} label="記録" icon="detail" />
         <TabBtn active={tab === "plan"} onClick={() => setTab("plan")} label="計画" icon="plan" />
@@ -475,6 +476,6 @@ function SubScreen({ title, onBack, children }) {
 }
 
 function TabBtn({ active, onClick, label, icon }) {
-  return <button onClick={onClick} style={{ ...styles.tabBtn, color: active ? "var(--tab-active)" : MUTED }}><Icon name={icon} size={22} strokeWidth={active ? 2.1 : 1.8} /><span style={{ fontSize: 10.5, marginTop: 3, fontWeight: active ? 700 : 500 }}>{label}</span></button>;
+  return <button onClick={onClick} className="ledger-tab" aria-current={active ? "page" : undefined}><Icon name={icon} size={22} strokeWidth={active ? 2.1 : 1.8} /><span>{label}</span></button>;
 }
 

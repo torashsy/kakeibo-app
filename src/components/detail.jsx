@@ -43,13 +43,15 @@ export function DetailList({ monthEntries, onEdit }) {
   return (
     <div>
       <div style={styles.detailCard}>
-        {list.map(({ e, d, desc }) => (
-          <button key={e.id} style={styles.listRow} onClick={() => onEdit(e)}>
+        {list.map(({ e, d, desc }, index) => (
+          <React.Fragment key={e.id}>
+            {(index === 0 || list[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
+          <button style={styles.listRow} onClick={() => onEdit(e)}>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, overflow: "hidden" }}>
               <span style={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</span>
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
-                <span style={{ fontSize: 11, color: MUTED }}>{d || "日付なし"}</span>
+                
               </span>
               {desc && <span style={{ fontSize: 11, color: MUTED, wordBreak: "break-all", textAlign: "left" }}>{desc}</span>}
             </span>
@@ -59,6 +61,7 @@ export function DetailList({ monthEntries, onEdit }) {
               <span style={styles.chev}>›</span>
             </span>
           </button>
+          </React.Fragment>
         ))}
       </div>
     </div>
