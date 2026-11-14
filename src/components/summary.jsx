@@ -1,7 +1,7 @@
 import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, cycleStartDate, addMonth, computeSummary } from '../utils';
+import { yen, ymLabel, periodLabel, parseTxnKey, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, cycleStartDate, addMonth, computeSummary } from '../utils';
 import "./home.css";
 import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
@@ -61,7 +61,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
 
       </>}
       {section === "invest" && <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />}
-      {section === "pay" && <PayrollReport slips={paySlips} />}
+      {section === "pay" && <PayrollReport key={ym} slips={paySlips} ym={ym} />}
     </div>
   );
 }
@@ -194,24 +194,32 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
 }
 function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const bank = entries.filter(e => e.cat === "account" && acctRole(e.item) === "transfer");
-  const confirmed = bank.filter(e => e.mfInvestmentId || e.id?.startsWith("mf-invest:"));
-  const manual = bank.filter(e => !confirmed.includes(e));
   const cards = Object.values(snapshot?.investmentCardRows || {}).filter(r => cycleYm(r.date, cutoff) === ym);
-  if (!bank.length && !cards.length) return <p>この月の投資記録はありません。</p>;
-  const sum = rows => rows.reduce((total, r) => total + r.amount, 0);
-  const groups = [
-    {label:"銀行振替", rows:confirmed, factor:1, color:"#357c72"},
-    {label:"その他の振替", rows:manual, factor:1, color:"#6786a4"},
-    {label:"カード積立", rows:cards, factor:-1, color:"#ae763f"},
-  ].filter(g => g.rows.length).map(g => ({...g, amount:g.factor * sum(g.rows)}))
-    .sort((a,b) => Math.abs(b.amount) - Math.abs(a.amount));
-  const max = Math.max(1, ...groups.map(g => Math.abs(g.amount)));
-  return <section className="k-group"><h3>投資の内訳</h3>
-    {groups.map(g => <details key={g.label} className="investment-group"><summary>
-      <span>{g.label}</span><b>{yen(g.amount)}</b>
-      <span className="investment-track"><i style={{width:Math.abs(g.amount)/max*100+"%",background:g.color}} /></span>
-    </summary>{g.rows.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(r =>
-      <div key={r.id} style={styles.settingRow}><span>{r.date?.slice(5)}　{r.broker || r.note || r.account}</span><b>{yen(g.factor*r.amount)}</b></div>)}</details>)}
+  const groups = new Map();
+  for (const [rows, method] of [[bank,"銀行振替"],[cards,"カード積立"]]) {
+    for (const row of rows) {
+      const txn = parseTxnKey(row.src);
+      const description = [row.note, row.description, txn?.desc].filter(Boolean).join(" ");
+      const name = row.broker || row.destination || (description.match(/大和コネクト証券|楽天証券|松井証券|マネックス証券|野村證券/i)?.[0])
+        || (/SBI証券/i.test(description) ? "SBI証券" : /ハイブリッド預金/.test(description) ? "SBIハイブリッド預金" : "振替先未確認");
+      if (!groups.has(name)) groups.set(name, {name, invested:0, returned:0, rows:[]});
+      const group = groups.get(name);
+      group.invested += Math.max(0,-row.amount);
+      group.returned += Math.max(0,row.amount);
+      group.rows.push({id:row.id, date:row.date || txn?.date, method, amount:-row.amount});
+    }
+  }
+  if (!groups.size) return <p>この月の投資記録はありません。</p>;
+  const ranked = [...groups.values()].sort((a,b)=> b.invested-a.invested);
+  const total = ranked.reduce((sum,g)=>sum+g.invested,0);
+  return <section className="statement"><h3>投資に回した額</h3><strong className="statement-total">{yen(total)}</strong>
+    <div className="statement-label"><span>振替先</span><span>投資額</span></div>
+    {ranked.map(g=><details className="destination" key={g.name}><summary>
+      <span>{g.name}</span><b>{yen(g.invested)}</b>
+      <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>
+    </summary>{g.rows.map(r=><div className="statement-line" key={r.id}><span>{r.date?.slice(5)}　{r.method}</span><span>{yen(r.amount)}</span></div>)}
+    </details>)}
+    {ranked.filter(g=>g.returned>0).map(g=><div key={g.name} className="statement-line"><span>{g.name}からの戻り</span><b>{yen(g.returned)}</b></div>)}
   </section>;
 }
 const alignedRow = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", padding: "11px 14px", borderBottom: `1px solid ${LINE}` };

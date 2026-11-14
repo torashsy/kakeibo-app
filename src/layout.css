@@ -43,3 +43,13 @@
 .report-index button {font:inherit;font-size:14px;cursor:pointer;color:var(--muted);padding:10px 2px;background:transparent;border:0;border-bottom:2px solid transparent}
 .report-index button[aria-pressed=true] {color:var(--ink);border-bottom-color:currentColor;font-weight:700}
 .ledger-app .home-overview>.home-flow,.ledger-app .home-overview>.home-spending,.ledger-app .home-overview>.home-balance {border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0 18px}
+.ledger-app {--radius:0px}
+.ledger-app :where(section,article,header,nav,main,div,button,select,input,textarea,details,summary,span,table,aside,dialog,li):not(.purpose-ring):not(.purpose-ring span){border-radius:0!important}
+.ledger-app .statement {padding:8px 0;background:transparent;border:0}
+.statement h3{margin:0;font-size:18px}.statement-total,.take-home strong{font:650 clamp(30px,9vw,44px)/1.35 var(--num-font);letter-spacing:-.04em}.statement-total{display:block;margin:6px 0 24px}
+.statement-label,.statement-line,.destination summary{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.statement-label{border-bottom:1px solid var(--ink);padding:8px 0;font-size:12px;color:var(--muted)}
+.statement-line{padding:9px 0}.destination summary{position:relative;padding:15px 0 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.destination-share{position:absolute;bottom:0;left:0;height:3px;background:var(--income)}
+.statement-line b,.destination b{font-variant-numeric:tabular-nums}.gross{margin:18px 0 4px;font-size:20px}.deduction{border-bottom:1px solid var(--line);font-size:14px}.deduction b{font-weight:500}.take-home{border-top:2px solid var(--ink);margin-top:8px;padding:12px 0 22px;color:var(--income)}.pay-report header select{margin-left:4px}
+.pay-split{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px;margin:0 0 10px}.pay-split>div{width:100%;height:9px;background:var(--muted)}.pay-split i{display:block;height:100%;background:var(--income)}.pay-split small:first-of-type{color:var(--income)}
