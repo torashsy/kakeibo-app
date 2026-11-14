@@ -18,6 +18,7 @@ const safeSource = (value) => {
 const resultLabel = { applied: "反映済み", matched: "照合済み", conflict: "要確認", pending: "未反映", superseded: "新しい通知あり" };
 
 export function FinanceFeedPanel({ feed, ledger, accounts = [], results = [], state, expanded = false, onOpen, onRefresh }) {
+  const [view, setView] = React.useState("内訳");
   const freshness = financeFreshness(feed?.checkedAt);
   const visible = results.filter((r) => r.status !== "superseded");
   const conflicts = visible.filter((r) => r.status === "conflict").length;
@@ -28,7 +29,7 @@ export function FinanceFeedPanel({ feed, ledger, accounts = [], results = [], st
     <section style={{ ...styles.detailCard, marginBottom: 14, padding: 14 }} aria-label="金融情報の自動更新">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <strong style={{ fontSize: 14 }}>金融情報の自動更新</strong>
-        {onOpen && <button onClick={onOpen} style={{ ...styles.backLink, margin: 0 }}>詳細 ›</button>}
+        {onOpen && <button onClick={onOpen} style={{ ...styles.backLink, margin: 0 }}>明細・照合 ›</button>}
       </div>
       <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.7, margin: "8px 0" }}>
         最終確認：{dateText(feed?.checkedAt)}
@@ -44,9 +45,13 @@ export function FinanceFeedPanel({ feed, ledger, accounts = [], results = [], st
         <p style={{ color: MUTED, fontSize: 12 }}>設定の「クラウド同期」にログインすると、確認できた請求額と残高を受け取れます。</p>
       ) : !feed && <p style={{ color: MUTED, fontSize: 12 }}>取得できた金融情報はまだありません。</p>}
       {state?.mode === 'on' && <LatestBalances feed={feed} accounts={accounts} />}
-      {state?.mode === 'on' && <MonthlyCardSpending snapshot={feed?.bankSnapshot} />}
-      {expanded && ledger && <ManualComparison snapshot={feed?.bankSnapshot} ledger={ledger} />}
-      {expanded && <>
+      {expanded && <div aria-label="表示切替" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0" }}>
+        {["内訳", "利用明細", "照合", "同期状況"].map(label => <button key={label} type="button" aria-pressed={view === label} onClick={() => setView(label)} style={{ ...styles.backLink, margin: 0, padding: 8, fontWeight: view === label ? 700 : 400 }}>{label}</button>)}
+      </div>}
+      {expanded && view === "利用明細" && <BankFeed snapshot={feed?.bankSnapshot} />}
+      {expanded && view === "内訳" && state?.mode === 'on' && <MonthlyCardSpending snapshot={feed?.bankSnapshot} />}
+      {expanded && view === "照合" && ledger && <ManualComparison snapshot={feed?.bankSnapshot} ledger={ledger} />}
+      {expanded && view === "同期状況" && <>
         <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.7 }}>金額・対象・日付が確認できた請求と残高を反映します。買い物速報は請求額に加算しません。既存記録と異なる金額は、記録を残して「要確認」にします。</p>
         {sources.length > 0 && <div style={{ borderTop: "1px solid var(--border)", paddingTop: 9 }}>
           {sources.map((s, i) => <div key={s.id || i} style={{ fontSize: 12, lineHeight: 1.7, marginBottom: 9 }}>
@@ -73,7 +78,6 @@ export function FinanceFeedPanel({ feed, ledger, accounts = [], results = [], st
             </article>;
           })}
         </div>
-        <BankFeed snapshot={feed?.bankSnapshot} />
         {onRefresh && <button type="button" onClick={onRefresh} style={{ ...styles.backupBtn, marginTop: 12 }}>受信済みデータを再読込</button>}
       </>}
     </section>

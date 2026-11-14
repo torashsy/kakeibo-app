@@ -76,7 +76,7 @@ export async function getSyncState() {
 
 // 金融機関から確認した情報はkvと分離し、端末からは読取のみ。
 // 古い端末やオフラインの再送でサーバー側の観測結果を巻き戻さない。
-export async function readFinanceFeed() {
+export async function readFinanceFeed(previous) {
   const c = await getClient();
   if (!c) return { mode: "off", feed: null };
   const { data: sessionData, error: sessionError } = await c.auth.getSession();
@@ -85,6 +85,11 @@ export async function readFinanceFeed() {
   setSessionIdentity(userId || null);
   if (!userId) return { mode: "signedOut", feed: null };
   const authEpoch = sessionEpoch;
+  if (previous?.updatedAt && previous.userId === userId && previous.authEpoch === authEpoch) {
+    const stamp = await c.from("finance_feed").select("updated_at").eq("user_id", userId).maybeSingle();
+    if (stamp.error) throw stamp.error;
+    if (stamp.data?.updated_at === previous.updatedAt && isFinanceSessionCurrent(userId, authEpoch)) return previous;
+  }
   const { data, error } = await c.from("finance_feed")
     .select("payload,updated_at").eq("user_id", userId).maybeSingle();
   if (error) throw error;

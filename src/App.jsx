@@ -145,15 +145,17 @@ export default function App() {
   useEffect(() => {
     if (!loaded) return;
     let cancelled = false, reading = false, lastRead = 0, generation = 0;
+    let previous = null;
     const refresh = async (force = false) => {
       if (!force && (reading || Date.now() - lastRead < 10000 || document.visibilityState === "hidden")) return;
       const request = ++generation;
       reading = true; lastRead = Date.now();
       try {
-        const next = await readFinanceFeed();
+        const next = await readFinanceFeed(previous);
         if (cancelled || request !== generation) return;
         setFinanceState({ mode: next.mode, userId: next.userId, authEpoch: next.authEpoch, error: "" });
-        setFinanceFeed((old) => JSON.stringify(old) === JSON.stringify(next.feed) ? old : next.feed);
+        previous = next;
+        setFinanceFeed(next.feed);
       } catch (error) {
         if (!cancelled && request === generation) setFinanceState((old) => ({ ...old, error: String(error?.message || error) }));
       } finally { if (request === generation) reading = false; }
@@ -163,6 +165,7 @@ export default function App() {
     const timer = window.setInterval(passiveRefresh, 30000);
     const off = onSyncChange(passiveRefresh);
     const offAuth = onFinanceAuthChange(() => {
+      previous = null;
       setFinanceFeed(null); setFinanceState({ mode: "loading", error: "" });
       // Auth callbacks must return before another getSession call acquires the auth lock.
       generation += 1;
