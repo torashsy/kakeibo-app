@@ -365,20 +365,31 @@ function MonthExplanation({result, entries, past}) {
   const actualIncome=(past || result.salaryRecorded ? result.salaryIncome : 0)+(past || result.otherRecorded ? result.otherIncome : 0);
   const actualSpend=ranked.reduce((sum,r)=>sum+(r.recorded?r.amount:0),0);
   const scale=Math.max(1,Math.abs(income),spending);
-  const bars=[[result.otherIncome===0 && result.salaryIncome>0?"給与":"収入",income,actualIncome],["支出",spending,actualSpend]];
+  const bars=[["収入",income,actualIncome],["支出",spending,actualSpend]];
+  const transfers=entries.filter(e=>e.cat==="account" && acctRole(e.item)==="transfer");
+  const outbound=transfers.reduce((sum,e)=>sum+Math.max(0,-e.amount),0);
+  const returned=transfers.reduce((sum,e)=>sum+Math.max(0,e.amount),0);
+  const investmentIsActual=past || result.investRecorded;
   return <section className="month-explain">
     <header><span>{past?"収支実績":"収支見込み"}</span><strong className={result.net<0?"negative":""}>{yen(result.net)}</strong></header>
-    <div className="forecast-key"><span>{!actualIncome && !actualSpend ? "記録済み 0円" : "記録済み"}</span><span>予定</span></div>
-    {bars.map(([label,value,actual])=><div key={label} className="forecast-bar"><span>{label}</span><div><i style={{width:100*Math.abs(value)/scale+"%"}}><u style={{width:(value?Math.max(0,Math.min(100,100*actual/value)):0)+"%"}}/></i></div><b>{yen(value)}</b></div>)}
-    <div className="major-heading"><h3>支出の内訳</h3><span>金額順</span></div>
-    {(expanded?ranked:ranked.slice(0,3)).map((r,i)=><div className="driver" key={r.key}>
+    <div className="month-flows">{bars.map(([label,value,actual])=><div className="month-flow-line" key={label}>
+      <span>{label}<small>{actual===value && value!==0 ? "実績" : actual===0 ? (value===0?"—":"予定") : "実績＋予定"}</small></span>
+      <b>{yen(value)}</b><div className="flow-track"><i style={{width:100*Math.abs(value)/scale+"%"}}><u style={{width:(value?Math.max(0,Math.min(100,100*actual/value)):0)+"%"}}/></i></div>
+    </div>)}</div>
+    <section className="investment-flow"><header><h3>投資振替</h3><small>{investmentIsActual?"実績":"予定"} · 収支外</small></header>
+      <div className="invest-result"><span>{result.invest>0?"口座への純戻し":"投資への純振替"}</span><strong>{yen(Math.abs(result.invest))}</strong></div>
+      {investmentIsActual && outbound+returned>0 && <><div className="transfer-track" aria-hidden="true"><i style={{flex:outbound}}/><i style={{flex:returned}}/></div>
+      <div className="transfer-labels"><span>投資へ　{yen(outbound)}</span><span>口座へ　{yen(returned)}</span></div></>}
+    </section>
+    <div className="major-heading"><h3>{expanded?"支出の内訳":ranked.length?"最大の支出":"支出の記録なし"}</h3></div>
+    {(expanded?ranked:ranked.slice(0,1)).map((r,i)=><div className="driver" key={r.key}>
       <div><b>{r.label}</b><strong>{yen(r.amount)}</strong></div>
       <div className="driver-scale"><i style={{width:100*r.amount/(spending||1)+"%",opacity:i===0?1:.55}}/></div>
       <small>{r.date && r.date.slice(5).replace("-","/")+"　"}{r.source} · {Math.round(100*r.amount/(spending||1))}%</small>
     </div>)}
-    <details open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="calculation"><summary>計算内訳{ranked.length>3?"・全"+ranked.length+"件":""}</summary>
+    <details open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="calculation"><summary>{expanded?"内訳を閉じる":"収支の内訳を見る"}{ranked.length?" · "+ranked.length+"件":""}</summary>
       <table><thead><tr><th></th><th>実績</th><th>予定</th></tr></thead><tbody>{bars.map(([label,value,actual])=><tr key={label}><th>{label}</th><td>{yen(actual)}</td><td>{yen(value-actual)}</td></tr>)}</tbody></table>
-      <small>投資振替　{yen(result.invest)}（収支集計外）</small>
+
     </details>
   </section>;
 }
