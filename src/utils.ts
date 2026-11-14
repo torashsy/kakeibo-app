@@ -755,6 +755,7 @@ export interface UpcomingDebit {
   amount: number;
   status: Exclude<CardClaimStatus, "paid">;
   kind: "card" | "fixed";
+  fromFeed?: boolean;
 }
 
 const addDays = (date: string, amount: number): string => {
@@ -765,7 +766,7 @@ const addDays = (date: string, amount: number): string => {
 
 // 選択月度内の未引落カードと、カードを使わない定期費を日付順に返す。
 // targetYm が無い呼び出しは、従来どおり今日から指定日数内を対象にする。
-export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, targetYm?: string, todayValue?: string, days: number = 30): UpcomingDebit[] {
+export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, targetYm?: string, todayValue?: string, days: number = 30, scheduled?: {card: string; date: string; amount: number}[] | null): UpcomingDebit[] {
   const today = validDate(todayValue) ? todayValue : (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -780,6 +781,12 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
     const ym = addMonth(startYm, offset);
     const monthEntries = (entries || []).filter((e) => e.ym === ym);
     for (const row of cardClaimStates(cards, debt, subs, monthEntries, ym, cutoffDay)) {
+      const observed = Array.isArray(scheduled) && scheduled.find(s => s?.card === row.name && validDate(s.date) && cycleYm(s.date, cutoffDay) === ym && Number.isSafeInteger(s.amount) && s.amount >= 0);
+      if (observed) {
+        if (row.status !== "paid" && observed.date >= start && observed.date <= end)
+          cardRows.push({ id: "card|" + ym + "|" + row.name, date: observed.date, label: row.name, amount: observed.amount, status: "forecast", kind: "card", fromFeed: true });
+        continue;
+      }
       if (row.status === "paid" || !row.due || row.due < start || row.due > end) continue;
       cardRows.push({ id: `card|${ym}|${row.name}`, date: row.due, label: row.name, amount: row.amount, status: row.status, kind: "card" });
     }

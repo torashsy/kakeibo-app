@@ -3,7 +3,7 @@ import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
 import { styles } from '../styles.js';
 
-export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards, onOpenClose, onOpenImport }) {
+export function Summary({ scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards, onOpenClose, onOpenImport }) {
   const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
@@ -15,7 +15,7 @@ export function Summary({ summary, balancesNow, prevBalTotal, plans, subs, confi
     .map(([acc, b]) => [acc, cycleEndDate(b.ym, config.cycleCutoffDay)]);
   const breakdown = useMemo(() => cardBreakdown(cards, debt || {}, memos, monthEntries, ym), [cards, debt, memos, monthEntries, ym]);
   const claimStates = useMemo(() => cardClaimStates(cards, debt || {}, subs, monthEntries, ym, config.cycleCutoffDay), [cards, debt, subs, monthEntries, ym, config.cycleCutoffDay]);
-  const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym), [entries, cards, debt, subs, config.cycleCutoffDay, ym]);
+  const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym, undefined, 30, scheduledDebits), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits]);
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div style={{ padding: "4px 2px" }}>
@@ -152,7 +152,7 @@ function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
               <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13.5 }}>{row.label}</span>
               <span style={{ textAlign: "right" }}>
                 <span style={{ display: "block", fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)", fontSize: 13.5 }}>{yen(row.amount)}</span>
-                <span style={{ color: state.color, fontSize: 10.5 }}>{state.label}</span>
+                <span style={{ color: state.color, fontSize: 10.5 }}>{row.fromFeed ? "マネーフォワード予定額" : state.label}</span>
               </span>
             </div>
           );
