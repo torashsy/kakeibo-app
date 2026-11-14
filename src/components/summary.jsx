@@ -33,10 +33,11 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       </nav>
       {section === "month" && <>
       <section className="home-flow" aria-label="選択月の収入と支出">
-        <header><h3>{ymLabel(ym)}の収支</h3></header>
+        <header><h3>収支差額</h3><strong className="net-result">{summary.net>0?"+":""}{yen(summary.net)}</strong></header>
         <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      {showOutlook && <BalanceTimeline compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
@@ -91,11 +92,11 @@ function CashWaterfall({income, expense, net}) {
       <div key={label}><span>{label}</span><strong>{label === "差引" && value > 0 ? "+" : ""}{yen(value)}</strong></div>)}</div>
   </div>;
 }
-function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
+function BalanceTimeline({ compact, onExpand, shown, upcoming, slips, forecast, ym, cutoff }) {
   const today = new Date().toLocaleDateString("sv-SE");
   if (ym !== cycleYm(today, cutoff)) return null;
   const accounts = Object.entries(shown);
-  if (!accounts.length) return <section className="k-group"><h3>残高の見通し</h3><p>口座残高の取得待ちです。</p></section>;
+  if (!accounts.length) return compact ? null : <section className="k-group"><h3>残高の見通し</h3><p>口座残高の取得待ちです。</p></section>;
   const start = accounts.reduce((sum, [, row]) => sum + row.amount, 0);
   const events = upcoming.filter(row => row.kind === "card").map(row => ({
     date: row.date, label: row.label, change: -row.amount
@@ -131,6 +132,10 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
     points.push({date, rows, amount:points.at(-1).amount + change});
   }
   const lowest = points.reduce((min, point) => point.amount < min.amount ? point : min);
+  if (compact) {
+    const debit = points.find(p => p.rows.some(r => r.change < 0));
+    return <button className="next-balance" onClick={onExpand}><span>{debit ? shortDate(debit.date)+" 引き落とし後の見込み" : "現在の口座残高"}<b>{yen(debit?.amount ?? start)}</b></span><span aria-hidden="true">→</span></button>;
+  }
   return <section className="k-group home-balance" aria-label="残高の見通し">
     <h3>これからの残高</h3><details className="home-accounts"><summary><span>現在</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}

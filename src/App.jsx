@@ -406,7 +406,7 @@ export default function App() {
   return (
     <div className="ledger-app" style={{ ...themeVars(theme) }}>
       <header className="ledger-header">
-        <div className="ledger-heading"><h1>{{ today:"今月の家計", records:"記録", plan:"計画", recurring:"定期費", settings:"設定", finance:"明細・同期", design:"表示設定", cards:"カード管理" }[tab]}</h1><CloudBadge /></div>
+        <div className="ledger-heading"><h1>{{ today:"家計簿", records:"記録", plan:"計画", recurring:"定期費", settings:"設定", finance:"明細・同期", design:"表示設定", cards:"カード管理" }[tab]}</h1></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
           <div className="ledger-month">
             <button aria-label="前の月" onClick={() => setYm(addMonth(ym, -1))}>‹</button>
@@ -417,24 +417,24 @@ export default function App() {
         {(tab === "today" || tab === "records" || tab === "plan") && periodRange(ym, config.cycleCutoffDay) && (
           <div className="ledger-period">{periodRange(ym, config.cycleCutoffDay)}</div>
         )}
+        {(tab === "today" || tab === "records") && <button className="entry-action" onClick={() => setSheet("pick")}>＋ 記録</button>}
       </header>
 
       <main className="ledger-main" data-view={tab}>
-        {tab === "finance" && <SubScreen title="明細・照合" onBack={() => setTab("today")}><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
+        {tab === "finance" && <SubScreen title="明細・照合" onBack={() => setTab("settings")}><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></SubScreen>}
         {tab === "today" && <Summary forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => setTab("plan")} onOpenCards={() => setTab("cards")} />}
         {tab === "today" && <FinanceFeedPanel accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onOpen={() => setTab("finance")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView forecasts={forecasts} plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); setTab("recurring"); }} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
+        {tab === "settings" && <div className="sync-link"><CloudBadge /><button onClick={()=>setTab("finance")}>同期状態を見る ›</button></div>}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
         {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>
 
-      {(tab === "today" || tab === "records") && <button aria-label="記録を追加・取り込み" className="ledger-add" onClick={() => setSheet("pick")}><span style={{ fontSize: 26, marginTop: -2 }}>＋</span></button>}
-
       <nav className="ledger-nav" aria-label="メインメニュー">
-        <TabBtn active={tab === "today" || tab === "finance"} onClick={() => setTab("today")} label="今月" icon="summary" />
+        <TabBtn active={tab === "today" || tab === "finance"} onClick={() => setTab("today")} label="ホーム" icon="summary" />
         <TabBtn active={tab === "records"} onClick={() => setTab("records")} label="記録" icon="detail" />
         <TabBtn active={tab === "plan"} onClick={() => setTab("plan")} label="計画" icon="plan" />
         <TabBtn active={tab === "recurring"} onClick={() => setTab("recurring")} label="定期費" icon="recurring" />

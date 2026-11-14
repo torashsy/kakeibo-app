@@ -30,7 +30,7 @@ export const styles = {
   viewToggleBtn: { border:"none", borderBottom:"3px solid transparent", background:"transparent", padding:"10px 12px", minHeight:44, fontSize:14, color:MUTED, cursor:"pointer", fontFamily:"inherit" },
   viewToggleActive: { color:INK, borderBottom:`3px solid ${ACCENT}`, fontWeight:700 },
   detailHead: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13.5, fontWeight: 600, color: ACCENT, margin: "0 4px 7px" },
-  detailCard: { background: "var(--card-bg)", border: `1px solid ${LINE}`, borderRadius: "var(--radius)", padding: "4px 14px 8px" },
+  detailCard: { background: "transparent", borderTop: `1px solid ${LINE}`, padding: "4px 2px 8px" },
   detailRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 6px" },
   editRow: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "12px 2px", background: "transparent", border: "none", borderBottom: `1px solid ${PAPER}`, cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
   editRowRight: { display: "grid", gridTemplateColumns: "112px 14px", alignItems: "center", gap: 6, width: 132, flexShrink: 0, textAlign: "right" },

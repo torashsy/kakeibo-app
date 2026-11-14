@@ -12,7 +12,7 @@ const FONT_STACK = "system-ui,-apple-system,'Hiragino Sans',Meiryo,sans-serif";
 // ダークを基本(既定)とする。
 export const DEFAULT_THEME = {
   accent: "#1F8A66",
-  dark: true,
+  dark: false,
 };
 
 // アクセント色のプリセット(設定画面で選べる)。
@@ -60,9 +60,9 @@ export const themeVars = (t) => {
         expenseSoft: mix("#F2765C", "#0F1216", 0.82), // 警告カードの背景
       }
     : {
-        paper: "#F6F7F9", ink: "#171A1D", line: "#E2E5EA", muted: "#626973",
+        paper: "#FAF9F5", ink: "#192D36", line: "#D5DAD6", muted: "#506168",
         cardBg: "#FFFFFF", thBg: "#EEF0F3", groupBg: "#E5E8EC",
-        subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#FFFFFF",
+        subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#FAF9F5",
         base: "#FFFFFF",
         income: accent, expense: "#CE3B2C",
         accentSoft: mix(accent, WHITE, 0.88),
@@ -79,9 +79,9 @@ export const themeVars = (t) => {
     "--subtotal-bg": p.subtotalBg, "--total-cell-bg": p.totalCellBg,
     "--col-hl": p.colHl, "--zero": p.zero, "--expense-soft": p.expenseSoft,
     "--num-align": "right", "--label-align": "left",
-    "--radius": "14px", "--row-pad": "12px", "--num-size": "15px",
+    "--radius": "0px", "--row-pad": "12px", "--num-size": "15px",
     "--hero-bg": accent, "--hero-text": "#FFFFFF",
-    "--font": FONT_STACK, "--num-font": "ui-monospace, SFMono-Regular, Consolas, monospace",
+    "--font": FONT_STACK, "--num-font": "Arial, Meiryo, sans-serif",
     "--base-size": "15px", "--heavy": 600, "--tracking": "0px",
     "--tab-bg": p.tabBg, "--tab-active": accent,
     "--num-variant": "tabular-nums",

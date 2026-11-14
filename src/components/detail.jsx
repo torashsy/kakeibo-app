@@ -8,7 +8,7 @@ import { AnnualMatrix } from './annual-matrix.jsx';
 // 記録タブ。その月に入力した実績(給与・カード・口座)を、履歴/項目別/表/年間で見返す。
 // 「メモ」は収支に計上しない用途記録(現金の使い道など)。計画は独立した「計画」タブへ分離した。
 export function Detail({ monthEntries, entries, ym, config, cards, memos, onSaveMemos, onEdit }) {
-  const [view, setView] = useState("card");
+  const [view, setView] = useState("list");
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
     <div style={{ padding: "4px 2px 8px" }}>
