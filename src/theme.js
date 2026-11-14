@@ -5,20 +5,20 @@ export const LINE = "var(--line)", MUTED = "var(--muted)", RED = "var(--expense)
 
 
 // 全体で使う1つのフォントスタック(以前の「フォント選択」機能は廃止)
-const FONT_STACK = "system-ui,-apple-system,'Hiragino Sans',Meiryo,sans-serif";
+const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif";
 
 
 // ユーザーが選べるのは「アクセント色」と「ダークモード」だけ。
 // ダークを基本(既定)とする。
 export const DEFAULT_THEME = {
-  accent: "#1F8A66",
+  accent: "#3956A5",
   dark: false,
 };
 
 // アクセント色のプリセット(設定画面で選べる)。
 // 白文字が乗るヒーロー等でも読めるよう、やや深めの発色に統一。
 export const ACCENT_PRESETS = [
-  { id: "emerald", label: "エメラルド", color: "#1F8A66" },
+  { id: "emerald", label: "エメラルド", color: "#3956A5" },
   { id: "teal", label: "ティール", color: "#1C8A93" },
   { id: "blue", label: "ブルー", color: "#2F6FBF" },
   { id: "indigo", label: "インディゴ", color: "#5257C7" },
@@ -48,21 +48,21 @@ export const themeVars = (t) => {
   // ベージュ系をやめ、クールでニュートラルなグレーを基調にする(ダーク基本)
   const p = dark
     ? {
-        paper: "#0F1216", ink: "#EAECEF", line: "#262B31", muted: "#868E99",
+        paper: "#121727", ink: "#EAECEF", line: "#262B31", muted: "#868E99",
         cardBg: "#171B20", thBg: "#1C2127", groupBg: "#21272E",
         subtotalBg: "#1A1F25", totalCellBg: "#181D22", tabBg: "#12161A",
-        base: "#0F1216",
+        base: "#121727",
         income: mix(accent, WHITE, 0.26), expense: "#F2765C",
-        accentSoft: mix(accent, "#0F1216", 0.78),
-        acctBg: mix(accent, "#0F1216", 0.85),
-        colHl: mix(accent, "#0F1216", 0.82),        // 年間表の「今月」列の淡いハイライト
+        accentSoft: mix(accent, "#121727", 0.78),
+        acctBg: mix(accent, "#121727", 0.85),
+        colHl: mix(accent, "#121727", 0.82),        // 年間表の「今月」列の淡いハイライト
         zero: "#4A515A",                             // 0円セルの控えめな文字色
-        expenseSoft: mix("#F2765C", "#0F1216", 0.82), // 警告カードの背景
+        expenseSoft: mix("#F2765C", "#121727", 0.82), // 警告カードの背景
       }
     : {
-        paper: "#FAF9F5", ink: "#192D36", line: "#D5DAD6", muted: "#506168",
+        paper: "#F8FAFC", ink: "#18233B", line: "#D8DFEB", muted: "#546279",
         cardBg: "#FFFFFF", thBg: "#EEF0F3", groupBg: "#E5E8EC",
-        subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#FAF9F5",
+        subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#F8FAFC",
         base: "#FFFFFF",
         income: accent, expense: "#CE3B2C",
         accentSoft: mix(accent, WHITE, 0.88),
@@ -81,7 +81,7 @@ export const themeVars = (t) => {
     "--num-align": "right", "--label-align": "left",
     "--radius": "0px", "--row-pad": "12px", "--num-size": "15px",
     "--hero-bg": accent, "--hero-text": "#FFFFFF",
-    "--font": FONT_STACK, "--num-font": "Arial, Meiryo, sans-serif",
+    "--font": FONT_STACK, "--num-font": FONT_STACK,
     "--base-size": "15px", "--heavy": 600, "--tracking": "0px",
     "--tab-bg": p.tabBg, "--tab-active": accent,
     "--num-variant": "tabular-nums",

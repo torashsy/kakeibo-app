@@ -28,7 +28,7 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, onSave
 
 export function DetailList({ monthEntries, onEdit }) {
   const catLabel = { salary: "給与系", card: "カード", account: "口座" };
-  const catColor = { salary: GREEN, card: RED, account: ACCENT };
+
   // 取り込んだ記録は指紋(src)に取引日を持っているので、日付の新しい順に並べる。
   // 日付を持たない記録(手入力)は日付順に混ぜられないので、末尾に入力の新しい順で置く。
   const list = useMemo(() => monthEntries
@@ -46,20 +46,10 @@ export function DetailList({ monthEntries, onEdit }) {
         {list.map(({ e, d, desc }, index) => (
           <React.Fragment key={e.id}>
             {(index === 0 || list[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
-          <button style={styles.listRow} onClick={() => onEdit(e)}>
-            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, overflow: "hidden" }}>
-              <span style={{ fontSize: 14.5, fontWeight: 600 }}>{e.cat === "account" ? `${e.item}・${e.account}` : e.item}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ ...styles.catTag, color: catColor[e.cat] }}>{catLabel[e.cat]}</span>
-                
-              </span>
-              {desc && <span style={{ fontSize: 11, color: MUTED, wordBreak: "break-all", textAlign: "left" }}>{desc}</span>}
-            </span>
-            <span style={styles.editRowRight}>
-              <span
-                style={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: e.amount < 0 ? RED : INK }}>{yen(e.amount)}</span>
-              <span style={styles.chev}>›</span>
-            </span>
+          <button className="journal-row" onClick={() => onEdit(e)}>
+            <span className="journal-mark" aria-hidden="true">{e.cat==="salary"?"給":e.cat==="card"?"カ":"口"}</span>
+            <span className="journal-name"><b>{desc || e.item}</b><small>{[catLabel[e.cat], e.account, desc && e.item].filter(Boolean).join(" · ")}</small></span>
+            <strong>{yen(e.amount)}</strong>
           </button>
           </React.Fragment>
         ))}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useLayoutEffect, useRef } from "react";
 import { ACCENT, GREEN, MUTED, RED } from "../theme.js";
 import { num } from "../utils";
 import { styles } from "../styles.js";
@@ -15,12 +15,17 @@ const valueColor = (row, value, column) => {
 };
 
 export function AnnualMatrix({ columns, rows, currentKey, totalLabel = "年間計" }) {
+  const scroller = useRef(null);
+  const selectedIndex = columns.findIndex(column => column.key === currentKey);
+  useLayoutEffect(() => {
+    if (scroller.current) scroller.current.scrollLeft = Math.max(0, selectedIndex) * VALUE_WIDTH;
+  }, [selectedIndex, currentKey]);
   const visibleRows = rows.filter((row) => !row.hidden);
   const tableWidth = LABEL_WIDTH + (columns.length + 1) * VALUE_WIDTH;
   const textOf = (row, value, column) => row.format ? row.format(value, column) : value === 0 ? "" : num(value);
 
   return (
-    <div style={styles.tableScroll}>
+    <div ref={scroller} style={styles.tableScroll}>
       <table style={{ ...styles.table, width: tableWidth }}>
         <colgroup><col style={{ width: LABEL_WIDTH }} />{columns.map((column) => <col key={column.key} style={{ width: VALUE_WIDTH }} />)}<col style={{ width: VALUE_WIDTH }} /></colgroup>
         <thead><tr>

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
-  num, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
+  num, yen, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
   plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
   monthForecast, plannedDebt, estimateSalaryTakeHome, plannedSalaryBreakdown,
   hasBalRecord, balTotalOf, pendingCardClaims, monthHasInput, isMonthClosed,
@@ -240,6 +240,10 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
+      {mode === "forecast" && months.includes(ym) && <section className="plan-focus">
+        <h3>{ymLabel(ym)}の収支{isMonthClosed(closedMonths, ym) ? "実績" : "見通し"}</h3><strong>{yen(projected[ym].net)}</strong>
+        <dl>{[["収入", projected[ym].salaryIncome + projected[ym].otherIncome],["支出",projected[ym].spending],["投資振替",projected[ym].invest]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{yen(value)}</dd></div>)}</dl>
+      </section>}
       {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
       {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 4px 6px" }}>

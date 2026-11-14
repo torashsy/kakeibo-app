@@ -221,10 +221,10 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   if (!groups.size) return <p>この月の投資記録はありません。</p>;
   const ranked = [...groups.values()].sort((a,b)=> b.invested-a.invested);
   const total = ranked.reduce((sum,g)=>sum+g.invested,0);
-  return <section className="statement"><h3>投資に回した額</h3><strong className="statement-total">{yen(total)}</strong>
+  return <section className="statement portfolio"><h3>投資に回した額</h3><strong className="statement-total">{yen(total)}</strong>
     <div className="statement-label"><span>振替先</span><span>投資額</span></div>
     {ranked.map(g=><details className="destination" key={g.name}><summary>
-      <span>{g.name}</span><b>{yen(g.invested)}</b>
+      <span>{g.name}<small>{total ? Math.round(100*g.invested/total) : 0}%</small></span><b>{yen(g.invested)}</b>
       <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>
     </summary>{g.rows.map(r=><div className="statement-line" key={r.id}><span>{r.date?.slice(5)}　{r.method}</span><span>{yen(r.amount)}</span></div>)}
     </details>)}

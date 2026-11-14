@@ -30,6 +30,7 @@ export function PayrollReport({ slips, ym }) {
   return <section className="statement pay-report"><header><h3>給与・賞与</h3><div>
     <select aria-label="支給年" value={year} onChange={e=>{setSelectedYear(e.target.value);setChoice("annual");setExpanded("");}}>{years.map(y=><option key={y}>{y}</option>)}</select>
     <select aria-label="集計期間" value={period || "annual"} onChange={e=>setChoice(e.target.value)}><option value="annual">年間</option>{months.map(m=><option key={m} value={m}>{Number(m.slice(5))}月</option>)}</select></div></header>
+    <div className="statement-line take-home"><span>手取り</span><strong>{yen(total("net"))}</strong></div>
     <div className="statement-line gross"><span>額面</span><b>{yen(total("gross"))}</b></div>
     {total("gross") > 0 && total("net") >= 0 && total("net") <= total("gross") && <div className="pay-split">
       <div aria-hidden="true"><i style={{width:(100*total("net")/total("gross"))+"%"}}/></div>
@@ -37,7 +38,7 @@ export function PayrollReport({ slips, ym }) {
     </div>}
     <div className="statement-label">差し引かれたもの</div>
     {[...deductions].filter(([,v])=>v).sort((a,b)=>b[1]-a[1]).map(([name,value])=><div className="statement-line deduction" key={name}><span>{name}</span><b>{value>0?"−":"＋"}{yen(Math.abs(value))}</b></div>)}
-    <div className="statement-line take-home"><span>手取り</span><strong>{yen(total("net"))}</strong></div>
+
     <details className="pay-breakdown"><summary>支給明細</summary>
     <table className="pay-list"><caption>支給日別の明細（金額は円）</caption>
       <thead><tr><th>支給日</th><th>支給額</th><th>控除額</th><th>手取り</th></tr></thead><tbody>
