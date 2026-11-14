@@ -450,7 +450,7 @@ export function computeSummary(monthEntries: Entry[]): Summary {
   }
   const salaryIncome = gross + deduction, otherIncome = cashIn;
   const income = salaryIncome + otherIncome, expense = cardTotal + cashOut;
-  const net = income - expense + invest;   // 投資振替は符号のまま加算(−なら支出方向、＋なら収入方向)
+  const net = income - expense;
   const balTotal = Object.values(balances).reduce((a, b) => a + b, 0);
   return { gross, deduction, cardTotal, cashIn, cashOut, invest, salaryIncome, otherIncome, income, expense, net, balances, balTotal };
 }
@@ -934,8 +934,8 @@ export const plannedDebt = (debt: Record<string, Record<string, unknown>> | null
 
 export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): number =>
   fixedForMonth(subs, ym, cards, cutoffDay) + plannedVariable(plan, ym) + plannedDebt(debt, ym);
-// 計画の収支 = 収入 − 支出 + 投資振替(符号のまま)
-export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt, cards, cutoffDay) + plannedInvest(plan, ym);
+// 計画の収支 = 収入 − 支出
+export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt, cards, cutoffDay);
 
 // 旧形式(カード別・口座フロー別に行を持つ計画)かどうか。旧キーは "salary|給与" のように "|" を含む。
 const isLegacyPlan = (plan: any): boolean => !!(plan && plan.lines && Object.keys(plan.lines).some((k) => /^(salary|card|flow|memo)\|/.test(k)));
@@ -1091,7 +1091,7 @@ export function monthForecast(plan: Plan, subs: Sub[] | null | undefined, entrie
   const budget = plannedSpending(plan, subs, ym, debt, cards, cutoff);
   const spending = closed ? actual.expense : Math.max(knownSpending, budget);
   const income = salaryIncome + otherIncome;
-  return {salaryIncome, otherIncome, income, spending, invest, net: income - spending + invest, salaryRecorded, otherRecorded, investRecorded,
+  return {salaryIncome, otherIncome, income, spending, invest, net: income - spending, salaryRecorded, otherRecorded, investRecorded,
     spendingSource: closed ? "実績" : budget > knownSpending ? "月の支出計画" : additional ? "記録・引落見込み" : "実績"};
 }
 

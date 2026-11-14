@@ -152,12 +152,12 @@ describe("computeSummary", () => {
   });
   it("収入=給与+控除+入金系", () => expect(s.income).toBe(300000 - 50000 + 10000));
   it("支出=カード+出金系", () => expect(s.expense).toBe(40000 + 20000));
-  it("収支=収入-支出+投資振替(符号のまま)", () => expect(s.net).toBe(s.income - s.expense - 30000));
+  it("投資振替は収支に含めない", () => expect(s.net).toBe(s.income - s.expense));
   it("残高計", () => expect(s.balTotal).toBe(333333));
   it("口座振替は収入・支出・収支に含めない", () => {
     expect(s.cashIn).toBe(10000);
     expect(s.cashOut).toBe(20000);
-    expect(s.net).toBe(s.income - s.expense - 30000);
+    expect(s.net).toBe(s.income - s.expense);
   });
 });
 

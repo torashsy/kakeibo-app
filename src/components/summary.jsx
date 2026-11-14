@@ -28,7 +28,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
         <div style={styles.heroLabel}>今月の収支</div>
         <div
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
-        <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}　投資振替 {yen(summary.invest)}</div>
+        <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}</div>
       </div>
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
@@ -43,7 +43,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       <PayrollReport slips={paySlips} />
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
-      <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net} />
+      <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
       </details>
       <details className="k-group"><summary>予算・年間の見通し</summary>
       <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
@@ -106,7 +106,7 @@ const purposeGroups = [
   ["食事", "#bf663e", ["外食","食料品","その他の食費"]],
   ["暮らし", "#408a76", ["携帯代","保険","健康食品・サプリ","日用品","スマホ用品","住まい用品","家電・電子機器"]],
   ["移動・旅行", "#537fae", ["交通費","旅行・宿泊"]],
-  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","カメラ用品","ドメイン費","試験料"]],
+  ["趣味・サービス", "#936bad", ["サブスク","書籍・漫画","ゲーム","レジャー","カメラ用品","ドメイン費","試験料","デジタルサービス"]],
   ["その他", "#aa925a", []],
   ["用途未確認", "#838995", ["未分類","通販（商品不明）"]],
 ];
@@ -431,7 +431,7 @@ function AccountBalances({ shown, hasBal, total, change, partialAccounts, config
           </div>;
         })}
         {change != null && <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", gap: 8, padding: "8px 0", fontSize: 12.5 }}><span style={{ color: MUTED }}>前月比</span><span style={{ ...alignedAmount, fontSize: 12.5, color: change >= 0 ? GREEN : RED }}>{yen(change)}</span></div>}
-        {diff != null && Math.abs(diff) >= 1 && <div style={{ color: RED, fontSize: 11.5, padding: "3px 0" }}>⚠ 収支との差 {yen(Math.abs(diff))}</div>}
+        {diff != null && Math.abs(diff) >= 1 && <div style={{ color: RED, fontSize: 11.5, padding: "3px 0" }}>⚠ 投資振替を含む口座増減との差 {yen(Math.abs(diff))}</div>}
         {partialAccounts.length > 0 && <div style={{ color: MUTED, fontSize: 10.5, padding: "3px 0", lineHeight: 1.5 }}>{partialAccounts.map(([acc, end]) => `${acc} ${end}`).join("・")}まで未確定</div>}
       </div>}
     </div>
