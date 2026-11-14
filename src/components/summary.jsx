@@ -81,24 +81,53 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
     if (date && date > today) events.push({date, label:"給与（計画額・支給日推定）", change:forecast.salaryIncome});
     else salaryNote = "給与計画 " + yen(forecast.salaryIncome) + " は今後の入金日が分かるまで残高見込みに含めません。";
   }
-  const dates = [...new Set(events.map(row => row.date))].sort();
-  const points = [{date:today, amount:start}];
-  for (const date of dates) points.push({date, amount:points.at(-1).amount + events.filter(r=>r.date===date).reduce((sum,r)=>sum+r.change,0)});
-  const low = Math.min(...points.map(p=>p.amount)), high = Math.max(...points.map(p=>p.amount));
-  const xy = points.map(p=>[8+284*(Date.parse(p.date)-Date.parse(today))/Math.max(86400000,Date.parse(points.at(-1).date)-Date.parse(today)), 66-56*(p.amount-low)/Math.max(1,high-low)]);
-  let balance = start;
+  const byDate = new Map();
+  for (const event of events) {
+    if (!byDate.has(event.date)) byDate.set(event.date, []);
+    byDate.get(event.date).push(event);
+  }
+  const points = [{date:today, amount:start, rows:[]}];
+  for (const date of [...byDate.keys()].sort()) {
+    const rows = byDate.get(date);
+    const change = rows.reduce((sum, row) => sum + row.change, 0);
+    points.push({date, rows, amount:points.at(-1).amount + change});
+  }
+  const lowest = points.reduce((min, point) => point.amount < min.amount ? point : min);
+  const high = Math.max(...points.map(point => point.amount));
+  const span = Math.max(86400000, Date.parse(end) - Date.parse(today));
+  const position = point => ({
+    x:8 + 284 * (Date.parse(point.date) - Date.parse(today)) / span,
+    y:high === lowest.amount ? 36 : 66 - 56 * (point.amount - lowest.amount) / (high - lowest.amount)
+  });
+  const line = points.map((point, index) => {
+    const {x,y} = position(point);
+    return index ? `H ${x} V ${y}` : `M ${x} ${y}`;
+  }).join(" ") + " H 292";
   return <section className="k-group" aria-label="残高の見通し"><h3>残高の見通し</h3>
     <details><summary>現在の登録残高　<strong>{yen(start)}</strong></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
     </details>
-    {dates.length>0 && <figure style={{margin:"12px 0"}}><svg viewBox="0 0 302 76" role="img" aria-label="予定反映後の残高推移" style={{width:"100%",height:100}}><polyline points={xy.map(p=>p.join(",")).join(" ")} fill="none" stroke={ACCENT} strokeWidth="3"/>{xy.map(([x,y],i)=><circle key={i} cx={x} cy={y} r="3" fill={ACCENT}><title>{points[i].date}　{yen(points[i].amount)}</title></circle>)}</svg><figcaption style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span>現在　{yen(start)}</span><b>{shortDate(points.at(-1).date)}　{yen(points.at(-1).amount)}</b></figcaption></figure>}
-    {dates.map(date => {
-      const rows = events.filter(row => row.date === date);
-      balance += rows.reduce((sum,row) => sum + row.change, 0);
-      return <details key={date}><summary style={{padding:"10px 0"}}>{shortDate(date)}　{rows.some(r=>r.change>0) ? "入金" : ""}{rows.some(r=>r.change<0) ? " 引落" : ""}後　<strong>{yen(balance)}</strong></summary>
-        {rows.map((row,index) => <div key={index} style={styles.settingRow}><span>{row.label}</span><span>{row.change>0 ? "+" : ""}{yen(row.change)}</span></div>)}
-      </details>;
-    })}
+    {points.length > 1 ? <>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:14}}>
+        <div><small>最低残高 · {lowest === points[0] ? "現在" : shortDate(lowest.date)}</small><br/><strong style={{color:lowest.amount < 0 ? RED : ACCENT}}>{yen(lowest.amount)}</strong></div>
+        <div><small>締め日 · {shortDate(end)}</small><br/><strong>{yen(points.at(-1).amount)}</strong></div>
+      </div>
+      <figure style={{margin:"8px 0"}}>
+        <svg viewBox="0 0 302 76" role="img" aria-label="登録残高から締め日までの残高見込み" style={{width:"100%",height:90}}>
+          <path d={line} fill="none" stroke={ACCENT} strokeWidth="3"/>
+          {points.map((point,i) => {
+            const {x,y} = position(point);
+            return <circle key={i} cx={x} cy={y} r={point === lowest ? 4 : 3} fill={point === lowest && point.amount < 0 ? RED : ACCENT}><title>{point.date}　{yen(point.amount)}</title></circle>;
+          })}
+        </svg>
+      </figure>
+      <details><summary>入出金予定（{events.length}件）</summary>
+        {points.slice(1).map(({date, rows, amount}) => <div key={date} style={{padding:"8px 0"}}>
+          <b>{shortDate(date)}　予定反映後 {yen(amount)}</b>
+          {rows.map((row,index) => <div key={index} style={styles.settingRow}><span>{row.label}</span><span>{row.change>0 ? "+" : ""}{yen(row.change)}</span></div>)}
+        </div>)}
+      </details>
+    </> : <p>締め日までに金額と日付が分かっている入出金予定はありません。</p>}
     <small>{shortDate(end)}までの給与・賞与とカード引落予定を反映。日々の買い物や振替は対象外です。{salaryNote}</small>
   </section>;
 }
