@@ -302,12 +302,12 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
   );
 }
 
-export function ThemeEditor({ theme, onSave, onBack }) {
+export function ThemeEditor({ theme, onSave }) {
   const set = (k, v) => onSave({ ...theme, [k]: v });
   const isCustom = !ACCENT_PRESETS.some((p) => p.color.toLowerCase() === (theme.accent || "").toLowerCase());
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <button style={styles.backLink} onClick={onBack}>‹ 設定</button>
+
       <div style={styles.themeSection}>表示モード</div>
       <div style={styles.detailCard}>
         <div style={styles.themeRow}>

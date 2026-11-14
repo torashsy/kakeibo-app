@@ -1,3 +1,4 @@
+import { IncomeLines } from "./income-lines";
 import { CashComparison } from "./cash-comparison";
 import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from "react";
@@ -8,8 +9,8 @@ import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
 
-export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
-  const [section, setSection] = useState("month");
+export function Summary({ section, onSection, forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
+  const setSection = onSection;
   const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
@@ -28,16 +29,16 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
-      <nav className="report-sections" aria-label="家計の表示切替">
-        {[["month","家計"],["funds","残高"],["invest","投資"],["pay","給与"]].map(([id,label])=>
+      {["month","funds","invest","pay"].includes(section) && <nav className="report-sections" aria-label="家計の表示切替">
+        {[["month","収支"],["funds","残高"],["invest","投資"],["pay","給与"]].map(([id,label])=>
           <button key={id} aria-current={(section===id || (id==="month" && ["flow","spend"].includes(section)))?"page":undefined} onClick={()=>setSection(id)}>{label}</button>)}
-      </nav>
+      </nav>}
       {section === "month" && <>
       <section className="overview-result">
-        <CashComparison title={showOutlook ? "月の収支見込み" : "月の収支実績"}
+        <CashComparison title={showOutlook ? "収支見込み" : "収支実績"}
           income={showOutlook ? forecast.income : summary.income} expense={showOutlook ? forecast.spending : summary.expense}
-          net={showOutlook ? forecast.net : summary.net}/>
-        <div className="result-actions"><button onClick={()=>setSection("flow")}>実績の内訳 ›</button>{showOutlook && <button onClick={onOpenPlan}>見込みの内訳 ›</button>}</div>
+          net={showOutlook ? forecast.net : summary.net} incomeDetails={<IncomeLines entries={monthEntries} forecast={showOutlook ? forecast : null} plans={plans} ym={ym}/>}/>
+        <div className="result-actions"><button onClick={()=>setSection("flow")}>収支実績 ›</button>{showOutlook && <button onClick={onOpenPlan}>計画 ›</button>}</div>
       </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
@@ -46,9 +47,9 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
       {section === "flow" && <>
       <section className="home-flow" aria-label="選択月の収入と支出">
-        <CashComparison title="月の収支実績" income={summary.income} expense={summary.expense} net={summary.net}/>
+        <CashComparison title="収支実績" income={summary.income} expense={summary.expense} net={summary.net} incomeDetails={<IncomeLines entries={monthEntries}/>}/>
       </section>
-      <details open className="k-group"><summary>今月の収支内訳・締め残高</summary>
+      <details open className="k-group"><summary>内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
       </details>
@@ -133,7 +134,7 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
         <span>{shortDate(event.date)}　{event.label.startsWith("給与（計画")?"給与入金見込み":event.label}</span><b>＋{yen(event.change)}</b>
       </div>)}
       {next.length > 0 && <details className="next-claim"><summary>
-        <span>{shortDate(nextDate)}　次のカード引落予定</span><b>{yen(next.reduce((sum,r)=>sum+r.amount,0))}</b></summary>
+        <span>{shortDate(nextDate)}　カード引落予定</span><b>{yen(next.reduce((sum,r)=>sum+r.amount,0))}</b></summary>
         {next.map(r=><div className="claim-row" key={r.id}><span>{r.label}</span><b>{yen(r.amount)}</b></div>)}
         {[...totals].map(([name,amount])=> {
           const bal = shown[name];
@@ -200,7 +201,7 @@ function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
     <header><h3>カード利用</h3>{visible.length>0 && <strong>{yen(visible.reduce((sum,g)=>sum+g.amount,0))}</strong>}</header>
     {visible.length ? <><div className="glance-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color}}/>)}</div>
       <div className="glance-categories">{visible.slice(0,2).map(g=><span key={g.label}><i style={{background:g.color}}/>{g.label} <b>{yen(g.amount)}</b></span>)}</div>
-      <button onClick={onOpen}>利用明細を見る　›</button></> : <p>取得済みの利用明細はありません</p>}
+      <button onClick={onOpen}>カード明細 ›</button></> : <p>取得済みの利用明細はありません</p>}
   </section>;
   return <section className="spend-report" aria-label="カードの使い道">
     <header><h3>{Number(ym.slice(5))}月度のカード利用</h3>{visible.length > 0 && <b>{yen(visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>

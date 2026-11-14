@@ -1,3 +1,4 @@
+import { IncomeLines } from "./income-lines";
 import { CashComparison } from "./cash-comparison";
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
@@ -237,7 +238,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
           <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
-      {mode === "forecast" && months.includes(ym) && <MonthExplanation key={ym} result={monthResult} entries={entriesByMonth[ym]} past={pastPeriod} />}
+      {mode === "forecast" && months.includes(ym) && <MonthExplanation plans={plans} ym={ym} key={ym} result={monthResult} entries={entriesByMonth[ym]} past={pastPeriod} />}
       {mode==="plan" && months.includes(ym) && <section className="month-budget"><h3>{ymLabel(ym)}の予算</h3>
         {[{label:"給与の設定",salary:true,k:"salaryIncome"}, {label:"その他の収入",editable:PLAN_OTHER_INCOME,k:"otherIncome"},
           ...variableRows.filter(row=>row.editable),{label:"投資振替",editable:PLAN_INVEST,k:"invest"}].map(row=><button key={row.k} onClick={()=>openEdit(row,ym)}>
@@ -340,7 +341,7 @@ function SalaryRulePreview({ edit }) {
   );
 }
 
-function MonthExplanation({result, entries, past}) {
+function MonthExplanation({result, entries, past, plans, ym}) {
   const [expanded,setExpanded] = useState(false);
   const items = new Map();
   function add(label, amount, recorded, source="", date="") {
@@ -371,14 +372,14 @@ function MonthExplanation({result, entries, past}) {
   const returned=transfers.reduce((sum,e)=>sum+Math.max(0,e.amount),0);
   const investmentIsActual=past || result.investRecorded;
   return <section className="month-explain">
-    <CashComparison title={past?"月の収支実績":"月の収支見込み"} income={income} expense={spending} net={result.net} actualIncome={actualIncome} actualSpend={actualSpend}/>
+    <CashComparison title={past?"収支実績":"収支見込み"} income={income} expense={spending} net={result.net} actualIncome={actualIncome} actualSpend={actualSpend} incomeDetails={<IncomeLines entries={entries} plans={plans} ym={ym} forecast={past ? null : result}/>}/>
     <div className="major-heading"><h3>{expanded?"支出の内訳":ranked[0]?.date && !ranked[0].recorded?"最大の引落予定":ranked.length?"支出の最大項目":"支出の記録なし"}</h3></div>
     {(expanded?ranked:ranked.slice(0,1)).map((r,i)=><div className="driver" key={r.key}>
       <div><b>{r.label}</b><strong>{yen(r.amount)}</strong></div>
       <div className="driver-scale"><i style={{width:100*r.amount/(spending||1)+"%",opacity:i===0?1:.55}}/></div>
       <small>{r.date && r.date.slice(5).replace("-","/")+"　"}{r.source} · {Math.round(100*r.amount/(spending||1))}%</small>
     </div>)}
-    <details open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="calculation"><summary>{expanded?"内訳を閉じる":"収支の内訳を見る"}{ranked.length?" · "+ranked.length+"件":""}</summary>
+    <details open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="calculation"><summary>{expanded?"内訳を閉じる":"支出内訳"}{ranked.length?" · "+ranked.length+"件":""}</summary>
       <table><thead><tr><th></th><th>実績</th><th>予定</th></tr></thead><tbody>{bars.map(([label,value,actual])=><tr key={label}><th>{label}</th><td>{yen(actual)}</td><td>{yen(value-actual)}</td></tr>)}</tbody></table>
 
     </details>

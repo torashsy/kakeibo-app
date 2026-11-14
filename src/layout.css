@@ -165,3 +165,20 @@
 .invest-directions b { font:600 18px var(--num-font); font-variant-numeric:tabular-nums; }
 .before-debit { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid var(--line); }
 .before-debit b { white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+.ledger-heading .parent-link {
+  justify-self:start; min-height:44px; border:0; background:none; color:var(--income);
+  padding:0 4px 0 0; font:inherit; cursor:pointer;
+}
+.cash-toggle {
+  display:flex; grid-column:1/-1; justify-content:space-between; align-items:center;
+  min-height:44px; border:0; padding:0; background:none; color:var(--ink); font:inherit; cursor:pointer;
+}
+.cash-toggle i { font:inherit; color:var(--income); }
+.cash-detail { grid-column:1/-1; }
+.income-lines { padding:4px 0 8px 12px; border-inline-start:2px solid var(--line); }
+.income-lines h4 { margin:6px 0; color:var(--muted); font-size:12px; }
+.income-lines section>div { display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:4px 0; }
+.income-lines b { white-space:nowrap; }
+.income-lines span { overflow-wrap:anywhere; }
+.pay-report .pay-period { justify-content:flex-end; }

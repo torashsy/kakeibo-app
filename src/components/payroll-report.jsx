@@ -23,12 +23,17 @@ export function PayrollReport({ slips, ym }) {
   const period = choice.length === 7 ? choice : choice === "annual" ? "" : months.includes(ym) ? ym : months[0];
   const active = period ? rows.filter(r=>r.date.startsWith(period)) : rows;
   const total = key => active.reduce((sum,r)=>sum+r[key],0);
+  const earnings = new Map();
+  for (const slip of active) for (const [name,value] of Object.entries(slip.earnings || {}))
+    earnings.set(name,(earnings.get(name) || 0) + value);
+  const unitemized = total("gross") - [...earnings.values()].reduce((sum,value)=>sum+value,0);
+  if (unitemized) earnings.set("支給内訳差額",unitemized);
   const deductions = new Map();
   for (const r of active) for (const [name,value] of Object.entries(r.withholdings || {}))
     deductions.set(name,(deductions.get(name)||0)+value);
   const delta = total("gross")-total("net")-[...deductions.values()].reduce((a,b)=>a+b,0);
   if (delta) deductions.set("明細差額",delta);
-  return <section className="statement pay-report"><header><h3>給与・賞与</h3><div>
+  return <section className="statement pay-report"><header className="pay-period"><div>
     <select aria-label="支給年" value={year} onChange={e=>{setSelectedYear(e.target.value);setChoice("annual");setExpanded("");}}>{shownYears.map(y=><option key={y}>{y}</option>)}</select>
     <select aria-label="集計期間" value={period || "annual"} onChange={e=>setChoice(e.target.value)}><option value="annual">年間</option>{[...new Set([...(period ? [period] : []),...months])].sort().reverse().map(m=><option key={m} value={m}>{Number(m.slice(5))}月</option>)}</select></div></header>
     {!active.length ? <p>この期間の給与明細はありません。<button className="plain-action" onClick={()=>{setSelectedYear(years[0]);setChoice(all[0].date.slice(0,7));}}>最新の明細を見る（{all[0].date}）</button></p> : <>
@@ -38,10 +43,14 @@ export function PayrollReport({ slips, ym }) {
       <div aria-hidden="true"><i style={{width:(100*total("net")/total("gross"))+"%"}}/></div>
       <small>手取り {Math.round(100*total("net")/total("gross"))}%</small><small>控除 {yen(total("gross")-total("net"))}</small>
     </div>}
-    <section className="deduction-list"><h4>控除の内訳</h4>
+    <section className="deduction-list pay-earnings"><h4>支給</h4>
+      {[...earnings].filter(([,value])=>value!==0).sort((a,b)=>b[1]-a[1]).map(([label,value])=>
+        <div className="statement-line deduction" key={label}><span>{label}</span><b>{yen(value)}</b></div>)}
+    </section>
+    <section className="deduction-list"><h4>控除</h4>
     {[...deductions].filter(([,v])=>v).sort((a,b)=>b[1]-a[1]).map(([name,value])=><div className="statement-line deduction" key={name}><span>{name}</span><b>{value>0?"−":"＋"}{yen(Math.abs(value))}</b></div>)}
 
-    </section><details className="pay-breakdown"><summary>支給日別の明細を見る</summary>
+    </section><details className="pay-breakdown"><summary>支給日別</summary>
     <table className="pay-list"><caption>支給日別の明細（金額は円）</caption>
       <thead><tr><th>支給日</th><th>支給額</th><th>控除額</th><th>手取り</th></tr></thead><tbody>
       {active.map(s=>{const id=s.date+s.kind;return <React.Fragment key={id}><tr>
