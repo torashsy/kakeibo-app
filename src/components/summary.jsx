@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
+import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
 
-export function Summary({ scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards, onOpenClose, onOpenImport }) {
+export function Summary({ snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards, onOpenClose, onOpenImport }) {
   const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
@@ -15,7 +16,8 @@ export function Summary({ scheduledDebits, summary, balancesNow, prevBalTotal, p
     .map(([acc, b]) => [acc, cycleEndDate(b.ym, config.cycleCutoffDay)]);
   const breakdown = useMemo(() => cardBreakdown(cards, debt || {}, memos, monthEntries, ym), [cards, debt, memos, monthEntries, ym]);
   const claimStates = useMemo(() => cardClaimStates(cards, debt || {}, subs, monthEntries, ym, config.cycleCutoffDay), [cards, debt, subs, monthEntries, ym, config.cycleCutoffDay]);
-  const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym, undefined, 30, scheduledDebits), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits]);
+  const purchases = useMemo(() => bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:")), [snapshot]);
+  const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym, undefined, 30, scheduledDebits, purchases), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits, purchases]);
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div style={{ padding: "4px 2px" }}>
@@ -25,6 +27,7 @@ export function Summary({ scheduledDebits, summary, balancesNow, prevBalTotal, p
           style={{ ...styles.heroValue, color: summary.net >= 0 ? "#fff" : "#FFD9CF" }}>{yen(summary.net)}</div>
         <div style={styles.heroSub}>収入 {yen(summary.income)}　−　支出 {yen(summary.expense)}　投資振替 {yen(summary.invest)}</div>
       </div>
+      <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
       {onOpenImport && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <button style={{ ...styles.closeCta, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}`, margin: 0 }} onClick={() => onOpenImport("csv")}>
@@ -42,7 +45,6 @@ export function Summary({ scheduledDebits, summary, balancesNow, prevBalTotal, p
       )}
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
-      <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
       <AnnualOutlookCard plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />
       <MonthlyNetChart entries={entries || []} ym={ym} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net} />
@@ -134,16 +136,17 @@ function CardClaimStatusList({ rows }) {
   );
 }
 function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
-  const [open, setOpen] = useState(false);
-  if (!rows.length && !missingCount) return null;
+  const [open, setOpen] = useState(true);
+  
   const total = rows.reduce((sum, row) => sum + row.amount, 0);
   return (
     <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
       <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
         <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>次の引き落とし</span>
-        <span style={{ ...alignedAmount, color: rows.length ? RED : MUTED, fontWeight: 600 }}>{rows.length ? yen(-total) : `未設定 ${missingCount}枚`}</span>
+        <span style={{ ...alignedAmount, color: rows.length ? RED : MUTED, fontWeight: 600 }}>{rows.length ? yen(-total) : "予定額未確認"}</span>
       </button>
       {open && <div style={{ paddingBottom: 4 }}>
+        <p style={{fontSize:12}}>カード分の合計　{rows.some(r => r.kind === "card") ? yen(rows.filter(r => r.kind === "card").reduce((sum,r) => sum + r.amount, 0)) : "金額未確認"}</p>
         {rows.map((row) => {
           const state = claimStatus[row.status];
           return (

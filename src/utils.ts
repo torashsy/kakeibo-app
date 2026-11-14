@@ -766,7 +766,7 @@ const addDays = (date: string, amount: number): string => {
 
 // 選択月度内の未引落カードと、カードを使わない定期費を日付順に返す。
 // targetYm が無い呼び出しは、従来どおり今日から指定日数内を対象にする。
-export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, targetYm?: string, todayValue?: string, days: number = 30, scheduled?: {card: string; date: string; amount: number}[] | null): UpcomingDebit[] {
+export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, targetYm?: string, todayValue?: string, days: number = 30, scheduled?: {card: string; date: string; amount: number}[] | null, purchases: {account?: string; date: string; amount: number}[] = []): UpcomingDebit[] {
   const today = validDate(todayValue) ? todayValue : (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -775,6 +775,18 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
   const start = targetRange && targetRange.start > today ? targetRange.start : today;
   const end = targetRange?.end || addDays(today, Math.max(0, days));
   const startYm = targetYm || cycleYm(today, cutoffDay);
+  const sourceName = (name: string) => (({ VIEW: "view card", EPOS: "epos card" } as Record<string, string>)[name] || name.toLowerCase());
+  const estimates = new Map<string, number>();
+  for (const purchase of purchases) {
+    const source = purchase.account?.toLowerCase() || "";
+    const card = cards?.find(c => sourceName(c.name) === source ||
+      (c.name === "SAISON" && (source.includes("saison") || source === "likeme" || source === "muji card")));
+    if (!card) continue;
+    const due = cardPaymentDate(purchase.date, card);
+    if (!due || due < start || due > end) continue;
+    const key = card.name + "|" + due;
+    estimates.set(key, (estimates.get(key) || 0) - purchase.amount);
+  }
   const cardRows: UpcomingDebit[] = [];
   const cardMonthCount = targetYm ? 1 : 3;
   for (let offset = 0; offset < cardMonthCount; offset++) {
@@ -788,7 +800,10 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
         continue;
       }
       if (row.status === "paid" || !row.due || row.due < start || row.due > end) continue;
-      cardRows.push({ id: `card|${ym}|${row.name}`, date: row.due, label: row.name, amount: row.amount, status: row.status, kind: "card" });
+      const net = estimates.get(row.name + "|" + row.due);
+      const debtAmount = debtValueTotal(debt?.[row.name]?.[ym]);
+      const amount = row.status === "forecast" && net !== undefined ? Math.max(0, net + debtAmount) : row.amount;
+      cardRows.push({ id: `card|${ym}|${row.name}`, date: row.due, label: row.name, amount, status: row.status, kind: "card" });
     }
   }
 
