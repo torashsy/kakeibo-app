@@ -23,6 +23,16 @@ export function FinanceFeedPanel({ feed, ledger, accounts = [], results = [], st
   const visible = results.filter((r) => r.status !== "superseded");
   const conflicts = visible.filter((r) => r.status === "conflict").length;
   const pending = visible.filter((r) => r.status === "pending").length;
+  if (!expanded) {
+    let status = "";
+    if (state?.error || feed?.ingestion?.status === "blocked") status = "更新できません";
+    else if (state?.mode === "on" && freshness === "stale") status = "更新待ち";
+    else if (state?.needsSync || feed?.ingestion?.status === "partial") status = "同期未完了";
+    else if (state?.mode === "on" && freshness !== "fresh") status = "最終確認待ち";
+    return <button type="button" onClick={onOpen} style={{...styles.collapseRow, minHeight:44}}>
+      <span>明細・同期</span><span>{status} ›</span>
+    </button>;
+  }
   const sources = Array.isArray(feed?.sources) ? feed.sources : [];
   const rows = [...visible].sort((a, b) => String(b.observation?.receivedAt || "").localeCompare(String(a.observation?.receivedAt || "")));
   return (

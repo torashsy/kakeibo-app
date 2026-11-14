@@ -28,6 +28,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />
       <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <div className="home-month"><span>{ymLabel(ym)}の収支</span><strong>{yen(summary.net)}</strong><small>収入 {yen(summary.income)}　支出 {yen(summary.expense)}</small></div>
+      <details className="k-group"><summary>月度の詳細</summary>
       <details className="k-group">
         <summary>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</summary>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
@@ -45,6 +46,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />
       <AnnualOutlookCard forecasts={forecasts} plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />
       <MonthlyNetChart entries={entries || []} ym={ym} />
+      </details>
       </details>
     </div>
   );
@@ -125,7 +127,7 @@ function BalanceTimeline({ shown, upcoming, slips, forecast, ym, cutoff }) {
         </div>)}
       </details>
     </> : <p>締め日までに金額と日付が分かっている入出金予定はありません。</p>}
-    <small>{shortDate(end)}までの給与・賞与とカード引落予定を反映。日々の買い物や振替は対象外です。{salaryNote}</small>
+    {salaryNote && <small>{salaryNote}</small>}
   </section>;
 }
 const purposeGroups = [
@@ -153,14 +155,14 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
     const from=edge; edge+=100*g.amount/positive;
     return g.color+" "+from+"% "+edge+"%";
   }).join(",");
-  const unresolved = purchases.filter(r=>["未分類","通販（商品不明）"].includes(r.spendingCategory || "未分類")).sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
+  const unresolved = [...groups.at(-1).rows].sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount));
   return <section className="k-group home-spending" aria-label="カードの使い道"><header><h3>カードの使い道</h3><strong>{visible.length ? yen(visible.reduce((sum,g)=>sum+g.amount,0)) : ""}</strong></header>
     {visible.length ? <><div className="home-chart">
       <div aria-hidden="true" style={{width:"100%",maxWidth:180,aspectRatio:"1",borderRadius:"50%",background:positive?"conic-gradient("+gradient+")":"#ccc",maskImage:"radial-gradient(circle,transparent 46%,black 47%)"}}/>
       <div>{visible.map(g=><details key={g.label}><summary className="home-category"><i style={{background:g.color}}/><span>{g.label}</span><b>{yen(g.amount)}</b> {positive>0 && g.amount>0 && <small>{Math.round(g.amount/positive*100)}%</small>}</summary>
         {g.rows.map(r=><div key={r.id} style={{fontSize:12,padding:"4px 0"}}>{shortDate(r.date)} {r.description}　{yen(-r.amount)} {r.spendingCategory?.endsWith("（推定）") && <small>{r.spendingCategory}</small>}</div>)}</details>)}</div>
-    </div><small>返金差引・積立とチャージを除く{visible.some(g=>g.amount<0) && " · 円の割合は差引がプラスの項目のみ"}</small></> : <p>この月度の利用明細はまだありません。</p>}
-    {unresolved.length>0 && <details><summary>用途未確認（全期間 {unresolved.length}件）</summary>
+    </div></> : <p>この月度の利用明細はまだありません。</p>}
+    {unresolved.length>0 && <details><summary>この月度の用途未確認（{unresolved.length}件）</summary>
       <table style={{width:"100%",fontSize:12}}><caption>金額の大きい順</caption><tbody>{unresolved.map(r=><tr key={r.id}><td>{r.date}</td><td>{r.description}</td><td style={{textAlign:"right"}}>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</td></tr>)}</tbody></table></details>}
   </section>;
 }
