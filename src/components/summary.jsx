@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ACCENT, LINE, MUTED, RED, GREEN } from '../theme.js';
-import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
+import { yen, ymLabel, periodLabel, acctRole, planVsActualForMonth, annualOutlook, cardBreakdown, cardClaimStates, upcomingDebits, cycleYm, balanceReachesCycleEnd, cycleEndDate, addMonth, computeSummary } from '../utils';
 import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
@@ -36,6 +36,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
           <div key={label} style={alignedRow}><span>{label} <small>{typeof source === "string" ? source : source ? "実績" : "計画"}</small></span><strong style={alignedAmount}>{yen(amount)}</strong></div>)}
       </details>
       <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />
+      <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />
       <PayrollReport slips={paySlips} />
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
@@ -48,6 +49,20 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       </details>
     </div>
   );
+}
+function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
+  const bank = entries.filter(e => e.cat === "account" && acctRole(e.item) === "transfer");
+  const cards = Object.values(snapshot?.investmentCardRows || {}).filter(r => cycleYm(r.date, cutoff) === ym);
+  if (!bank.length && !cards.length) return null;
+  const sum = rows => rows.reduce((total, r) => total + r.amount, 0);
+  return <details className="k-group"><summary>投資の内訳</summary>
+    {[["銀行の投資振替（差引）", bank, sum(bank)], ["カード積立（利用日基準）", cards, -sum(cards)]].map(([label,rows,total]) =>
+      <details key={label}><summary style={{padding:"10px 0"}}>{label}　{yen(total)}（{rows.length}件）</summary>
+        {rows.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(r =>
+          <div key={r.id} style={{...styles.settingRow, gap:8}}><span>{r.date?.slice(5) || "日付未登録"}　{r.broker || r.note || r.account}</span><strong>{yen(label.startsWith("カード") ? -r.amount : r.amount)}</strong></div>)}
+      </details>)}
+    <p style={{fontSize:12}}>カード積立はカード請求の内訳です。収支への追加計上はありません。</p>
+  </details>;
 }
 const alignedRow = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", padding: "11px 14px", borderBottom: `1px solid ${LINE}` };
 const alignedAmount = { textAlign: "right", whiteSpace: "nowrap", fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)", fontSize: "var(--num-size)" };
