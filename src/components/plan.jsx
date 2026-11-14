@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { INK, MUTED, ACCENT, GREEN, RED } from '../theme.js';
 import {
-  num, yen, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
+  num, yen, cycleYm, ymLabel, addMonth, planMonths, fyStartOf, computeSummary, planValue, evalAmount,
   plannedIncome, plannedSalaryIncome, plannedOtherIncome, plannedVariable, plannedInvest, plannedSpending, plannedNet, fixedForMonth, variableBuckets,
   monthForecast, plannedDebt, estimateSalaryTakeHome, plannedSalaryBreakdown,
   hasBalRecord, balTotalOf, pendingCardClaims, monthHasInput, isMonthClosed,
@@ -109,6 +109,8 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
       { k: "net", label: "収支", net: true },
     ];
 
+  const pastPeriod = ym < cycleYm(new Date().toLocaleDateString("sv-SE"), config?.cycleCutoffDay || 0) || isMonthClosed(closedMonths, ym);
+  const monthResult = pastPeriod ? computeSummary(entriesByMonth[ym] || []) : projected[ym];
   const showBal = mode === "forecast";
 
   const openEdit = (r, mo) => {
@@ -241,8 +243,8 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
         ))}
       </div>
       {mode === "forecast" && months.includes(ym) && <section className="plan-focus">
-        <h3>{ymLabel(ym)}の収支{isMonthClosed(closedMonths, ym) ? "実績" : "見通し"}</h3><strong>{yen(projected[ym].net)}</strong>
-        <dl>{[["収入", projected[ym].salaryIncome + projected[ym].otherIncome],["支出",projected[ym].spending],["投資振替",projected[ym].invest]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{yen(value)}</dd></div>)}</dl>
+        <h3>{ymLabel(ym)}の収支{pastPeriod ? "実績" : "見通し"}</h3><strong>{yen(monthResult.net)}</strong>
+        <dl>{[["収入", monthResult.salaryIncome + monthResult.otherIncome],["支出",pastPeriod ? monthResult.expense : monthResult.spending],["投資振替",monthResult.invest]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{yen(value)}</dd></div>)}</dl>
       </section>}
       {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
       {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (

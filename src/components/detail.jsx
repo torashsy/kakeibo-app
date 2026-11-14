@@ -27,6 +27,7 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, onSave
 }
 
 export function DetailList({ monthEntries, onEdit }) {
+  const [query,setQuery] = useState("");
   const catLabel = { salary: "給与系", card: "カード", account: "口座" };
 
   // 取り込んだ記録は指紋(src)に取引日を持っているので、日付の新しい順に並べる。
@@ -40,12 +41,17 @@ export function DetailList({ monthEntries, onEdit }) {
       return b.i - a.i;
     }), [monthEntries]);
   if (!list.length) return <div style={{ color: MUTED, fontSize: 13, padding: 12 }}>記録なし</div>;
+  const normalize = value => String(value ?? "").normalize("NFKC").toLowerCase().replace(/,/g,"");
+  const needle = normalize(query.trim());
+  const filtered = list.filter(({e,d,desc})=>[e.item,e.account,e.amount,d,desc,e.note].some(value=>normalize(value).includes(needle)));
   return (
     <div>
+      <input className="record-search" type="search" aria-label="記録を検索" placeholder="店名・口座・金額で検索" value={query} onChange={e=>setQuery(e.target.value)} />
+      {!filtered.length && <p>一致する記録はありません</p>}
       <div style={styles.detailCard}>
-        {list.map(({ e, d, desc }, index) => (
+        {filtered.map(({ e, d, desc }, index) => (
           <React.Fragment key={e.id}>
-            {(index === 0 || list[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
+            {(index === 0 || filtered[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
           <button className="journal-row" onClick={() => onEdit(e)}>
             <span className="journal-mark" aria-hidden="true">{e.cat==="salary"?"給":e.cat==="card"?"カ":"口"}</span>
             <span className="journal-name"><b>{desc || e.item}</b><small>{[catLabel[e.cat], e.account, desc && e.item].filter(Boolean).join(" · ")}</small></span>

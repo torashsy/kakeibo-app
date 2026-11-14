@@ -430,7 +430,7 @@ export default function App() {
         {tab === "settings" && <div className="sync-link"><CloudBadge /><button onClick={()=>setTab("finance")}>同期状態を見る ›</button></div>}
         {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => setTab("design")} onOpenCards={() => setTab("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} onBack={() => setTab("settings")} />}
-        {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
+        {tab === "cards" && <SubScreen title="カード管理" onBack={() => setTab("settings")}><CardList accounts={config.accounts} cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></SubScreen>}
       </main>
 
       <nav className="ledger-nav" aria-label="メインメニュー">

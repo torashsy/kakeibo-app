@@ -129,7 +129,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   );
 }
 
-export function CardList({ cards, onSaveCards, onRemoveCard }) {
+export function CardList({ accounts = [], cards, onSaveCards, onRemoveCard }) {
   const [edit, setEdit] = useState(null);
   const commit = () => {
     if (!edit.name.trim()) return;
@@ -176,6 +176,9 @@ export function CardList({ cards, onSaveCards, onRemoveCard }) {
               <label style={styles.fieldLabel}><span>引き落とし日</span><input type="number" inputMode="numeric" min="1" max="31" value={edit.paymentDay ?? ""} onChange={(e) => setEdit({ ...edit, paymentDay: e.target.value })} placeholder="例 10" style={{ ...styles.textInput, marginTop: 6, textAlign: "right" }} /></label>
             </div>
             <div style={{ fontSize: 11, color: MUTED, marginTop: 5 }}>31＝月末・休日は翌営業日</div>
+            {accounts.length > 0 && <label style={styles.fieldLabel}>引き落とし口座<select style={styles.textInput} value={edit.paymentAccount || ""} onChange={e=>setEdit({...edit,paymentAccount:e.target.value})}>
+              <option value="">未登録</option>{accounts.map(name=><option key={name}>{name}</option>)}
+            </select></label>}
             <label style={styles.fieldLabel}>メモ（任意）</label>
             <input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="正式名称や用途など" style={styles.textInput} />
             <button style={{ ...styles.saveBtn, opacity: edit.name.trim() ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim()}>{edit.id ? "更新" : "追加"}</button>

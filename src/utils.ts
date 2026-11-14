@@ -56,6 +56,7 @@ export interface Card {
   note?: string;
   annualFee?: number;
   cutoffDay?: number;  // 利用締日。31は月末扱い
+  paymentAccount?: string;
   paymentDay?: number; // 口座引き落とし日。休日は翌営業日へ送る
 }
 

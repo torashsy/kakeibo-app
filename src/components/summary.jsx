@@ -32,13 +32,13 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
           <button key={id} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}
       </nav>
       {section === "month" && <>
-      {showOutlook && <BalanceTimeline compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
+      {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
+      <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <section className="home-flow" aria-label="選択月の収入と支出">
         <header><h3>月の収支</h3></header>
         <CashWaterfall income={summary.income} expense={summary.expense} net={summary.net}/>
       </section>
-      <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       <details className="k-group"><summary>今月の収支内訳・締め残高</summary>
       <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
@@ -47,7 +47,7 @@ export function Summary({ forecasts, paySlips, snapshot, scheduledDebits, summar
       <MonthlyNetChart entries={entries || []} ym={ym} />
       </>}
       {section === "funds" && <>
-      {showOutlook && <BalanceTimeline shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
+      {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
       {!showOutlook && !hasBal && <p>この月の口座残高は未登録です。</p>}
       {!showOutlook && <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />}
@@ -93,7 +93,7 @@ function CashWaterfall({income, expense, net}) {
       <div key={label}><span>{label}</span><strong>{label === "差引" && value > 0 ? "+" : ""}{yen(value)}</strong></div>)}</div>
   </div>;
 }
-function BalanceTimeline({ compact, onExpand, shown, upcoming, slips, forecast, ym, cutoff }) {
+function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcoming, slips, forecast, ym, cutoff }) {
   const today = new Date().toLocaleDateString("sv-SE");
   if (ym !== cycleYm(today, cutoff)) return null;
   const accounts = Object.entries(shown);
@@ -134,16 +134,33 @@ function BalanceTimeline({ compact, onExpand, shown, upcoming, slips, forecast, 
   }
   const lowest = points.reduce((min, point) => point.amount < min.amount ? point : min);
   if (compact) {
-    const debit = points.find(p => p.rows.some(r => r.change < 0));
-    return <section className="account-stage"><button onClick={onExpand}><span>口座残高</span><strong>{yen(start)}</strong><small>口座別・入出金予定　→</small></button>
-      {debit && <div><span>{shortDate(debit.date)} 引き落とし後</span><b>{yen(debit.amount)}</b></div>}</section>;
+    const bills = upcoming.filter(row => row.kind === "card" && row.amount > 0);
+    const nextDate = bills[0]?.date;
+    const next = bills.filter(row => row.date === nextDate);
+    const totals = new Map();
+    for (const bill of next) {
+      const name = cards?.find(card => card.name === bill.label)?.paymentAccount || "";
+      totals.set(name, (totals.get(name) || 0) + bill.amount);
+    }
+    return <section className="cash-position"><button className="all-balances" onClick={onExpand}>
+      <span>口座残高 <small>{accounts.length}口座合計</small></span><b>{yen(start)}</b><span aria-hidden="true">›</span></button>
+      {next.length > 0 && <details className="next-claim"><summary>
+        <span>{shortDate(nextDate)}　次のカード引落予定</span><b>{yen(next.reduce((sum,r)=>sum+r.amount,0))}</b></summary>
+        {next.map(r=><div className="claim-row" key={r.id}><span>{r.label}</span><b>{yen(r.amount)}</b></div>)}
+        {[...totals].map(([name,amount])=> {
+          const bal = shown[name];
+          return name && bal ? <div key={name} className="claim-account"><span>{name} · {bal.asOf || bal.ym+"月度"} 残高</span><b>{yen(bal.amount)}</b><span>この請求を引いた残額</span><strong>{yen(bal.amount-amount)}</strong></div> :
+            <div key={name} className="claim-row">{name ? name+"の残高未取得" : "引落口座は未登録"}{!name && <button onClick={onOpenCards}>カード管理 ›</button>}</div>;
+        })}
+      </details>}</section>;
+
   }
   return <section className="k-group home-balance" aria-label="残高の見通し">
-    <h3>これからの残高</h3><details className="home-accounts"><summary><span>現在</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
+    <h3>全口座の残高見通し</h3><details className="home-accounts"><summary><span>現在</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
     </details>
     {points.length > 1 ? <>
-      <table className="balance-events"><thead><tr><th>日付</th><th>入出金予定</th><th>残る額</th></tr></thead>
+      <table className="balance-events"><thead><tr><th>日付</th><th>入出金予定</th><th>全口座計</th></tr></thead>
         <tbody>{points.slice(1).map(({date,rows,amount}) => <tr key={date}>
           <th scope="row">{shortDate(date)}</th>
           <td>{rows.map((row,i) => <div key={i}><span>{row.label}</span><b>{row.change>0 ? "+" : ""}{yen(row.change)}</b></div>)}</td>
@@ -190,12 +207,12 @@ function SpendingPurpose({ purchases, ym, cutoff }) {
   const selected = selection?.ym === ym ? groups.get(selection.label) : null;
   const choose = label => setSelection(selected?.label === label ? null : {ym,label});
   return <section className="spend-report" aria-label="カードの使い道">
-    <header><h3>カードの使い道</h3>{visible.length > 0 && <b>{yen(visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>
+    <header><h3>{Number(ym.slice(5))}月度のカード利用</h3>{visible.length > 0 && <b>{yen(visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>
     {!visible.length && <p>利用明細なし</p>}
     {visible.length > 0 && <div className="spend-filter">{[["category","用途別"],["merchant","利用先別"]].map(([id,label])=><button key={id} aria-pressed={basis===id} onClick={()=>{setBasis(id);setSelection(null);setAllMerchants(false);}}>{label}</button>)}</div>}
     {basis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
     {(basis==="merchant" && !allMerchants ? visible.slice(0,5) : visible).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
-      <i style={{background:g.color}}/><span>{g.label}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
+      <i style={{background:g.color}}/><span className="spend-name">{g.label}{basis==="category" && !selected && <small>{[...new Set(g.rows.map(r=>r.description))].slice(0,2).join("・")}</small>}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
     </button>{selected===g && <div className="spend-transactions">{g.rows.map(r=><div key={r.id}><time>{shortDate(r.date)}</time><span>{r.description}</span><b>{r.amount>0?"返金 ":""}{yen(Math.abs(r.amount))}</b></div>)}</div>}</React.Fragment>)}
     {basis==="merchant" && visible.length>5 && <button className="merchant-more" onClick={()=>setAllMerchants(!allMerchants)}>{allMerchants?"上位5件に戻る":"全"+visible.length+"件の利用先を見る"}</button>}
   </section>;
