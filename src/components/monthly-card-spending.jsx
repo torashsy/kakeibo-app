@@ -3,6 +3,7 @@ import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from 'react';
 import { bankTransactions } from '../bank-feed';
 import { yen } from '../utils';
+import { PendingPurchases } from './pending-purchases';
 
 export function MonthlyCardSpending({ snapshot }) {
   const rows = useMemo(() => classifyCardRows(bankTransactions(snapshot).filter(row => row.id.startsWith('mf-card:'))), [snapshot]);
@@ -24,7 +25,7 @@ export function MonthlyCardSpending({ snapshot }) {
       {months.map(m => <option key={m}>{m}</option>)}
     </select></label>
     <small>確定明細 {monthly.length}件・返金を差し引いた利用額</small>
-    {[...byCategory.keys()].filter(category => byCategory.get(category).length).map(category => {
+    {[...byCategory.keys()].filter(category => category !== "用途未確認").map(category => {
       const items = byCategory.get(category);
       const total = -items.reduce((sum, row) => sum + row.amount, 0);
       return <details key={month + category} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
@@ -34,5 +35,6 @@ export function MonthlyCardSpending({ snapshot }) {
         </div>)}
       </details>;
     })}
+    <PendingPurchases key={month} rows={byCategory.get("用途未確認")}/>
   </section>;
 }

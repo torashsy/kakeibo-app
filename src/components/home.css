@@ -102,4 +102,7 @@
 .ledger-refund {color:var(--income)}
 .ledger-refund small {font:inherit;font-size:12px}
 .ledger-more {display:block;width:100%}
+.pending-purchases {margin-top:12px;border-top:1px solid var(--line)}
+.pending-purchases summary {padding:12px 0;cursor:pointer}
+.pending-purchases summary b {float:right;font-variant-numeric:tabular-nums}
 .cash-waterfall-labels strong {font-family:var(--num-font);font-variant-numeric:tabular-nums;font-size:clamp(12px,3.7vw,18px)}

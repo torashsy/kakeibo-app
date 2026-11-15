@@ -1,5 +1,6 @@
 import { spendingGroup, purchaseLabel, needsPurposeReview } from "../spending-groups";
 import { IncomeLines } from "./income-lines";
+import { PendingPurchases } from "./pending-purchases";
 import { CashComparison } from "./cash-comparison";
 import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from "react";
@@ -228,6 +229,8 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
     g.rows.push(row);
   }
   const visible = [...groups.values()].sort((a,b)=>b.amount-a.amount);
+  const pendingGroup = groupBasis==="category" ? groups.get("用途未確認") : null;
+  const ranked = pendingGroup ? visible.filter(g=>g!==pendingGroup) : visible;
   const positive = visible.reduce((sum,g)=>sum+Math.max(0,g.amount),0);
   const selected = selection?.ym === ym ? groups.get(selection.label) : null;
   const choose = label => setSelection(selected?.label === label ? null : {ym,label});
@@ -235,7 +238,7 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
   if (compact) return <section className="spend-glance">
     <header><h3>カード利用</h3>{visible.length>0 && <strong>{yen(visible.reduce((sum,g)=>sum+g.amount,0))}</strong>}</header>
     {visible.length ? <><div className="glance-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color}}/>)}</div>
-      <div className="glance-categories">{visible.filter(g=>g!==subscription).slice(0,2).map(g=><span key={g.label}><i style={{background:g.color}}/>{g.label} <b>{yen(g.amount)}</b></span>)}</div>
+      <div className="glance-categories">{ranked.filter(g=>g!==subscription).slice(0,2).map(g=><span key={g.label}><i style={{background:g.color}}/>{g.label} <b>{yen(g.amount)}</b></span>)}</div>
       {subscription && <details key={ym} className="subscription-glance"><summary><span>サブスク</span><b>{yen(subscription.amount)}</b></summary>
         <SubscriptionServices rows={subscription.rows}/></details>}
       <button onClick={onOpen}>カード明細 ›</button></> : <p>取得済みの利用明細はありません</p>}
@@ -245,9 +248,10 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
     {!visible.length && <p>利用明細なし</p>}
     {visible.length > 0 && <div className="spend-filter">{[["ledger","明細"],["category","用途別"],["merchant","利用先別"],...(appleRows.length?[["apple","Apple決済"]]:[])].map(([id,label])=><button key={id} aria-pressed={(basis==="apple" && !appleView ? "category" : basis)===id} onClick={()=>{setBasis(id);setSelection(null);setAllMerchants(false);}}>{label}</button>)}</div>}
     {!appleView && basis!=="ledger" && groupBasis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
-    {basis==="ledger" ? (visible.length>0 && <CardLedger key={ym} rows={monthRows}/>) : appleView ? <PurchaseLines rows={appleRows} apple/> : (basis==="merchant" && !allMerchants ? visible.slice(0,5) : visible).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
+    {basis==="ledger" ? (visible.length>0 && <CardLedger key={ym} rows={monthRows}/>) : appleView ? <PurchaseLines rows={appleRows} apple/> : (basis==="merchant" && !allMerchants ? ranked.slice(0,5) : ranked).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
       <i style={{background:g.color}}/><span className="spend-name">{g.label}{groupBasis==="category" && !selected && <small>{[...new Set(g.rows.map(purchaseLabel))].slice(0,2).join("・")}</small>}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
-    </button>{selected===g && groupBasis==="category" && g.label==="サブスク" ? <SubscriptionServices rows={g.rows}/> : selected===g && <PurchaseLines rows={g.label==="用途未確認" ? [...g.rows].sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount)) : g.rows} showCategory={g.label==="生活・サービス"}/>}</React.Fragment>)}
+    </button>{selected===g && groupBasis==="category" && g.label==="サブスク" ? <SubscriptionServices rows={g.rows}/> : selected===g && <PurchaseLines rows={g.rows} showCategory={g.label==="生活・サービス"}/>}</React.Fragment>)}
+    {basis!=="ledger" && !appleView && pendingGroup && <PendingPurchases key={ym} rows={pendingGroup.rows}/>}
     {basis==="merchant" && visible.length>5 && <button className="merchant-more" onClick={()=>setAllMerchants(!allMerchants)}>{allMerchants?"上位5件に戻る":"全"+visible.length+"件の利用先を見る"}</button>}
   </section>;
 
