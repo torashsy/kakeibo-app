@@ -23,3 +23,7 @@ export function spendingGroup(row) {
   return source || byCategory.get("未分類");
 }
 export const purchaseLabel = row => row.appleProduct || (row.appleBilling ? "Apple（商品未確認）" : row.subscriptionLabel || row.description);
+
+export function needsPurposeReview(row) {
+  return spendingGroup(row)?.[0] === "用途未確認" || (row.appleBilling === true && !row.appleProduct);
+}

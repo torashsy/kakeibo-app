@@ -1,4 +1,4 @@
-import { spendingGroup, purchaseLabel } from "../spending-groups";
+import { spendingGroup, purchaseLabel, needsPurposeReview } from "../spending-groups";
 import { IncomeLines } from "./income-lines";
 import { CashComparison } from "./cash-comparison";
 import { classifyCardRows } from "../card-purposes";
@@ -185,15 +185,39 @@ function PurchaseLines({ rows, apple=false, showCategory=false }) {
     <b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b>
   </div>)}</div>;
 }
-function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
+function CardLedger({ rows }) {
+  const [query, setQuery] = useState("");
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const [limit, setLimit] = useState(20);
+  const normalize = text => text.normalize("NFKC").toLowerCase();
+  const needle = normalize(query.trim());
+  const pending = rows.filter(needsPurposeReview).length;
+  const review = pending > 0 && reviewOnly;
+  const matches = rows.filter(row => (!review || needsPurposeReview(row)) &&
+    (!needle || normalize([purchaseLabel(row), row.account, row.description, spendingGroup(row)?.[0]].join(" ")).includes(needle)));
+  return <div className="card-ledger">
+    <div className="ledger-tools"><input type="search" aria-label="明細を検索" placeholder="店名・カード名で検索" value={query}
+      onChange={e=>{setQuery(e.target.value);setLimit(20);}}/>
+      {pending>0 && <button aria-pressed={review} onClick={()=>{setReviewOnly(!review);setLimit(20);}}>要確認 {pending}件</button>}
+    </div>
+    <ul>{matches.slice(0,limit).map(row=><li key={row.id}>
+      <time dateTime={row.date}>{row.date.slice(5).replace("-", "/")}</time>
+      <span className="ledger-merchant">{purchaseLabel(row)}<small>{needsPurposeReview(row) ? "用途未確認" : spendingGroup(row)?.[0]} · {row.account}</small></span>
+      <b className={row.amount>0 ? "ledger-refund" : undefined}>{row.amount>0 && <small>返金 </small>}{yen(Math.abs(row.amount))}</b>
+    </li>)}</ul>
+    {!matches.length && <p role="status">該当する明細はありません</p>}
+    {matches.length>limit && <button className="ledger-more" onClick={()=>setLimit(limit+20)}>続きを見る（残り{matches.length-limit}件）</button>}
+  </div>;
+}
+export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
   const [selection, setSelection] = useState(null);
-  const [basis,setBasis] = useState("category");
+  const [basis,setBasis] = useState(compact ? "category" : "ledger");
   const [allMerchants,setAllMerchants] = useState(false);
   const groups = new Map();
   const monthRows = purchases.filter(row=>cycleYm(row.date,cutoff)===ym && spendingGroup(row));
   const appleRows = monthRows.filter(row=>row.appleBilling);
   const appleView = basis==="apple" && appleRows.length>0;
-  const groupBasis = basis==="apple" ? "category" : basis;
+  const groupBasis = basis==="merchant" ? "merchant" : "category";
   for (const row of monthRows) {
     const preset = spendingGroup(row);
     const label = groupBasis === "merchant" ? (row.appleBilling ? "Apple" : row.subscriptionLabel || row.description?.trim() || "利用先未確認") : preset[0];
@@ -219,9 +243,9 @@ function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
   return <section className="spend-report" aria-label="カードの使い道">
     <header><h3>{Number(ym.slice(5))}月度の{appleView?"Apple決済":"カード利用"}</h3>{visible.length > 0 && <b>{yen(appleView ? -appleRows.reduce((sum,r)=>sum+r.amount,0) : visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>
     {!visible.length && <p>利用明細なし</p>}
-    {visible.length > 0 && <div className="spend-filter">{[["category","用途別"],["merchant","利用先別"],...(appleRows.length?[["apple","Apple決済"]]:[])].map(([id,label])=><button key={id} aria-pressed={(appleView?"apple":groupBasis)===id} onClick={()=>{setBasis(id);setSelection(null);setAllMerchants(false);}}>{label}</button>)}</div>}
-    {!appleView && groupBasis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
-    {appleView ? <PurchaseLines rows={appleRows} apple/> : (basis==="merchant" && !allMerchants ? visible.slice(0,5) : visible).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
+    {visible.length > 0 && <div className="spend-filter">{[["ledger","明細"],["category","用途別"],["merchant","利用先別"],...(appleRows.length?[["apple","Apple決済"]]:[])].map(([id,label])=><button key={id} aria-pressed={(basis==="apple" && !appleView ? "category" : basis)===id} onClick={()=>{setBasis(id);setSelection(null);setAllMerchants(false);}}>{label}</button>)}</div>}
+    {!appleView && basis!=="ledger" && groupBasis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
+    {basis==="ledger" ? (visible.length>0 && <CardLedger key={ym} rows={monthRows}/>) : appleView ? <PurchaseLines rows={appleRows} apple/> : (basis==="merchant" && !allMerchants ? visible.slice(0,5) : visible).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
       <i style={{background:g.color}}/><span className="spend-name">{g.label}{groupBasis==="category" && !selected && <small>{[...new Set(g.rows.map(purchaseLabel))].slice(0,2).join("・")}</small>}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
     </button>{selected===g && groupBasis==="category" && g.label==="サブスク" ? <SubscriptionServices rows={g.rows}/> : selected===g && <PurchaseLines rows={g.label==="用途未確認" ? [...g.rows].sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount)) : g.rows} showCategory={g.label==="生活・サービス"}/>}</React.Fragment>)}
     {basis==="merchant" && visible.length>5 && <button className="merchant-more" onClick={()=>setAllMerchants(!allMerchants)}>{allMerchants?"上位5件に戻る":"全"+visible.length+"件の利用先を見る"}</button>}
