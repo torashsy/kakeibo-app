@@ -4,9 +4,24 @@ const subscriptions = [
   ["Amazon Prime", /^(?:amazon|アマゾン)\s*(?:プライム|prime)\s*(?:会費|membership)(?:$|[ (])/i],
   ["radiko ダブルプラン", /^(?:ラジコ|radiko)\s*ダブルプラン(?:$|[ (])/i],
   ["radiko タイムフリー30", /^(?:ラジコ|radiko).*タイムフリ[ー-]30/i],
+  ["U-NEXT", /^ユーネクストサービス(?:利用料|リヨウリヨウ)$/],
+  ["Google One", /^google\s*\*\s*google one$/],
+  ["JAL Wellness & Travel", /^jal wellness &(?: travel)?$/],
+  ["X 有料機能", /^x corp\. paid features(?:$| )/],
+  ["NewsPicks", /^newspicks$/],
+  ["Pontaパス", /^pontaパス(?:旧スマプレ)?$/],
+  ["J SPORTSオンデマンド", /^j sportsオンデマンド$/],
+  ["NHKオンデマンド", /^nhkオンデマンド$/],
   ["Netflix", /^netflix(?:\.com)?$/i],
   ["Spotify", /^spotify(?: premium)?$/i],
 ];
+const appleBill = /^apple[. ]com[ /]bill$/;
+const appleItem = /^(.+)\s*\(apple[. ]com[ /]bill\)$/i;
+function appleSubscription(description) {
+  const product = description.normalize("NFKC").match(appleItem)?.[1].trim();
+  if (product && /^(?:Apple Music|iCloud\+ (?:\d+(?:GB|TB))|ChatGPT (?:Plus|Pro(?: \d+)?)|Claude (?:Pro|Max) - Monthly|SuperGrok Plus|Meitu 年間VIP|≠ME LINK .+トークルーム)$/i.test(product))
+    return product;
+}
 const rules = [
   ["交通費", /駅\s*オートチャージ\(モバイル\)|モバイルsuica入金/],
   ["旅行・宿泊", /近畿日本ツーリストインターネット/],
@@ -74,19 +89,29 @@ export function classifyCardRows(rows) {
   const applePairs = new Map();
   const appleKey = row => [row.account, row.date, Math.abs(row.amount)].join("|");
   for (const row of rows) {
-    if (!/^apple[. ]com[ /]bill$/i.test(normalize(row.description)) || !row.account || !row.amount) continue;
+    const name = normalize(row.description);
+    if (!(appleBill.test(name) || appleItem.test(name)) || !row.account || !row.date || !row.amount) continue;
     const key = appleKey(row);
     const signs = applePairs.get(key) || {charges:0, refunds:0};
-    if (row.amount < 0) signs.charges++; else signs.refunds++;
+    if (row.amount < 0) {
+      signs.charges++;
+      signs.subscription = appleSubscription(row.description);
+    } else signs.refunds++;
     applePairs.set(key, signs);
   }
   return rows.map(row => {
     const name = normalize(row.description);
     const pair = applePairs.get(appleKey(row));
-    if (pair?.charges === 1 && pair.refunds === 1 && /^apple[. ]com[ /]bill$/i.test(name) && broad(row.spendingCategory))
-      return {...row, spendingCategory:"Apple決済"};
+    const product = appleSubscription(row.description);
+    if (product) return {...row, spendingCategory:"サブスク", subscriptionLabel:product};
+    if (pair?.charges === 1 && pair.refunds === 1 && appleBill.test(name)) {
+      if (row.amount > 0 && pair.subscription && (broad(row.spendingCategory) || ["サブスク","Apple決済"].includes(row.spendingCategory)))
+        return {...row, spendingCategory:"サブスク", subscriptionLabel:pair.subscription};
+      if (broad(row.spendingCategory)) return {...row, spendingCategory:"Apple決済"};
+    }
     if (name === "株式会社さん" && Math.abs(row.amount) === 1078)
       return {...row, spendingCategory:"サブスク", subscriptionLabel:"音読さん"};
+    if (name === "fod" && Math.abs(row.amount) === 1320) return {...row, spendingCategory:"サブスク", subscriptionLabel:"FODプレミアム"};
     const service = subscriptions.find(([,pattern])=>pattern.test(name));
     if (service) return {...row, spendingCategory:"サブスク", subscriptionLabel:service[0]};
     if (row.spendingCategory?.replace(/（推定）$/, "") === "サブスク") return row;

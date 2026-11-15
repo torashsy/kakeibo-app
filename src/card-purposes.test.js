@@ -25,3 +25,13 @@ it("labels confirmed Ondoku charges and refunds while retaining their billing de
   expect(result.map(row=>row.subscriptionLabel)).toEqual(["音読さん","音読さん",undefined]);
   expect(result.map(row=>row.description)).toEqual(rows.map(row=>row.description));
 });
+
+it("assigns a bare Apple reversal only to a unique subscription charge on the same card and day", () => {
+  const base = {account:"A", date:"2026-10-03"};
+  const charge = {...base, description:"Apple Music（APPLE.COM/BILL）", amount:-680};
+  const refund = {...base, description:"APPLE.COM/BILL", amount:680};
+  const purchase = {...base, description:"ゲーム内通貨（APPLE.COM/BILL）", amount:-680};
+  expect(classifyCardRows([charge,refund]).map(r=>r.subscriptionLabel)).toEqual(["Apple Music","Apple Music"]);
+  expect(classifyCardRows([charge,purchase,refund]).map(r=>r.subscriptionLabel)).toEqual(["Apple Music",undefined,undefined]);
+  expect(classifyCardRows([charge,{...refund,account:"B"}])[1].subscriptionLabel).toBeUndefined();
+});
