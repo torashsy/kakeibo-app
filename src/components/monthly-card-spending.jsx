@@ -10,11 +10,11 @@ export function MonthlyCardSpending({ snapshot }) {
   const [selection, setSelection] = useState('');
   if (!months.length) return null;
   const month = months.includes(selection) ? selection : months[0];
-  const monthly = rows.filter(row => row.date.startsWith(month));
+  const monthly = rows.filter(row => row.date.startsWith(month) && spendingGroup(row));
 
   const byCategory = new Map();
   for (const row of monthly) {
-    const label = spendingGroup(row)?.[0] || "資金移動";
+    const label = spendingGroup(row)[0];
     if (!byCategory.has(label)) byCategory.set(label, []);
     byCategory.get(label).push(row);
   }

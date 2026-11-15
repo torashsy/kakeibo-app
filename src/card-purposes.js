@@ -28,6 +28,13 @@ function applePurchase(description, originalCategory) {
   return {appleProduct:product, spendingCategory:category && !["未分類","Apple決済","その他の分類済み"].includes(category) ? category : "デジタル購入"};
 }
 const rules = [
+  ["手数料", /^(?:カード年会費|再発行手数料|分割払手数料|回収事務手数料)(?:$|\s)/],
+  ["Revolutチャージ", /^revolut\*+\d{4}\*$/],
+  ["その他の食費", /^コカ[・･]コーラ自販機/],
+  ["美容院・理髪", /^square\s+sq\*spea向ヶ丘遊園$/],
+  ["教養・教育", /^paypal\s*\*kenbusiness(?:$|\s)/],
+  ["映画館", /^toho-one 年会費$/],
+  ["趣味・娯楽", /^paypal\s*\*musescore(?:$|\s)/],
   ["交通費", /駅\s*オートチャージ\(モバイル\)|モバイルsuica入金/],
   ["旅行・宿泊", /近畿日本ツーリストインターネット/],
   ["交通費", /新日本海フェリー/],

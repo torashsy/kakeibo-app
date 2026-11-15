@@ -178,10 +178,10 @@ function SubscriptionServices({ rows }) {
       {service.rows.map(row=><div key={row.id}><time>{shortDate(row.date)}</time><span>{row.account}</span><b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b></div>)}
     </details>)}</div>;
 }
-function PurchaseLines({ rows, apple=false }) {
+function PurchaseLines({ rows, apple=false, showCategory=false }) {
   return <div className="spend-transactions">{rows.map(row=><div key={row.id}>
     <time dateTime={row.date}>{shortDate(row.date)}</time>
-    <span>{purchaseLabel(row)}{apple && <small>{row.appleProduct ? row.spendingCategory : row.account}</small>}</span>
+    <span>{purchaseLabel(row)}{apple && <small>{row.appleProduct ? row.spendingCategory : row.account}</small>}{showCategory && <small>{row.spendingCategory==="その他の分類済み" ? row.mfMinor || row.mfMajor : row.spendingCategory}</small>}</span>
     <b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b>
   </div>)}</div>;
 }
@@ -223,7 +223,7 @@ function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
     {!appleView && groupBasis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
     {appleView ? <PurchaseLines rows={appleRows} apple/> : (basis==="merchant" && !allMerchants ? visible.slice(0,5) : visible).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
       <i style={{background:g.color}}/><span className="spend-name">{g.label}{groupBasis==="category" && !selected && <small>{[...new Set(g.rows.map(purchaseLabel))].slice(0,2).join("・")}</small>}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
-    </button>{selected===g && groupBasis==="category" && g.label==="サブスク" ? <SubscriptionServices rows={g.rows}/> : selected===g && <PurchaseLines rows={g.rows}/>}</React.Fragment>)}
+    </button>{selected===g && groupBasis==="category" && g.label==="サブスク" ? <SubscriptionServices rows={g.rows}/> : selected===g && <PurchaseLines rows={g.label==="用途未確認" ? [...g.rows].sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount)) : g.rows} showCategory={g.label==="生活・サービス"}/>}</React.Fragment>)}
     {basis==="merchant" && visible.length>5 && <button className="merchant-more" onClick={()=>setAllMerchants(!allMerchants)}>{allMerchants?"上位5件に戻る":"全"+visible.length+"件の利用先を見る"}</button>}
   </section>;
 
