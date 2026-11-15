@@ -12,6 +12,7 @@ it("limits spending to six groups including unresolved purchases, and excludes t
     {description:"カード年会費", amount:-1000},
     {description:"Square", amount:-1000},
   ]);
+  expect(spendingGroup({spendingCategory:"Apple決済"})[0]).toBe("生活・サービス");
   expect(spendingGroup(transfer)).toBeNull();
   expect(spendingGroup(fee)[0]).toBe("生活・サービス");
   expect(spendingGroup(unknown)[0]).toBe("用途未確認");

@@ -9,9 +9,9 @@ const groups = [
     "ゲーム","書籍・漫画","書籍","レジャー","交際費","チケット代","映画館","試験料","セクシー系",
     "趣味・娯楽","教養・教育","大学関連","学費","映画・音楽・ゲーム","アウトドア",
     "事業経費","還元","その他入金","手数料","寄付","ドメイン費","印刷サービス","宅配便・運送",
-    "デジタル購入","デジタルサービス",
+    "デジタル購入","デジタルサービス","Apple決済","優待サービス",
   ]],
-  ["用途未確認", "#838995", ["未分類","Apple決済","通販（商品不明）","電子マネー","情報サービス"]],
+  ["用途未確認", "#838995", ["未分類","通販（商品不明）","電子マネー","情報サービス"]],
 ];
 const byCategory = new Map(groups.flatMap(group => group[2].map(category=>[category,group])));
 export function spendingGroup(row) {
@@ -22,4 +22,4 @@ export function spendingGroup(row) {
     : byCategory.get(category);
   return source || byCategory.get("未分類");
 }
-export const purchaseLabel = row => row.appleProduct || (row.appleBilling ? "商品未確認" : row.subscriptionLabel || row.description);
+export const purchaseLabel = row => row.appleProduct || (row.appleBilling ? "Apple（商品未確認）" : row.subscriptionLabel || row.description);

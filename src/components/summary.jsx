@@ -175,7 +175,7 @@ function SubscriptionServices({ rows }) {
   }
   return <div className="subscription-services">{[...byService.values()].sort((a,b)=>b.amount-a.amount).map(service=>
     <details key={service.name}><summary><span>{service.name}</span><b>{yen(service.amount)}</b></summary>
-      {service.rows.map(row=><div key={row.id}><time>{shortDate(row.date)}</time><span>{row.account}</span><b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b></div>)}
+      {service.rows.map(row=><div key={row.id}><time>{shortDate(row.date)}</time><span>{row.account}{row.spendingCategory?.endsWith("（推定）") && <small> · 推定</small>}</span><b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b></div>)}
     </details>)}</div>;
 }
 function PurchaseLines({ rows, apple=false, showCategory=false }) {
