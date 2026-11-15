@@ -1,9 +1,8 @@
+import { purchaseLabel, spendingGroup } from "../spending-groups";
 import { classifyCardRows } from "../card-purposes";
 import React, { useMemo, useState } from 'react';
 import { bankTransactions } from '../bank-feed';
 import { yen } from '../utils';
-
-const categories = ['サブスク', '携帯代', '交通費', '外食', '投資', '健康食品・サプリ', 'ドメイン費', '食料品', 'その他の食費', 'その他の分類済み', '未分類'];
 
 export function MonthlyCardSpending({ snapshot }) {
   const rows = useMemo(() => classifyCardRows(bankTransactions(snapshot).filter(row => row.id.startsWith('mf-card:'))), [snapshot]);
@@ -13,9 +12,9 @@ export function MonthlyCardSpending({ snapshot }) {
   const month = months.includes(selection) ? selection : months[0];
   const monthly = rows.filter(row => row.date.startsWith(month));
 
-  const byCategory = new Map(categories.map(category => [category, []]));
+  const byCategory = new Map();
   for (const row of monthly) {
-    const label = row.spendingCategory || '未分類';
+    const label = spendingGroup(row)?.[0] || "資金移動";
     if (!byCategory.has(label)) byCategory.set(label, []);
     byCategory.get(label).push(row);
   }
@@ -30,8 +29,8 @@ export function MonthlyCardSpending({ snapshot }) {
       const total = -items.reduce((sum, row) => sum + row.amount, 0);
       return <details key={month + category} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
         <summary>{category}　{yen(total)}（{items.length}件）</summary>
-        {items.map(row => <div key={row.id} style={{ padding: '5px 0', fontSize: 13, overflowWrap: 'anywhere' }}>
-          {row.date.slice(5)}　{row.description}　{yen(-row.amount)} <small>{row.account}</small>
+        {items.map(row => <div className="dated-detail" key={row.id} style={{ padding: '5px 0', fontSize: 13, overflowWrap: 'anywhere' }}>
+          <time>{row.date.slice(5).replace("-","/")}</time><span>{purchaseLabel(row)} <small>{row.account}</small></span><b>{yen(-row.amount)}</b>
         </div>)}
       </details>;
     })}

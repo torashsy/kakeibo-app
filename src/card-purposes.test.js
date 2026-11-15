@@ -35,3 +35,17 @@ it("assigns a bare Apple reversal only to a unique subscription charge on the sa
   expect(classifyCardRows([charge,purchase,refund]).map(r=>r.subscriptionLabel)).toEqual(["Apple Music",undefined,undefined]);
   expect(classifyCardRows([charge,{...refund,account:"B"}])[1].subscriptionLabel).toBeUndefined();
 });
+
+it("keeps one-off Apple products visible, including a uniquely matched refund", () => {
+  const base = {account:"A", date:"2026-10-03"};
+  const charge = {...base, description:"ゲーム内課金（APPLE COM BILL）", amount:-160};
+  const refund = {...base, description:"APPLE.COM/BILL", amount:160};
+  const rows = classifyCardRows([charge,refund,{...charge,description:"APPLE.COM/BILL",amount:-300}]);
+  expect(rows.map(row=>row.appleProduct)).toEqual(["ゲーム内課金","ゲーム内課金",undefined]);
+  expect(rows.map(row=>row.spendingCategory)).toEqual(["ゲーム","ゲーム","Apple決済"]);
+});
+
+it("preserves known purchase purposes even at a marketplace", () => {
+  const rows = classifyCardRows([{description:"Amazon.co.jp",amount:-500,spendingCategory:"食料品"}]);
+  expect(rows[0].spendingCategory).toBe("食料品");
+});

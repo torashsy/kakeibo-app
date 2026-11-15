@@ -377,7 +377,7 @@ function MonthExplanation({result, entries, past, plans, ym}) {
     {(expanded?ranked:ranked.slice(0,1)).map((r,i)=><div className="driver" key={r.key}>
       <div><b>{r.label}</b><strong>{yen(r.amount)}</strong></div>
       <div className="driver-scale"><i style={{width:100*r.amount/(spending||1)+"%",opacity:i===0?1:.55}}/></div>
-      <small>{r.date && r.date.slice(5).replace("-","/")+"　"}{r.source} · {Math.round(100*r.amount/(spending||1))}%</small>
+      <small>{r.date && <time className="date-slot">{r.date.slice(5).replace("-","/")}</time>}{r.source} · {Math.round(100*r.amount/(spending||1))}%</small>
     </div>)}
     <details open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="calculation"><summary>{expanded?"内訳を閉じる":"支出内訳"}{ranked.length?" · "+ranked.length+"件":""}</summary>
       <table><thead><tr><th></th><th>実績</th><th>予定</th></tr></thead><tbody>{bars.map(([label,value,actual])=><tr key={label}><th>{label}</th><td>{yen(actual)}</td><td>{yen(value-actual)}</td></tr>)}</tbody></table>

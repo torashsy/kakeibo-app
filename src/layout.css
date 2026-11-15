@@ -195,3 +195,10 @@
 .subscription-services summary span { overflow-wrap:anywhere; }
 .subscription-services details>div { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; padding:4px 0; font-size:13px; }
 .subscription-services b { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.ledger-app { --detail-date: 3.4rem; }
+.spend-transactions>div, .subscription-services details>div, .dated-detail {
+  display:grid; grid-template-columns:var(--detail-date) minmax(0,1fr) auto; gap:8px; align-items:baseline;
+}
+.date-slot { display:inline-block; width:calc(var(--detail-date) + 8px); }
+.date-slot, .dated-detail time, .spend-transactions time, .subscription-services time { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.spend-transactions span small { display:block; color:var(--muted); font-size:12px; }

@@ -4,6 +4,8 @@ const subscriptions = [
   ["Amazon Prime", /^(?:amazon|アマゾン)\s*(?:プライム|prime)\s*(?:会費|membership)(?:$|[ (])/i],
   ["radiko ダブルプラン", /^(?:ラジコ|radiko)\s*ダブルプラン(?:$|[ (])/i],
   ["radiko タイムフリー30", /^(?:ラジコ|radiko).*タイムフリ[ー-]30/i],
+  ["≠ME・＝LOVE ファンクラブ", /^アーティスト[・･]サイト$/],
+  ["PikPak", /^paypal\s*\*\s*pikcloudpte(?:$|\s*\()/],
   ["U-NEXT", /^ユーネクストサービス(?:利用料|リヨウリヨウ)$/],
   ["Google One", /^google\s*\*\s*google one$/],
   ["JAL Wellness & Travel", /^jal wellness &(?: travel)?$/],
@@ -17,10 +19,13 @@ const subscriptions = [
 ];
 const appleBill = /^apple[. ]com[ /]bill$/;
 const appleItem = /^(.+)\s*\(apple[. ]com[ /]bill\)$/i;
-function appleSubscription(description) {
+function applePurchase(description, originalCategory) {
   const product = description.normalize("NFKC").match(appleItem)?.[1].trim();
+  if (!product) return null;
   if (product && /^(?:Apple Music|iCloud\+ (?:\d+(?:GB|TB))|ChatGPT (?:Plus|Pro(?: \d+)?)|Claude (?:Pro|Max) - Monthly|SuperGrok Plus|Meitu 年間VIP|≠ME LINK .+トークルーム)$/i.test(product))
-    return product;
+    return {appleProduct:product, spendingCategory:"サブスク", subscriptionLabel:product};
+  const category = /有償ダイヤ|ゲーム内通貨|ゲーム内課金/.test(product) ? "ゲーム" : originalCategory;
+  return {appleProduct:product, spendingCategory:category && !["未分類","Apple決済","その他の分類済み"].includes(category) ? category : "デジタル購入"};
 }
 const rules = [
   ["交通費", /駅\s*オートチャージ\(モバイル\)|モバイルsuica入金/],
@@ -95,19 +100,19 @@ export function classifyCardRows(rows) {
     const signs = applePairs.get(key) || {charges:0, refunds:0};
     if (row.amount < 0) {
       signs.charges++;
-      signs.subscription = appleSubscription(row.description);
+      signs.purchase = applePurchase(row.description, row.spendingCategory);
     } else signs.refunds++;
     applePairs.set(key, signs);
   }
   return rows.map(row => {
     const name = normalize(row.description);
     const pair = applePairs.get(appleKey(row));
-    const product = appleSubscription(row.description);
-    if (product) return {...row, spendingCategory:"サブスク", subscriptionLabel:product};
-    if (pair?.charges === 1 && pair.refunds === 1 && appleBill.test(name)) {
-      if (row.amount > 0 && pair.subscription && (broad(row.spendingCategory) || ["サブスク","Apple決済"].includes(row.spendingCategory)))
-        return {...row, spendingCategory:"サブスク", subscriptionLabel:pair.subscription};
-      if (broad(row.spendingCategory)) return {...row, spendingCategory:"Apple決済"};
+    const purchase = applePurchase(row.description, row.spendingCategory);
+    if (purchase) return {...row, appleBilling:true, ...purchase};
+    if (appleBill.test(name)) {
+      if (row.amount > 0 && pair?.charges === 1 && pair.refunds === 1 && pair.purchase)
+        return {...row, appleBilling:true, ...pair.purchase};
+      return {...row, appleBilling:true, spendingCategory:"Apple決済"};
     }
     if (name === "株式会社さん" && Math.abs(row.amount) === 1078)
       return {...row, spendingCategory:"サブスク", subscriptionLabel:"音読さん"};
@@ -115,7 +120,7 @@ export function classifyCardRows(rows) {
     const service = subscriptions.find(([,pattern])=>pattern.test(name));
     if (service) return {...row, spendingCategory:"サブスク", subscriptionLabel:service[0]};
     if (row.spendingCategory?.replace(/（推定）$/, "") === "サブスク") return row;
-    if (retailMerchant.test(name)) return {...row, spendingCategory: "物販"};
+    if (retailMerchant.test(name) && (broad(row.spendingCategory) || row.spendingCategory === "通販（商品不明）")) return {...row, spendingCategory: "物販"};
     if (!broad(row.spendingCategory)) return row;
     const rule = rules.find(([, pattern]) => pattern.test(name));
     const previous = history.get(name);
