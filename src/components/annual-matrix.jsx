@@ -42,7 +42,7 @@ export function AnnualMatrix({ columns, rows, currentKey, totalLabel = "年間�
               <tr key={row.key}>
                 <td style={{ ...styles.td, ...styles.tdSticky, ...(summary ? styles.tdSubLabel : {}), ...(row.indent ? { padding: "8px 10px 8px 20px", fontWeight: 400 } : {}), ...(row.muted ? { color: MUTED } : {}) }}>
                   {row.renderLabel ? row.renderLabel() : row.onToggle ? (
-                    <button aria-expanded={!!row.open} style={{ ...styles.cellBtn, width: "100%", textAlign: "left", fontWeight: 600 }} onClick={row.onToggle}>{row.open ? "⌄" : "›"} {row.label}</button>
+                    <button aria-expanded={!!row.open} style={{ ...styles.cellBtn, width: "100%", textAlign: "left", fontWeight: 600 }} onClick={row.onToggle}><span className="disclosure-chevron" aria-hidden="true">›</span> {row.label}</button>
                   ) : row.onLabelClick ? (
                     <button style={{ ...styles.cellBtn, width: "100%", textAlign: "left", color: "inherit", fontWeight: "inherit" }} onClick={row.onLabelClick}>{row.label}</button>
                   ) : row.label}

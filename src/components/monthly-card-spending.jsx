@@ -29,7 +29,7 @@ export function MonthlyCardSpending({ snapshot }) {
       const items = byCategory.get(category);
       const total = -items.reduce((sum, row) => sum + row.amount, 0);
       return <details key={month + category} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-        <summary>{category}　{yen(total)}（{items.length}件）</summary>
+        <summary className="amount-summary"><span>{category} <small>{items.length}件</small></span><b>{yen(total)}</b></summary>
         {items.map(row => <div className="dated-detail" key={row.id} style={{ padding: '5px 0', fontSize: 13, overflowWrap: 'anywhere' }}>
           <time>{row.date.slice(5).replace("-","/")}</time><span>{purchaseLabel(row)} <small>{row.account}</small></span><b>{yen(-row.amount)}</b>
         </div>)}

@@ -54,7 +54,7 @@ export function PayrollReport({ slips, ym }) {
     <table className="pay-list"><caption>支給日別の明細（金額は円）</caption>
       <thead><tr><th>支給日</th><th>支給額</th><th>控除額</th><th>手取り</th></tr></thead><tbody>
       {active.map(s=>{const id=s.date+s.kind;return <React.Fragment key={id}><tr>
-        <th scope="row"><button aria-expanded={expanded===id} onClick={()=>setExpanded(expanded===id?"":id)}>{s.date.slice(5).replace("-","/")}<small>{s.kind} {expanded===id?"▴":"▾"}</small></button></th>
+        <th scope="row"><button aria-expanded={expanded===id} onClick={()=>setExpanded(expanded===id?"":id)}><span className="disclosure-chevron" aria-hidden="true">›</span> {s.date.slice(5).replace("-","/")}<small>{s.kind}</small></button></th>
         <td>{money(s.gross)}</td><td>{money(s.deductions)}</td><td><b>{money(s.net)}</b></td></tr>
         {expanded===id && <tr><td colSpan={4} className="pay-detail"><AmountTable title="支給内訳" items={s.earnings} total={s.gross}/><AmountTable title="控除内訳" items={s.withholdings} total={s.deductions}/>{s.overtimeHours!=null && <p>時間外割増時間　{s.overtimeHours}時間</p>}</td></tr>}</React.Fragment>})}
     </tbody></table>

@@ -85,7 +85,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   return (
     <div>
       <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
-        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span style={{ color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={styles.editRowRight}><span style={{ ...styles.subtotalNum, color: RED }}>{yen(totalRemaining)}</span><span style={styles.chevRSpacer} /></span></div>
+        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span style={{ color: MUTED }}>残債合計（{ymLabel(ym)}以降）</span><span style={styles.editRowRight}><span style={{ ...styles.subtotalNum, color: RED }}>{yen(totalRemaining)}</span></span></div>
       </div>
       <div style={styles.tableScroll}>
         <table style={{ ...styles.table, width: 132 + (columns.length + 1) * 96 }}>

@@ -160,7 +160,7 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
           </div>
         )}
 
-        <button style={styles.mcToggle} onClick={() => setDetail((d) => !d)}>
+        <button style={styles.mcToggle} aria-expanded={detail} onClick={() => setDetail((d) => !d)}>
           {detail ? "内訳を閉じる" : "内訳"}
           <span style={{ ...styles.chev, transform: detail ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform .15s", verticalAlign: -2, marginLeft: 4 }}>›</span>
         </button>

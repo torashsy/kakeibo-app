@@ -242,7 +242,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
       {mode==="plan" && months.includes(ym) && <section className="month-budget"><h3>{ymLabel(ym)}の予算</h3>
         {[{label:"給与の設定",salary:true,k:"salaryIncome"}, {label:"その他の収入",editable:PLAN_OTHER_INCOME,k:"otherIncome"},
           ...variableRows.filter(row=>row.editable),{label:"投資振替",editable:PLAN_INVEST,k:"invest"}].map(row=><button key={row.k} onClick={()=>openEdit(row,ym)}>
-          <span>{row.label.replace(/^・/,"")}</span><b>{yen(planOf(row.k,ym))}</b><small>編集 ›</small></button>)}
+          <span>{row.label.replace(/^・/,"")} <small>編集 ›</small></span><b>{yen(planOf(row.k,ym))}</b></button>)}
       </section>}
       {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
       {mode === "forecast" && months.includes(ym) && onToggleClosedMonth && !monthHasInput(entriesByMonth[ym] || [], [], ym) && (

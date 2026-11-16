@@ -13,10 +13,12 @@
 .pay-report caption {text-align:left;font-weight:650;padding:6px 0}
 .pay-report th,.pay-report td {padding:7px 2px;border-bottom:1px solid var(--border);text-align:right}
 .pay-report th:first-child,.pay-report .pay-detail {text-align:left}
-.pay-list button {display:grid;border:0;padding:3px 0;text-align:left;cursor:pointer}
+.pay-list button small {grid-column:2}
+.pay-list button {display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:4px;border:0;padding:3px 0;text-align:left;cursor:pointer}
 .pay-items th {font-weight:400}
 .pay-items tfoot {font-weight:700}
-.pay-report .pay-detail {padding:8px 12px;background:var(--bg)}
+.pay-report :is(td,th):last-child {padding-inline-end:0}
+.pay-report .pay-detail {padding:8px 0 8px 12px;background:var(--bg)}
 
 .k-group {background:var(--card-bg);border:1px solid var(--border);border-radius:12px;margin:0 0 10px;padding:0 12px}
 .k-group>summary,.pay-breakdown>summary,.bank-balances>summary {cursor:pointer;font-size:14px;font-weight:600;padding:12px 0}

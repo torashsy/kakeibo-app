@@ -54,8 +54,8 @@ export function DetailList({ monthEntries, onEdit }) {
           <React.Fragment key={e.id}>
             {(index === 0 || filtered[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
           <button className="journal-row" aria-label={`編集　${desc || e.note || e.item}　${yen(e.amount)}`} onClick={() => onEdit(e)}>
-            <span className="journal-name"><b>{desc || e.note || e.item}</b><small>{[catLabel[e.cat], e.account, (desc || e.note) && e.item].filter(Boolean).join(" · ")}</small></span>
-            <span className="entry-value"><strong>{yen(e.amount)}</strong> <span aria-hidden="true">›</span></span>
+            <span className="journal-name"><b><span aria-hidden="true">› </span>{desc || e.note || e.item}</b><small>{[catLabel[e.cat], e.account, (desc || e.note) && e.item].filter(Boolean).join(" · ")}</small></span>
+            <span className="entry-value"><strong>{yen(e.amount)}</strong></span>
           </button>
           </React.Fragment>
         ))}
@@ -68,30 +68,30 @@ export function DetailList({ monthEntries, onEdit }) {
 export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
   const its = node.entries; const total = its.reduce((a, e) => a + e.amount, 0);
   if (its.length === 0) {
-    return <div style={styles.itemRow}><span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={{ ...styles.detailItem, color: "var(--zero)" }}>{label}</span></span><span style={styles.editRowRight}><span style={{ ...styles.detailTotal, color: "var(--zero)" }}>¥0</span><span style={styles.chevRSpacer} /></span></div>;
+    return <div style={styles.itemRow}><span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={{ ...styles.detailItem, color: "var(--zero)" }}>{label}</span></span><span style={styles.editRowRight}><span style={{ ...styles.detailTotal, color: "var(--zero)" }}>¥0</span></span></div>;
   }
   if (its.length === 1) {
     return (
       <button style={styles.itemRow} onClick={() => onEdit(its[0])}>
-        <span style={styles.itemRowLeft}><span style={styles.chevSpacer} /><span style={styles.detailItem}>{label}</span></span>
-        <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(its[0].amount)}</span><span style={styles.chev}>›</span></span>
+        <span style={styles.itemRowLeft}><span style={styles.chev} aria-hidden="true">›</span><span style={styles.detailItem}>{label}</span></span>
+        <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(its[0].amount)}</span></span>
       </button>
     );
   }
   const isOpen = !!open[gkey];
   return (
     <div>
-      <button style={styles.itemRow} onClick={() => toggle(gkey)}>
+      <button style={styles.itemRow} aria-expanded={isOpen} onClick={() => toggle(gkey)}>
         <span style={styles.itemRowLeft}>
           <span style={{ ...styles.chev, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", width: 16 }}>›</span>
           <span style={styles.detailItem}>{label}</span><span style={styles.countBadge}>{its.length}件</span>
         </span>
-        <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(total)}</span><span style={styles.chevRSpacer} /></span>
+        <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(total)}</span></span>
       </button>
       {isOpen && its.map((e, i) => (
         <button key={e.id} style={styles.editSubRow} onClick={() => onEdit(e)}>
-          <span style={{ color: MUTED, fontSize: 12.5 }}>{i + 1}件目</span>
-          <span style={styles.editRowRight}><span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{yen(e.amount)}</span><span style={styles.chev}>›</span></span>
+          <span style={{ color: MUTED, fontSize: 12.5 }}><span style={styles.chev} aria-hidden="true">›</span> {i + 1}件目</span>
+          <span style={styles.editRowRight}><span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{yen(e.amount)}</span></span>
         </button>
       ))}
     </div>
@@ -134,7 +134,7 @@ export function DetailCards({ S, config, cards, onEdit }) {
           const accTotal = flows.reduce((b, t) => b + S.totalOf(`account|${t}|${acc}`), 0);
           return (
             <div key={acc}>
-              <div style={styles.subGroupHead}><span>{acc}</span><span style={styles.editRowRight}><span style={styles.subGroupTotal}>{yen(accTotal)}</span><span style={styles.chevRSpacer} /></span></div>
+              <div style={styles.subGroupHead}><span>{acc}</span><span style={styles.editRowRight}><span style={styles.subGroupTotal}>{yen(accTotal)}</span></span></div>
               {flows.map((t) => <ItemRow key={t} label={t} node={S.get("account", t, acc)} gkey={`acct|${acc}|${t}`} {...rowProps} />)}
             </div>
           );

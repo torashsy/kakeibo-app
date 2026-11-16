@@ -524,7 +524,7 @@ function CycleVerifier({ entries, config, closedMonths, onClose }) {
               {/* 合わないときは、差額の原因になりそうな記録をその場で挙げる */}
               {r.diff != null && r.diff !== 0 && (
                 <button style={{ ...styles.chipGhost, marginTop: 4, fontSize: 11 }}
-                  onClick={() => setOpenYm(openYm === r.ym ? "" : r.ym)}>
+                  aria-expanded={openYm === r.ym} onClick={() => setOpenYm(openYm === r.ym ? "" : r.ym)}>
                   原因を{openYm === r.ym ? "閉じる" : "探す"}
                   <span style={{ ...styles.chev, transform: openYm === r.ym ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform .15s", verticalAlign: -2, marginLeft: 3 }}>›</span>
                 </button>

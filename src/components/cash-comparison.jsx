@@ -13,7 +13,7 @@ export function CashComparison({ title, income, expense, net, actualIncome, actu
       const status = actual == null || amount === 0 ? "" : actual === amount ? "実績" : actual === 0 ? "予定" : "実績＋予定";
       const excess = Math.abs(amount) - shared;
       return <div className="cash-line" key={label}>
-        {label==="収入" && incomeDetails ? <button type="button" aria-label="収入の内訳" aria-expanded={open} aria-controls={detailId} className="cash-toggle" onClick={()=>setOpen(!open)}><span>{label} <i aria-hidden="true">{open?"⌃":"⌄"}</i> <small>{status}</small></span><b>{yen(amount)}</b></button> : <><span>{label} <small>{status}</small></span><b>{yen(amount)}</b></>}
+        {label==="収入" && incomeDetails ? <button type="button" aria-label="収入の内訳" aria-expanded={open} aria-controls={detailId} className="cash-toggle" onClick={()=>setOpen(!open)}><span><span className="disclosure-chevron" aria-hidden="true">›</span> {label} <small>{status}</small></span><b>{yen(amount)}</b></button> : <><span>{label} <small>{status}</small></span><b>{yen(amount)}</b></>}
         {income >= 0 && expense >= 0 && <div className="cash-scale" aria-hidden="true">
           <i style={{width:100*shared/maximum+"%"}}/>
           {excess > 0 && <i className="cash-gap" data-deficit={net < 0} style={{width:100*excess/maximum+"%"}}/>}

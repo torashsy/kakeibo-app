@@ -55,8 +55,8 @@ export function Subs({ subs, onSave, cards, ym }) {
   return (
     <div>
       <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 12 }}>
-        <div style={styles.subtotalRow}><span>月換算</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(monthTotal)}</span><span style={styles.chevRSpacer} /></span></div>
-        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span>年合計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(yearTotal)}</span><span style={styles.chevRSpacer} /></span></div>
+        <div style={styles.subtotalRow}><span>月換算</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(monthTotal)}</span></span></div>
+        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span>年合計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(yearTotal)}</span></span></div>
       </div>
       <div style={styles.detailHead}><span>一覧（{subs.length}）</span><button style={styles.addBtn} onClick={newSub}>＋ 追加</button></div>
       {subs.length === 0 ? (
@@ -80,15 +80,16 @@ export function Subs({ subs, onSave, cards, ym }) {
                   return (
                     <button key={s.id} style={{ ...styles.itemRow, ...(soon ? { color: "var(--accent)" } : {}) }} onClick={() => setEdit({ ...s, amount: s.amount ? String(s.amount) : "", category: s.category || "" })}>
                       <span style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 600, color: INK }}>{s.name}{s.plan ? <small style={styles.subCycle}>　{s.plan}</small> : null}</span>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: INK }}><span style={styles.chev} aria-hidden="true">›</span> {s.name}{s.plan ? <small style={styles.subCycle}>　{s.plan}</small> : null}</span>
                         <span style={{ ...styles.subMeta, marginTop: 4 }}>
+                          <small style={styles.subCycle}>{s.cycle === "yearly" ? "年額" : "月額"}</small>
                         {ended ? <span style={styles.subDuePast}>解約済み</span> : soon && <span style={styles.subDue}>{d === 0 ? "本日更新" : `更新まであと${d}日`}</span>}
                         {!ended && past && <span style={styles.subDuePast}>更新日を過ぎています</span>}
                         {s.card && <span style={styles.brandTag}>{s.card}</span>}
                         {s.renewal && <span style={styles.brandTag}>更新 {s.renewal}</span>}
                         </span>
                       </span>
-                      <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(s.amount)}<small style={styles.subCycle}>/{s.cycle === "yearly" ? "年" : "月"}</small></span><span style={styles.chev}>›</span></span>
+                      <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(s.amount)}</span></span>
                     </button>
                   );
                 })}

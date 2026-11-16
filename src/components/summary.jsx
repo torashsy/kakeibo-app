@@ -136,7 +136,7 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
       totals.set(name, (totals.get(name) || 0) + bill.amount);
     }
     return <section className="cash-position"><button className="all-balances" onClick={onExpand}>
-      <span>口座残高 <small>{accounts.length}口座合計</small></span><b>{yen(start)}</b><span aria-hidden="true">›</span></button>
+      <span aria-hidden="true">›</span><span>口座残高 <small>{accounts.length}口座合計</small></span><b>{yen(start)}</b></button>
       {depositsBeforeDebit.map((event,index)=><div className="before-debit" key={event.date+index}>
         <span><time className="date-slot">{shortDate(event.date)}</time>{event.label.startsWith("給与（計画")?"給与入金見込み":event.label}</span><b>＋{yen(event.change)}</b>
       </div>)}
@@ -154,7 +154,7 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
 
   }
   return <section className="k-group home-balance" aria-label="残高の見通し">
-    <h3>全口座の残高見通し</h3><details className="home-accounts"><summary><span>現在</span><strong>{yen(start)}</strong><small>口座別 ›</small></summary>
+    <h3>全口座の残高見通し</h3><details className="home-accounts"><summary><span>現在 <small>口座別</small></span><strong>{yen(start)}</strong></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
     </details>
     {points.length > 1 ? <>
@@ -254,9 +254,9 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initia
           return <div className="purchase-group" key={g.label}>
             <button type="button" className="purchase-rank" aria-expanded={compact ? undefined : open}
               onClick={() => compact ? onOpen(view, g.label) : setSelection(open ? null : {ym, label:g.label})}>
+              <span className="disclosure-chevron" aria-hidden="true">›</span>
               <span className="purchase-name">{g.label}</span>
               <b>{g.amount < 0 && <small>返金超過 </small>}{yen(g.amount)}</b>
-              <span className="purchase-chevron" aria-hidden="true">{open ? "⌄" : "›"}</span>
               <span className="purchase-track" aria-hidden="true"><i data-refund={g.amount < 0}
                 style={{width: 100 * Math.abs(g.amount) / max + "%"}}/></span>
             </button>
@@ -298,7 +298,7 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
     <h4 className="list-heading">振替先別</h4>
     {ranked.map(g=><details className="destination" key={g.name}><summary>
       <span>{g.name}{ranked.length>1 && <small>{total ? Math.round(100*g.invested/total) : 0}%</small>}</span><b>{yen(g.invested)}</b>
-      <small className="action-caption">明細 {g.rows.length}件 ›</small>
+      <small className="action-caption">明細 {g.rows.length}件</small>
       {ranked.length>1 && <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>}
     </summary>{g.rows.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(r=><div className="statement-line" key={r.id}><span><time className="date-slot">{shortDate(r.date)}</time>{r.method}{r.amount<0?"・戻し":""}</span><b>{yen(r.amount)}</b></div>)}
     </details>)}
