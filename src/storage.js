@@ -22,6 +22,7 @@ const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); 
 
 let clientPromise = null;
 let initPromise = null;
+let hasReadLedger = false;
 let activeSyncPromise = null;
 const listeners = new Set();
 const financeAuthListeners = new Set();
@@ -32,8 +33,9 @@ let activity = { status: "idle", lastSyncAt: null, error: "" };
 
 function setSessionIdentity(userId) {
   if (sessionUserId === userId) return;
+  const firstIdentity = sessionEpoch === 0;
   sessionUserId = userId; sessionEpoch += 1;
-  financeAuthListeners.forEach((fn) => { try { fn(); } catch {} });
+  financeAuthListeners.forEach((fn) => { try { fn(userId, firstIdentity); } catch {} });
 }
 export const onFinanceAuthChange = (fn) => { financeAuthListeners.add(fn); return () => financeAuthListeners.delete(fn); };
 export const isFinanceSessionCurrent = (userId, epoch) => !!userId && sessionUserId === userId && ledgerUserId === userId && sessionEpoch === epoch;
@@ -178,12 +180,30 @@ async function fullSync() {
   try {
     const owner = readJSON(OWNER_KEY, null);
     if (owner && owner !== userId) throw new Error("この端末の記録と同じユーザーでログインしてください。");
-    const { data: rows, error } = await c.from(TABLE).select("key,value,updated_at");
-    if (error) throw error;
+    // A returning device usually already has every value. Check the small version list first.
+    let versionsMatch = false;
+    if (owner === userId) {
+      if (Object.keys(meta()).length) {
+        const versions = await c.from(TABLE).select("key,updated_at").eq("user_id", userId);
+        if (versions.error) throw versions.error;
+        const remote = versions.data || [];
+        const localVersions = meta();
+        const local = localValues();
+        versionsMatch = Object.keys(local).length === remote.length && remote.every(row =>
+          local[row.key] != null && Date.parse(localVersions[row.key]) === Date.parse(row.updated_at)
+        );
+      }
+    }
+    let rows = [];
+    if (!versionsMatch) {
+      const result = await c.from(TABLE).select("key,value,updated_at").eq("user_id", userId);
+      if (result.error) throw result.error;
+      rows = result.data || [];
+    }
     const { data: latest } = await c.auth.getSession();
     setSessionIdentity(latest?.session?.user?.id || null);
     if (sessionUserId !== userId || sessionEpoch !== authEpoch) throw new Error("ログイン状態が変わりました。再読み込みしてください。");
-    const { toLocal, toPush } = decideSync(meta(), localValues(), rows || []);
+    const { toLocal, toPush } = versionsMatch ? { toLocal: [], toPush: [] } : decideSync(meta(), localValues(), rows);
     writeJSON(OWNER_KEY, userId);
     for (const { key, value, ts } of toLocal) {
       if (value == null) localStorage.removeItem(PREFIX + key); else localStorage.setItem(PREFIX + key, value);
@@ -195,7 +215,7 @@ async function fullSync() {
     if (sessionUserId !== userId || sessionEpoch !== authEpoch) throw new Error("ログイン状態が変わりました。再読み込みしてください。");
     ledgerUserId = userId;
     setActivity({ status: "synced", lastSyncAt: new Date().toISOString(), error: "" });
-    if (toLocal.length > 0 && typeof window !== "undefined") {
+    if (hasReadLedger && toLocal.length > 0 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("kakeibo:remote-update", { detail: { keys: toLocal.map((x) => x.key) } }));
     }
     return toLocal.length > 0;
@@ -226,6 +246,7 @@ if (typeof window !== "undefined") {
 window.storage = {
   async get(key) {
     await ensureInit();
+    hasReadLedger = true;
     try { return wrap(localStorage.getItem(PREFIX + key)); } catch { return null; }
   },
   async set(key, value) {

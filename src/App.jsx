@@ -148,8 +148,8 @@ export default function App() {
   }, []);
 
   const save = (k, v) => { try { window.storage.set(k, JSON.stringify(v), true); } catch (e) { console.error(e); } };
+  // Fetch bank data alongside the ledger. financeCanApply below checks both owners before use.
   useEffect(() => {
-    if (!loaded) return;
     let cancelled = false, reading = false, lastRead = 0, generation = 0;
     let previous = null;
     const refresh = async (force = false) => {
@@ -170,7 +170,9 @@ export default function App() {
     const passiveRefresh = () => refresh();
     const timer = window.setInterval(passiveRefresh, 30000);
     const off = onSyncChange(passiveRefresh);
-    const offAuth = onFinanceAuthChange(() => {
+    const offAuth = onFinanceAuthChange((userId, firstIdentity) => {
+      // The in-flight initial read checks the session again before returning its data.
+      if (firstIdentity && userId && reading && !previous) return;
       previous = null;
       setFinanceFeed(null); setFinanceState({ mode: "loading", error: "" });
       // Auth callbacks must return before another getSession call acquires the auth lock.
@@ -180,7 +182,7 @@ export default function App() {
     window.addEventListener("focus", passiveRefresh);
     document.addEventListener("visibilitychange", passiveRefresh);
     return () => { cancelled = true; generation += 1; clearInterval(timer); off(); offAuth(); window.removeEventListener("focus", passiveRefresh); document.removeEventListener("visibilitychange", passiveRefresh); };
-  }, [loaded, financeRefresh]);
+  }, [financeRefresh]);
   const financeCanApply = financeState.mode === "on" && !financeState.error && loadedLedgerUserId === financeState.userId && isFinanceSessionCurrent(financeState.userId, financeState.authEpoch);
   const financeMerge = useMemo(() => mergeFinanceObservations(entries, financeCanApply ? financeFeed : null, config, cards, { closedMonths, suppressed: financeSuppressed }), [entries, financeFeed, financeCanApply, config, cards, closedMonths, financeSuppressed]);
   useEffect(() => {
@@ -394,16 +396,20 @@ export default function App() {
   const summary = useMemo(() => computeSummary(reportMonth), [reportMonth]);
   const prevBalTotal = useMemo(() => balTotalAsOf(reportEntries, addMonth(ym, -1)), [reportEntries, ym]);
 
+  const annualForecast = tab === "plan" || (tab === "today" && page.section === "funds");
+  const monthForecastVisible = tab === "today" && page.section === "month";
   const forecasts = useMemo(() => {
+    if (!loaded || (!annualForecast && !monthForecastVisible)) return {};
     const snapshot = financeCanApply ? financeFeed?.bankSnapshot : null;
     const purchases = bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:"));
     const cutoff = config.cycleCutoffDay || 0;
-    return Object.fromEntries(planMonths(fyStartOf(ym)).map(month => {
+    const periods = annualForecast ? planMonths(fyStartOf(ym)) : [ym];
+    return Object.fromEntries(periods.map(month => {
       const rows = reportEntries.filter(e => e.ym === month);
       const bills = upcomingDebits(rows, cards, debt, subs, cutoff, month, cycleStartDate(month, cutoff), 30, snapshot?.upcomingCardDebits, purchases);
       return [month, monthForecast(plans, subs, rows, month, closedMonths.includes(month), debt, cards, cutoff, bills)];
     }));
-  }, [ym, reportEntries, financeCanApply, financeFeed, plans, subs, cards, debt, closedMonths, config.cycleCutoffDay]);
+  }, [loaded, annualForecast, monthForecastVisible, ym, reportEntries, financeCanApply, financeFeed, plans, subs, cards, debt, closedMonths, config.cycleCutoffDay]);
 
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 

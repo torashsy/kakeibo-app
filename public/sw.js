@@ -23,7 +23,13 @@ self.addEventListener("fetch", (e) => {
     // HTML: まずネットワークから取得。オフライン時のみキャッシュへフォールバック
     e.respondWith(
       fetch(e.request)
-        .then((res) => { caches.open(CACHE).then((c) => c.put(e.request, res.clone())); return res; })
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            e.waitUntil(caches.open(CACHE).then(cache => cache.put(e.request, copy)).catch(() => {}));
+          }
+          return res;
+        })
         .catch(() => caches.match(e.request))
     );
     return;
@@ -33,6 +39,7 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     caches.open(CACHE).then(async (cache) => {
       const cached = await cache.match(e.request);
+      if (cached && /\/assets\/[^/]+-[\w-]{8,}\.(js|css)$/.test(url.pathname)) return cached;
       const fetched = fetch(e.request)
         .then((res) => { if (res && res.ok) cache.put(e.request, res.clone()); return res; })
         .catch(() => cached);
