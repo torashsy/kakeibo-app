@@ -11,14 +11,14 @@ const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',
 // ユーザーが選べるのは「アクセント色」と「ダークモード」だけ。
 // ダークを基本(既定)とする。
 export const DEFAULT_THEME = {
-  accent: "#3956A5",
+  accent: "#295C59",
   dark: false,
 };
 
 // アクセント色のプリセット(設定画面で選べる)。
 // 白文字が乗るヒーロー等でも読めるよう、やや深めの発色に統一。
 export const ACCENT_PRESETS = [
-  { id: "emerald", label: "エメラルド", color: "#3956A5" },
+  { id: "emerald", label: "エメラルド", color: "#295C59" },
   { id: "teal", label: "ティール", color: "#1C8A93" },
   { id: "blue", label: "ブルー", color: "#2F6FBF" },
   { id: "indigo", label: "インディゴ", color: "#5257C7" },
@@ -60,21 +60,22 @@ export const themeVars = (t) => {
         expenseSoft: mix("#F2765C", "#121727", 0.82), // 警告カードの背景
       }
     : {
-        paper: "#F8FAFC", ink: "#18233B", line: "#D8DFEB", muted: "#546279",
+        paper: "#FBFAF7", ink: "#232A29", line: "#D9DDDA", muted: "#586460",
         cardBg: "#FFFFFF", thBg: "#EEF0F3", groupBg: "#E5E8EC",
         subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#F8FAFC",
         base: "#FFFFFF",
-        income: accent, expense: "#CE3B2C",
+        income: accent, expense: "#94483D",
         accentSoft: mix(accent, WHITE, 0.88),
         acctBg: mix(accent, WHITE, 0.92),
         colHl: mix(accent, WHITE, 0.92),
         zero: "#B7BCC3",
-        expenseSoft: mix("#CE3B2C", WHITE, 0.90),
+        expenseSoft: mix("#94483D", WHITE, 0.90),
       };
 
   return {
     "--accent": accent, "--accent-soft": p.accentSoft, "--ink": p.ink, "--paper": p.paper,
     "--line": p.line, "--muted": p.muted, "--income": p.income, "--expense": p.expense,
+    "--chart-ink": dark ? "#A2C3BC" : "#355F58",
     "--card-bg": p.cardBg, "--th-bg": p.thBg, "--group-bg": p.groupBg, "--acct-bg": p.acctBg,
     "--subtotal-bg": p.subtotalBg, "--total-cell-bg": p.totalCellBg,
     "--col-hl": p.colHl, "--zero": p.zero, "--expense-soft": p.expenseSoft,

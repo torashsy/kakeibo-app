@@ -13,6 +13,11 @@ import { styles } from '../styles.js';
 
 export function Summary({ section, onSection, forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
   const setSection = onSection;
+  const [spendingView, setSpendingView] = useState(null);
+  const openSpending = (basis, label) => {
+    setSpendingView({ basis, label, ym });
+    setSection("spend");
+  };
   const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
@@ -44,9 +49,9 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
-      <SpendingPurpose compact onOpen={()=>setSection("spend")} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      <SpendingPurpose compact onOpen={openSpending} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       </>}
-      {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
+      {section === "spend" && <SpendingPurpose initialView={spendingView} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
       {section === "flow" && <>
       <section className="home-flow" aria-label="選択月の収入と支出">
         <CashComparison title="収支実績" income={summary.income} expense={summary.expense} net={summary.net} incomeDetails={<IncomeLines entries={monthEntries}/>}/>
@@ -210,51 +215,61 @@ function CardLedger({ rows }) {
     {matches.length>limit && <button className="ledger-more" onClick={()=>setLimit(limit+20)}>続きを見る（残り{matches.length-limit}件）</button>}
   </div>;
 }
-export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff }) {
-  const [selection, setSelection] = useState(null);
-  const [basis,setBasis] = useState(compact ? "category" : "ledger");
-  const [allMerchants,setAllMerchants] = useState(false);
+export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initialView }) {
+  const [basis, setBasis] = useState(initialView?.basis || "card");
+  const [selection, setSelection] = useState(initialView);
+  const [allMerchants, setAllMerchants] = useState(false);
+  const monthRows = purchases.filter(row => cycleYm(row.date, cutoff) === ym && spendingGroup(row));
+  const appleRows = monthRows.filter(row => row.appleBilling);
+  const view = basis === "apple" && !appleRows.length ? "category" : basis;
+  const total = rows => -rows.reduce((sum, row) => sum + row.amount, 0);
   const groups = new Map();
-  const monthRows = purchases.filter(row=>cycleYm(row.date,cutoff)===ym && spendingGroup(row));
-  const appleRows = monthRows.filter(row=>row.appleBilling);
-  const appleView = basis==="apple" && appleRows.length>0;
-  const groupBasis = basis==="merchant" ? "merchant" : "category";
   for (const row of monthRows) {
-    const preset = spendingGroup(row);
-    const label = groupBasis === "merchant" ? (row.appleBilling ? "Apple" : row.subscriptionLabel || row.description?.trim() || "利用先未確認") : preset[0];
-    const color = groupBasis === "merchant" ? "var(--income)" : preset[1];
-    if (!groups.has(label)) groups.set(label, {label,color,amount:0,rows:[]});
-    const g = groups.get(label);
-    g.amount -= row.amount;
-    g.rows.push(row);
+    let label = spendingGroup(row)[0];
+    if (view === "card") label = row.account?.trim() || "カード名未確認";
+    if (view === "merchant") label = row.appleBilling ? "Apple" : row.subscriptionLabel || row.description?.trim() || "利用先未確認";
+    if (!groups.has(label)) groups.set(label, {label, amount: 0, rows: []});
+    const group = groups.get(label);
+    group.amount -= row.amount;
+    group.rows.push(row);
   }
-  const visible = [...groups.values()].sort((a,b)=>b.amount-a.amount);
-  const pendingGroup = groupBasis==="category" ? groups.get("用途未確認") : null;
-  const ranked = pendingGroup ? visible.filter(g=>g!==pendingGroup) : visible;
-  const positive = visible.reduce((sum,g)=>sum+Math.max(0,g.amount),0);
-  const selected = selection?.ym === ym ? groups.get(selection.label) : null;
-  const choose = label => setSelection(selected?.label === label ? null : {ym,label});
-  const subscription = groups.get("サブスク");
-  if (compact) return <section className="spend-glance">
-    <header><h3>カード利用</h3>{visible.length>0 && <strong>{yen(visible.reduce((sum,g)=>sum+g.amount,0))}</strong>}</header>
-    {visible.length ? <><div className="glance-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color}}/>)}</div>
-      <div className="glance-categories">{ranked.filter(g=>g!==subscription).slice(0,2).map(g=><span key={g.label}><i style={{background:g.color}}/>{g.label} <b>{yen(g.amount)}</b></span>)}</div>
-      {subscription && <details key={ym} className="subscription-glance"><summary><span>サブスク</span><b>{yen(subscription.amount)}</b></summary>
-        <SubscriptionServices rows={subscription.rows}/></details>}
-      <button onClick={onOpen}>カード明細 ›</button></> : <p>取得済みの利用明細はありません</p>}
+  const pending = view === "category" && groups.get("用途未確認");
+  const ranked = [...groups.values()].filter(g => g !== pending)
+    .sort((a,b) => b.amount - a.amount || a.label.localeCompare(b.label, "ja"));
+  const max = Math.max(1, ...ranked.map(g => Math.abs(g.amount)));
+  const shown = compact ? ranked.slice(0,3) : view === "merchant" && !allMerchants ? ranked.slice(0,5) : ranked;
+  const views = compact ? [["card","カード別"],["category","用途別"]] :
+    [["card","カード別"],["category","用途別"],["ledger","明細"],["merchant","利用先別"],...(appleRows.length ? [["apple","Apple決済"]] : [])];
+  return <section className="purchase-report" aria-label="カード利用額">
+    <header><h3>{Number(ym.slice(5))}月度のカード利用額</h3><strong>{yen(total(view === "apple" ? appleRows : monthRows))}</strong></header>
+    {monthRows.length ? <>
+      <div className="purchase-views" role="group" aria-label="集計の切替">
+        {views.map(([id,label]) => <button key={id} aria-pressed={view === id}
+          onClick={() => {setBasis(id); setSelection(null); setAllMerchants(false);}}>{label}</button>)}
+      </div>
+      {view === "ledger" ? <CardLedger key={ym} rows={monthRows}/> :
+        view === "apple" ? <PurchaseLines rows={appleRows} apple/> :
+        shown.map(g => {
+          const open = !compact && selection?.ym === ym && selection?.label === g.label;
+          return <div className="purchase-group" key={g.label}>
+            <button type="button" className="purchase-rank" aria-expanded={compact ? undefined : open}
+              onClick={() => compact ? onOpen(view, g.label) : setSelection(open ? null : {ym, label:g.label})}>
+              <span className="purchase-name">{g.label}</span>
+              <b>{g.amount < 0 && <small>返金超過 </small>}{yen(g.amount)}</b>
+              <span className="purchase-chevron" aria-hidden="true">{open ? "⌄" : "›"}</span>
+              <span className="purchase-track" aria-hidden="true"><i data-refund={g.amount < 0}
+                style={{width: 100 * Math.abs(g.amount) / max + "%"}}/></span>
+            </button>
+            {open && (view === "category" && g.label === "サブスク" ? <SubscriptionServices rows={g.rows}/> :
+              <PurchaseLines rows={g.rows} showCategory={view === "category" && g.label === "生活・サービス"}/>)}
+          </div>;
+        })}
+      {pending && <PendingPurchases key={ym} rows={pending.rows}/>}
+      {compact && <button className="purchase-more" onClick={() => onOpen(view)}>{view === "card" ? "すべてのカード" : "すべての用途"}を見る ›</button>}
+      {!compact && view === "merchant" && ranked.length > 5 && <button className="purchase-more" onClick={() => setAllMerchants(!allMerchants)}>
+        {allMerchants ? "上位5件に戻る" : "すべての利用先を見る"}</button>}
+    </> : <p>この月度のカード利用明細はありません。</p>}
   </section>;
-  return <section className="spend-report" aria-label="カードの使い道">
-    <header><h3>{Number(ym.slice(5))}月度の{appleView?"Apple決済":"カード利用"}</h3>{visible.length > 0 && <b>{yen(appleView ? -appleRows.reduce((sum,r)=>sum+r.amount,0) : visible.reduce((s,g)=>s+g.amount,0))}</b>}</header>
-    {!visible.length && <p>利用明細なし</p>}
-    {visible.length > 0 && <div className="spend-filter">{[["ledger","明細"],["category","用途別"],["merchant","利用先別"],...(appleRows.length?[["apple","Apple決済"]]:[])].map(([id,label])=><button key={id} aria-pressed={(basis==="apple" && !appleView ? "category" : basis)===id} onClick={()=>{setBasis(id);setSelection(null);setAllMerchants(false);}}>{label}</button>)}</div>}
-    {!appleView && basis!=="ledger" && groupBasis==="category" && positive > 0 && <div className="spend-strip" aria-hidden="true">{visible.filter(g=>g.amount>0).map(g=><i key={g.label} style={{flex:g.amount,background:g.color,opacity:selected && selected!==g ? .25 : 1}}/>)}</div>}
-    {basis==="ledger" ? (visible.length>0 && <CardLedger key={ym} rows={monthRows}/>) : appleView ? <PurchaseLines rows={appleRows} apple/> : (basis==="merchant" && !allMerchants ? ranked.slice(0,5) : ranked).map(g=><React.Fragment key={g.label}><button className="spend-row" aria-expanded={selected===g} onClick={()=>choose(g.label)}>
-      <i style={{background:g.color}}/><span className="spend-name">{g.label}{groupBasis==="category" && !selected && <small>{[...new Set(g.rows.map(purchaseLabel))].slice(0,2).join("・")}</small>}</span><small>{positive>0 && g.amount>0 ? Math.round(100*g.amount/positive)+"%" : ""}</small><b>{yen(g.amount)}</b><span aria-hidden="true">{selected===g?"−":"＋"}</span>
-    </button>{selected===g && groupBasis==="category" && g.label==="サブスク" ? <SubscriptionServices rows={g.rows}/> : selected===g && <PurchaseLines rows={g.rows} showCategory={g.label==="生活・サービス"}/>}</React.Fragment>)}
-    {basis!=="ledger" && !appleView && pendingGroup && <PendingPurchases key={ym} rows={pendingGroup.rows}/>}
-    {basis==="merchant" && visible.length>5 && <button className="merchant-more" onClick={()=>setAllMerchants(!allMerchants)}>{allMerchants?"上位5件に戻る":"全"+visible.length+"件の利用先を見る"}</button>}
-  </section>;
-
 }
 function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const bank = entries.filter(e => e.cat === "account" && acctRole(e.item) === "transfer");
