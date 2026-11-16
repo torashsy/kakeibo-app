@@ -12,7 +12,7 @@
 .ledger-month select {font-weight:650;max-width:42vw;text-align:center}
 .ledger-month select option {background:var(--card-bg)}
 .ledger-month button {min-width:32px;min-height:44px;font-size:22px}
-.ledger-period {grid-column:2;text-align:center;color:var(--muted);font-size:12px}
+
 .ledger-main {padding:18px clamp(12px,3vw,24px) 24px}
 .ledger-main:is([data-view=today],[data-view=records]) {padding-bottom:68px}
 .ledger-nav {position:fixed;z-index:6;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,var(--sheet-width));display:flex;box-sizing:border-box;background:var(--tab-bg);border-top:1px solid var(--line);padding:5px 6px max(6px,env(safe-area-inset-bottom))}
@@ -30,7 +30,7 @@
  .ledger-tab {flex:none;grid-template-columns:24px 1fr;align-items:center;gap:5px;padding:10px 8px}
  .ledger-add {bottom:20px}
 }
-@media(max-width:350px){.ledger-header {padding-inline:12px;gap:4px}.ledger-month button {min-width:28px}}
+@media(max-width:350px){.ledger-header {padding-inline:12px;gap:4px}}
 .history-date { margin: 0; padding: 12px 14px 7px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .investment-group summary { display:grid; grid-template-columns:1fr auto; gap:7px; padding:10px 0; cursor:pointer }
 .investment-track {grid-column:1/-1; background:var(--line); height:7px;border-radius:5px;overflow:hidden}
@@ -56,9 +56,9 @@
 .ledger-app {--sheet-width:760px}
 .ledger-app .ledger-header{grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:20px clamp(16px,4vw,32px) 14px;border:0;border-top:5px solid var(--ink)}
 .ledger-heading{grid-column:1;grid-row:1}.ledger-heading h1{font:700 clamp(22px,6vw,32px)/1.2 var(--font);letter-spacing:.035em}
-.ledger-header .ledger-month{grid-column:1;grid-row:2;justify-self:start;border:0;background:none;margin-left:-7px}
-.ledger-month select{font-size:16px}.ledger-month button{min-width:28px}
-.ledger-period{grid-column:2;grid-row:2;align-self:center;font-variant-numeric:tabular-nums}
+
+
+
 .entry-action{grid-column:2;grid-row:1;justify-self:end;border:0;background:var(--ink);color:var(--paper);font:600 14px var(--font);padding:10px 16px;cursor:pointer}
 .ledger-main{padding:0 clamp(16px,4vw,32px) 24px}.ledger-app .report-index{justify-content:space-between;border-block:1px solid var(--line)}
 .report-index button{min-height:44px;padding-inline:5px}.ledger-app .home-overview{gap:18px}
@@ -92,7 +92,7 @@
 .journal-row{width:100%;min-height:62px;display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:9px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);text-align:left;font:inherit;cursor:pointer}.journal-mark{background:var(--group-bg);display:grid;place-items:center;height:32px;color:var(--muted);font-size:12px}.journal-name{display:grid;gap:3px;overflow-wrap:anywhere}.journal-name small{font-size:11px;color:var(--muted)}.journal-row strong{font-variant-numeric:tabular-nums}.ledger-app .history-date{padding:15px 0 6px;color:var(--muted);font-weight:550}
 .plan-focus{padding:12px 0 16px}.plan-focus h3{margin:0 0 6px}.plan-focus dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:16px 0 0;border-block:1px solid var(--line)}.plan-focus dl div{padding:8px 2px}.plan-focus dt{color:var(--muted);font-size:12px}.plan-focus dd{margin:4px 0 0;font-weight:600;font-variant-numeric:tabular-nums}
 .cash-position{border-block:1px solid var(--line);padding:0}.all-balances,.next-claim summary,.claim-row{display:flex;align-items:center;gap:10px;justify-content:space-between}.all-balances{background:transparent;border:0;padding-inline:0;width:100%;min-height:66px;text-align:left;color:inherit;cursor:pointer;font:inherit}.all-balances small{display:block;color:var(--muted);font-size:12px}.all-balances b{margin-left:auto;font-size:26px;font-variant-numeric:tabular-nums}.next-claim summary{min-height:48px;border-top:1px solid var(--line);cursor:pointer}.next-claim summary b{margin-left:auto}.claim-row,.claim-account{padding:9px 0;font-size:14px}.claim-row button{min-height:44px;color:inherit;background:none;border:0;text-decoration:underline;cursor:pointer}.claim-account{display:grid;grid-template-columns:1fr auto;background:var(--group-bg);padding:10px 0 10px 10px;gap:6px}.claim-account b,.claim-account strong{text-align:right}.spend-row .spend-name{flex:1}.spend-row .spend-name small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-weight:400;font-size:12px}.spend-filter button,.report-index button,.ledger-month button{min-height:44px}
-.record-search{width:100%;padding:12px 10px;min-height:44px;font:inherit;color:var(--ink);background:var(--card-bg);border:1px solid var(--line);margin-bottom:10px}
+
 .home-overview,.ledger-main,.home-overview>*{min-width:0}.home-overview{grid-template-columns:minmax(0,1fr)}
 .report-picker,.spend-glance header,.flow-link,.glance-categories{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .report-picker select,.report-picker button,.spend-glance button,.flow-link{font:inherit;color:var(--ink);background:transparent;min-height:44px;cursor:pointer}
@@ -124,11 +124,14 @@
   box-shadow: inset 0 -2px currentColor;
 }
 .cash-comparison { margin: 20px 0 22px; color: var(--ink); }
-.cash-comparison figcaption { font-size: 15px; font-weight: 600; }
+.cash-comparison figcaption {
+  display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between;
+  gap:2px 12px; margin-bottom:14px; font-size:15px; font-weight:600;
+}
 .cash-comparison figcaption strong {
   text-align:right;
   display: block;
-  margin: 4px 0 18px;
+  margin-inline-start:auto;
   font: 600 clamp(32px, 8vw, 42px)/1.2 var(--num-font);
   font-variant-numeric: tabular-nums;
 }
@@ -229,3 +232,45 @@
 button[aria-expanded="true"] .disclosure-chevron { transform:rotate(90deg); }
 .amount-summary { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
 .amount-summary > :last-child { white-space:nowrap; text-align:end; font-variant-numeric:tabular-nums; }
+
+.month-toolbar {
+  grid-column:1/-1;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  gap:2px 8px;
+  margin-top:4px;
+  padding-block:4px;
+  border-block:1px solid var(--line);
+}
+.month-toolbar .ledger-month { border:0; background:transparent; }
+.month-toolbar button { min-inline-size:44px; min-block-size:44px; }
+.month-selection { position:relative; display:grid; align-content:center; justify-items:center; min-height:44px; padding-inline:4px; }
+.month-selection strong { color:var(--ink); font-size:16px; line-height:1.4; font-weight:650; white-space:nowrap; }
+.month-selection strong::after { content:""; display:inline-block; width:5px; height:5px; border:solid var(--muted); border-width:0 1.5px 1.5px 0; transform:translateY(-3px) rotate(45deg); margin-inline-start:7px; }
+.month-selection #ledger-period { color:var(--muted); font-size:12px; line-height:1.35; }
+.month-selection select { position:absolute; inset:0; width:100%; height:100%; max-width:none; opacity:0; }
+.month-selection:has(select:focus-visible) { outline:2px solid var(--income); outline-offset:2px; }
+.month-reset { border:0; padding:0 4px; background:transparent; color:var(--income); font:600 13px var(--font); cursor:pointer; }
+.ledger-nav .ledger-tab[aria-current] { position:relative; box-shadow:none; }
+.ledger-tab[aria-current]::before { content:""; position:absolute; inset-block-start:0; inset-inline:calc(50% - 12px); height:2px; background:currentColor; }
+@media(min-width:860px) {
+  .ledger-tab[aria-current]::before { inset-block:calc(50% - 12px); inset-inline-start:0; width:2px; height:auto; }
+}
+.ledger-app :is(.ledger-tab,.parent-link,.month-toolbar button,.report-sections button,.purchase-rank,.purchase-views button,summary):active {
+  background-color:var(--accent-soft);
+}
+.search-field {
+  position:relative; display:flex; align-items:center; flex:1; min-width:0;
+  box-sizing:border-box; padding-inline-start:10px; border:1px solid var(--line); color:var(--muted);
+}
+.search-field:focus-within { border-color:var(--ink); }
+.search-field svg { width:18px; height:18px; flex:none; }
+.search-field input {
+  flex:1; min-width:0; min-height:44px; box-sizing:border-box; border:0; padding:8px;
+  font:400 16px var(--font); color:var(--ink); background:transparent;
+}
+.search-field input::-webkit-search-cancel-button { -webkit-appearance:none; }
+.search-field button { width:44px; min-height:44px; border:0; background:transparent; color:var(--muted); font:400 20px var(--font); cursor:pointer; }
+.ledger-main[data-view=records] .search-field { margin-bottom:10px; }

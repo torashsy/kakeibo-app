@@ -1,3 +1,4 @@
+import { SearchField } from "./search-field";
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, num, buildStructure, computeSummary, flowTypesFor, acctRole, parseTxnKey, entryDate } from '../utils';
@@ -47,7 +48,7 @@ export function DetailList({ monthEntries, onEdit }) {
   const filtered = list.filter(({e,d,desc})=>[e.item,e.account,e.amount,d,desc,e.note].some(value=>normalize(value).includes(needle)));
   return (
     <div>
-      <input className="record-search" type="search" aria-label="記録を検索" placeholder="店名・口座・金額で検索" value={query} onChange={e=>{setQuery(e.target.value);setLimit(5);}} />
+      <SearchField label="記録を検索" placeholder="店名・口座・金額で検索" value={query} onChange={value=>{setQuery(value);setLimit(5);}} />
       {!filtered.length && <p>一致する記録はありません</p>}
       <div style={styles.detailCard}>
         {filtered.slice(0,limit).map(({ e, d, desc }, index) => (

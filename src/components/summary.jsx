@@ -1,3 +1,4 @@
+import { SearchField } from "./search-field";
 import { spendingGroup, purchaseLabel, needsPurposeReview } from "../spending-groups";
 import { IncomeLines } from "./income-lines";
 import { PendingPurchases } from "./pending-purchases";
@@ -49,7 +50,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
-      <SpendingPurpose compact onOpen={openSpending} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      <SpendingPurpose compact initialView={spendingView} onOpen={openSpending} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       </>}
       {section === "spend" && <SpendingPurpose initialView={spendingView} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
       {section === "flow" && <>
@@ -201,16 +202,23 @@ function CardLedger({ rows }) {
   const review = pending > 0 && reviewOnly;
   const matches = rows.filter(row => (!review || needsPurposeReview(row)) &&
     (!needle || normalize([purchaseLabel(row), row.account, row.description, spendingGroup(row)?.[0]].join(" ")).includes(needle)));
+  const days = [];
+  for (const row of matches.slice(0, limit)) {
+    if (days.at(-1)?.date !== row.date) days.push({date:row.date, rows:[]});
+    days.at(-1).rows.push(row);
+  }
   return <div className="card-ledger">
-    <div className="ledger-tools"><input type="search" aria-label="明細を検索" placeholder="店名・カード名で検索" value={query}
-      onChange={e=>{setQuery(e.target.value);setLimit(20);}}/>
+    <div className="ledger-tools"><SearchField label="明細を検索" placeholder="店名・カード名で検索" value={query}
+      onChange={value=>{setQuery(value);setLimit(20);}}/>
       {pending>0 && <button aria-pressed={review} onClick={()=>{setReviewOnly(!review);setLimit(20);}}>要確認 {pending}件</button>}
     </div>
-    <ul>{matches.slice(0,limit).map(row=><li key={row.id}>
-      <time dateTime={row.date}>{row.date.slice(5).replace("-", "/")}</time>
+    {days.map(day=><div className="ledger-day" key={day.rows[0].id}>
+      <time dateTime={day.date}>{day.date.slice(5).replace("-", "/")}</time>
+      <ul aria-label={day.date}>{day.rows.map(row=><li key={row.id}>
       <span className="ledger-merchant">{purchaseLabel(row)}<small>{needsPurposeReview(row) ? "用途未確認" : spendingGroup(row)?.[0]} · {row.account}</small></span>
       <b className={row.amount>0 ? "ledger-refund" : undefined}>{row.amount>0 && <small>返金 </small>}{yen(Math.abs(row.amount))}</b>
-    </li>)}</ul>
+      </li>)}</ul>
+    </div>)}
     {!matches.length && <p role="status">該当する明細はありません</p>}
     {matches.length>limit && <button className="ledger-more" onClick={()=>setLimit(limit+20)}>続きを見る（残り{matches.length-limit}件）</button>}
   </div>;
@@ -241,7 +249,7 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initia
   const views = compact ? [["card","カード別"],["category","用途別"]] :
     [["card","カード別"],["category","用途別"],["ledger","明細"],["merchant","利用先別"],...(appleRows.length ? [["apple","Apple決済"]] : [])];
   return <section className="purchase-report" aria-label="カード利用額">
-    <header><h3>{Number(ym.slice(5))}月度のカード利用額</h3><strong>{yen(total(view === "apple" ? appleRows : monthRows))}</strong></header>
+    <header><h3>{compact ? Number(ym.slice(5))+"月度のカード利用額" : view === "apple" ? "Apple決済の合計" : "利用合計"}</h3><strong>{yen(total(view === "apple" ? appleRows : monthRows))}</strong></header>
     {monthRows.length ? <>
       <div className="purchase-views" role="group" aria-label="集計の切替">
         {views.map(([id,label]) => <button key={id} aria-pressed={view === id}

@@ -375,7 +375,14 @@ export default function App() {
     });
   };
 
-  const months = useMemo(() => { const s = new Set(entries.map((e) => e.ym)); s.add(ym); return Array.from(s).sort(); }, [entries, ym]);
+  const currentMonth = currentCycleYm(config.cycleCutoffDay);
+  const months = useMemo(() => {
+    const available = new Set(entries.map(entry => entry.ym));
+    for (let offset = 0; offset < 12; offset++) available.add(addMonth(currentMonth, -offset));
+    available.add(ym);
+    return [...available].sort();
+  }, [entries, ym, currentMonth]);
+  const rangeLabel = periodRange(ym, config.cycleCutoffDay);
   const monthEntries = useMemo(() => entries.filter((e) => e.ym === ym), [entries, ym]);
 
   // Keep dated ledger entries intact. Use reconciled closing balances only in reports.
@@ -418,14 +425,19 @@ export default function App() {
       <header className="ledger-header">
         <div className="ledger-heading">{page.parent && <button className="parent-link" onClick={back} aria-label={pageLabel(page.parent)+"に戻る"}>‹ {pageLabel(page.parent)}</button>}<h1>{pageLabel(page)}</h1></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
-          <div className="ledger-month">
-            <button aria-label="前の月" onClick={() => setYm(addMonth(ym, -1))}>‹</button>
-            <select value={ym} onChange={(e) => setYm(e.target.value)} aria-label="表示する月">{months.map((m) => <option key={m} value={m}>{periodLabel(m, config.cycleCutoffDay)}</option>)}</select>
-            <button aria-label="次の月" onClick={() => setYm(addMonth(ym, 1))}>›</button>
+          <div className="month-toolbar">
+            <div className="ledger-month">
+              <button aria-label="前の月" onClick={() => setYm(addMonth(ym, -1))}>‹</button>
+              <div className="month-selection">
+                <strong aria-hidden="true">{periodLabel(ym, config.cycleCutoffDay)}</strong>
+                <select value={ym} onChange={e => setYm(e.target.value)} aria-label="表示する月"
+                  aria-describedby={rangeLabel ? "ledger-period" : undefined}>{months.map(m => <option key={m} value={m}>{periodLabel(m, config.cycleCutoffDay)}</option>)}</select>
+                {rangeLabel && <span id="ledger-period" aria-hidden="true">{rangeLabel}</span>}
+              </div>
+              <button aria-label="次の月" onClick={() => setYm(addMonth(ym, 1))}>›</button>
+            </div>
+            {ym !== currentMonth && <button className="month-reset" onClick={() => setYm(currentMonth)}>今月に戻る</button>}
           </div>
-        )}
-        {(tab === "today" || tab === "records" || tab === "plan") && periodRange(ym, config.cycleCutoffDay) && (
-          <div className="ledger-period">{periodRange(ym, config.cycleCutoffDay)}</div>
         )}
         {(tab === "today" || tab === "records") && <button className="entry-action" onClick={() => setSheet("pick")}>＋ 記録</button>}
       </header>
