@@ -1,3 +1,4 @@
+import { EntrySheet } from "./entry-sheet";
 import React, { useMemo, useState } from "react";
 import { INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, periodLabel, addMonth, evalAmount, acctRole } from '../utils';
@@ -129,8 +130,7 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
   };
 
   return (
-    <div style={styles.sheetBackdrop} onClick={onClose}>
-      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+    <EntrySheet onClose={onClose}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>まとめ入力（{periodLabel(ym, config.cycleCutoffDay)}）</div>
 
@@ -238,7 +238,6 @@ export function MonthlyClose({ ym, config, cards, entries, onClose, onSave }) {
 
         <button style={styles.saveBtn} onClick={submit}>保存</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
-      </div>
-    </div>
+    </EntrySheet>
   );
 }

@@ -1,5 +1,5 @@
 .home-overview {display:grid;gap:10px;padding:4px 2px;font-variant-numeric:tabular-nums}
-.home-overview>.k-group {margin:0}
+.report-content>.k-group {margin:0}
 .home-overview summary {cursor:pointer;overflow-wrap:anywhere}
 .home-overview summary:focus-visible {outline:2px solid currentColor;outline-offset:2px}
 .home-overview .home-balance,.home-overview .home-spending {padding:16px;border-radius:18px}

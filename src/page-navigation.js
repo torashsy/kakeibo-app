@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const home = { tab: "today", section: "month" };
+export const homeSections = ["month", "funds", "invest", "pay"];
 export const homeLabels = { month:"ホーム", spend:"カード利用", flow:"収支実績", funds:"残高", invest:"投資", pay:"給与" };
 export const tabLabels = { today:"ホーム", records:"記録", plan:"計画", recurring:"定期費", settings:"設定", finance:"明細・同期", design:"表示設定", cards:"カード管理" };
 export const pageLabel = page => page.tab === "today" ? homeLabels[page.section] : tabLabels[page.tab];
@@ -31,7 +32,7 @@ export function usePageNavigation() {
   useLayoutEffect(() => {
     document.title = pageLabel(page) + " · 家計簿";
     if (destinationY.current !== null) {
-      window.scrollTo(0, destinationY.current);
+      window.scrollTo({ top:destinationY.current, behavior:"instant" });
       destinationY.current = null;
     }
   }, [page]);

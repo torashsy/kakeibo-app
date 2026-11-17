@@ -1,3 +1,4 @@
+import { EntrySheet } from "./entry-sheet";
 import React, { useRef, useState } from "react";
 import { ACCENT, MUTED, RED, GREEN } from '../theme.js';
 import { parseBankText, parseBankCsv, classifyTxn, classifyTxnForImport, txnToEntry, txnKey, txnBalanceKey, dedupeTxns, guessYuchoScreenshotAccount, uid, yen, cycleYm, cycleStartDate, periodLabel, addMonth, verifyOcrBalanceChain, verifyBalanceTotal, fixSignsFromBalances, cycleEndBalances, cardMonthTotal, isDebitDesc, cleanOcrText, guessCardForDebit, payeeFromDebit, matchesOwnName, pairOwnTransfers, parseTxnKey, decodeImportPayload, entrySignature, entryDaySignature, countBySignature, INTERNAL_TRANSFER_ITEM } from '../utils';
@@ -430,8 +431,7 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
   };
 
   return (
-    <div style={styles.sheetBackdrop} onClick={onClose}>
-      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+    <EntrySheet onClose={onClose}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>取込</div>
         {!rows && pendingShots && (
@@ -713,7 +713,6 @@ export function ImportSheet({ cards, config, ym, entries: existing, initialText,
             <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
           </>
         )}
-      </div>
-    </div>
+    </EntrySheet>
   );
 }

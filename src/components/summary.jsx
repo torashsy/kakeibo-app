@@ -1,3 +1,4 @@
+import { homeSections } from "../page-navigation";
 import { SearchField } from "./search-field";
 import { spendingGroup, purchaseLabel, needsPurposeReview } from "../spending-groups";
 import { IncomeLines } from "./income-lines";
@@ -37,10 +38,11 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
-      {["month","funds","invest","pay"].includes(section) && <nav className="report-sections view-switch" aria-label="家計の表示切替">
+      {homeSections.includes(section) && <nav className="report-sections view-switch" aria-label="家計の表示切替" style={{"--selected-tab":homeSections.indexOf(section)}}>
         {[["month","収支"],["funds","残高"],["invest","投資"],["pay","給与"]].map(([id,label])=>
           <button key={id} aria-current={(section===id || (id==="month" && ["flow","spend"].includes(section)))?"page":undefined} onClick={()=>setSection(id)}>{label}</button>)}
       </nav>}
+      <div className="report-content" key={section+"|"+ym}>
       {section === "month" && <>
       <section className="overview-result">
         <CashComparison title={showOutlook ? "収支見込み" : "収支実績"}
@@ -82,6 +84,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </>}
       {section === "invest" && <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />}
       {section === "pay" && <PayrollReport key={ym} slips={paySlips} ym={ym} />}
+      </div>
     </div>
   );
 }

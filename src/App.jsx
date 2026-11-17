@@ -1,4 +1,4 @@
-import { usePageNavigation, pageLabel } from "./page-navigation";
+import { usePageNavigation, pageLabel, homeSections } from "./page-navigation";
 import "./layout.css";
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
@@ -424,11 +424,11 @@ export default function App() {
 
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
-  const monthCover = tab === "today" && page.section === "month" && !page.parent;
+  const monthCover = tab === "today" && homeSections.includes(page.section);
   return (
     <div className="ledger-app" style={{ ...themeVars(theme) }}>
       <header className="ledger-header" data-month-cover={monthCover}>
-        <div className="ledger-heading">{page.parent && <button className="parent-link" onClick={back} aria-label={pageLabel(page.parent)+"に戻る"}>‹ {pageLabel(page.parent)}</button>}<h1>{pageLabel(page)}</h1></div>
+        <div className="ledger-heading">{page.parent && !monthCover && <button className="parent-link" onClick={back} aria-label={pageLabel(page.parent)+"に戻る"}>‹ {pageLabel(page.parent)}</button>}<h1>{pageLabel(page)}</h1></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
           <div className="month-toolbar">
             <div className="ledger-month">
@@ -441,15 +441,15 @@ export default function App() {
               </div>
               <button aria-label="次の月" onClick={() => setYm(addMonth(ym, 1))}>›</button>
             </div>
-            {ym !== currentMonth && <button className="month-reset" onClick={() => setYm(currentMonth)}>今月に戻る</button>}
+            <button className="month-reset" disabled={ym === currentMonth} aria-label="今月に戻る" onClick={() => setYm(currentMonth)}>今月</button>
           </div>
         )}
         {(tab === "today" || tab === "records") && <button className="entry-action" onClick={() => setSheet("pick")}>＋ 記録</button>}
       </header>
 
-      <main className="ledger-main" data-view={tab}>
+      <main key={tab} className="ledger-main" data-view={tab}>
         {tab === "finance" && <><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></>}
-        {tab === "today" && <Summary section={page.section} onSection={section=>section==="month" ? visit("today") : visit("today",section,true)} forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => drill("plan")} onOpenCards={() => drill("cards")} />}
+        {tab === "today" && <Summary section={page.section} onSection={section=>visit("today",section,!homeSections.includes(section))} forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => drill("plan")} onOpenCards={() => drill("cards")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView forecasts={forecasts} plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); drill("recurring"); }} />}
         {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}

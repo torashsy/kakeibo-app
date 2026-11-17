@@ -1,3 +1,4 @@
+import { EntrySheet } from "./entry-sheet";
 import React, { useMemo, useState } from "react";
 import { ACCENT, INK, LINE, MUTED, RED, GREEN } from '../theme.js';
 import { yen, ymLabel, addMonth, evalAmount, ACCOUNT_TYPES, acctRole, entryDate, cycleYm, periodLabel } from '../utils';
@@ -15,8 +16,7 @@ export function PickCategory({ onClose, onPick }) {
     { id: "import", label: "取込", color: MUTED, icon: "camera" },
   ];
   return (
-    <div style={styles.sheetBackdrop} onClick={onClose}>
-      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+    <EntrySheet onClose={onClose}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>追加</div>
         {cats.map((c) => (
@@ -27,8 +27,7 @@ export function PickCategory({ onClose, onPick }) {
           </button>
         ))}
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
-      </div>
-    </div>
+    </EntrySheet>
   );
 }
 
@@ -43,8 +42,7 @@ export function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
     onClose();
   };
   return (
-    <div style={styles.sheetBackdrop} onClick={onClose}>
-      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+    <EntrySheet onClose={onClose}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>{editing.item}を編集（{ymLabel(editing.ym)}）</div>
         <label style={styles.fieldLabel}>金額</label>
@@ -52,8 +50,7 @@ export function SalaryEditForm({ editing, onClose, onUpdate, onDelete }) {
         <button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={submit} disabled={!canSave}>更新</button>
         <button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
-      </div>
-    </div>
+    </EntrySheet>
   );
 }
 
@@ -66,8 +63,7 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
   const copyPrev = () => setRows(config.salaryItems.map((it) => { const f = prevEntries.find((e) => e.item === it); return { item: it, amount: f ? Math.abs(f.amount).toString() : "" }; }));
   const takeHome = rows.reduce((a, r) => { const v = evalAmount(r.amount); if (v == null) return a; return a + (r.item === "控除" ? -Math.abs(v) : v); }, 0);
   return (
-    <div style={styles.sheetBackdrop} onClick={onClose}>
-      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+    <EntrySheet onClose={onClose}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>給与系（{ymLabel(ym)}）</div>
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
@@ -84,8 +80,7 @@ export function SalaryForm({ ym, config, entries, onClose, onSave }) {
         <div style={styles.takeHomeRow}><span>手取り見込み</span><span style={{ fontWeight: 600, color: GREEN }}>{yen(takeHome)}</span></div>
         <button style={styles.saveBtn} onClick={() => onSave(rows)}>保存</button>
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
-      </div>
-    </div>
+    </EntrySheet>
   );
 }
 
@@ -134,8 +129,7 @@ export function CardForm({ ym, config, cards, entries, editing, onClose, onAdd, 
     if (cont) { setFlash(`${item} ${yen(Math.abs(Math.round(evalAmount(amount) || 0)))} を追加`); setItem(""); setAmount(""); setTimeout(() => setFlash(""), 1600); } else onClose();
   };
   return (
-    <div style={styles.sheetBackdrop} onClick={onClose}>
-      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+    <EntrySheet onClose={onClose}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>{editing ? "カード請求を編集" : "カード請求を追加"}</div>
         {flash && <div style={styles.flash}>✓ {flash}</div>}
@@ -156,8 +150,7 @@ export function CardForm({ ym, config, cards, entries, editing, onClose, onAdd, 
           </div>
         )}
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
-      </div>
-    </div>
+    </EntrySheet>
   );
 }
 
@@ -193,8 +186,7 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
     if (cont) { setFlash(`${account} ${type} ${yen(signed())}`); setAmount(""); setTimeout(() => setFlash(""), 1600); } else onClose();
   };
   return (
-    <div style={styles.sheetBackdrop} onClick={onClose}>
-      <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+    <EntrySheet onClose={onClose}>
         <div style={styles.sheetHandle} />
         <div style={styles.sheetTitle}>{editing ? "口座の記録を編集" : "口座の記録を追加"}</div>
         {flash && <div style={styles.flash}>✓ {flash}</div>}
@@ -226,7 +218,6 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
           </div>
         )}
         <button style={styles.cancelBtn} onClick={onClose}>閉じる</button>
-      </div>
-    </div>
+    </EntrySheet>
   );
 }

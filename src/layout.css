@@ -42,7 +42,7 @@
 .report-index {display:flex;border-bottom:1px solid var(--line);gap:clamp(8px,3vw,22px)}
 .report-index button {font:inherit;font-size:14px;cursor:pointer;color:var(--muted);padding:10px 2px;background:transparent;border:0;border-bottom:2px solid transparent}
 .report-index button[aria-pressed=true] {color:var(--ink);border-bottom-color:currentColor;font-weight:700}
-.ledger-app .home-overview>.home-flow,.ledger-app .home-overview>.home-spending,.ledger-app .home-overview>.home-balance {border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0 18px}
+.ledger-app .report-content>.home-flow,.ledger-app .report-content>.home-spending,.ledger-app .report-content>.home-balance {border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0 18px}
 .ledger-app {--radius:0px}
 .ledger-app :where(section,article,header,nav,main,div,button,select,input,textarea,details,summary,span,table,aside,dialog,li):not(.purpose-ring):not(.purpose-ring span){border-radius:0!important}
 .ledger-app .statement {padding:8px 0;background:transparent;border:0}
@@ -444,3 +444,64 @@ button[aria-expanded="true"] .disclosure-chevron { transform:rotate(90deg); }
 .ledger-app .ledger-merchant small,.ledger-app .journal-name small { font-size:12px; line-height:1.45; }
 .ledger-app .card-ledger li b,.ledger-app .journal-row strong { font-size:16px; font-weight:600; }
 .ledger-app .portfolio .destination-share { background:var(--chart-ink); }
+
+
+/* Stable controls share one geometry across the four monthly reports. */
+html {scrollbar-gutter:stable both-edges;}
+.ledger-app {
+  --motion-fast:120ms;
+  --motion-page:180ms;
+  --motion-ease:cubic-bezier(.2,.8,.2,1);
+}
+.ledger-app .ledger-header[data-month-cover=true] {
+  position:relative;
+  min-block-size:calc(94px + env(safe-area-inset-top));
+  box-sizing:border-box;
+}
+.ledger-header[data-month-cover=true] .month-toolbar {width:100%; box-sizing:border-box;}
+.ledger-header[data-month-cover=true] .ledger-month {flex:1; min-width:0;}
+.ledger-header[data-month-cover=true] .month-selection {flex:1; min-width:0; margin-right:0;}
+.ledger-header[data-month-cover=true] .month-selection strong {font-variant-numeric:tabular-nums;}
+.ledger-header[data-month-cover=true] .entry-action {align-self:start;}
+.ledger-header[data-month-cover=true] .month-reset {
+  position:absolute; right:var(--page-inset); bottom:0; min-height:44px; min-width:44px;
+}
+.month-reset:disabled {visibility:hidden; pointer-events:none;}
+.report-sections.view-switch {position:relative; isolation:isolate;}
+.ledger-app .report-sections button {font-weight:600;}
+.ledger-app .report-sections button[aria-current=page]::after {display:none;}
+.report-sections::after {
+  content:""; position:absolute; inset:auto auto -1px 5.5%;
+  width:14%; height:2px; background:var(--ink); pointer-events:none;
+  transform:translateX(calc(var(--selected-tab) * 178.57143%));
+  transition:transform var(--motion-page) var(--motion-ease);
+}
+.report-content {display:grid; grid-template-columns:minmax(0,1fr); gap:24px; min-width:0;}
+.report-content {animation:report-arrive var(--motion-page) var(--motion-ease) both;}
+.ledger-main:not([data-view=today]) {animation:detail-arrive var(--motion-page) var(--motion-ease) both;}
+@keyframes report-arrive {from {opacity:0; transform:translateY(4px);} to {opacity:1; transform:translateY(0);}}
+.ledger-app :is(button,summary,a,select) {touch-action:manipulation; -webkit-tap-highlight-color:transparent;}
+.ledger-app :is(button,summary,a) {
+  transition:background-color var(--motion-fast) ease-out,color var(--motion-fast) ease-out,opacity var(--motion-fast) ease-out;
+}
+.ledger-app :is(button,summary,a):active {background-color:var(--accent-soft);}
+.ledger-app :is(.disclosure-chevron,.reading-arrow),.ledger-app details>summary::before {
+  transition:transform var(--motion-page) var(--motion-ease);
+}
+.ledger-app details[open] > :not(summary),.cash-detail:not([hidden]) {
+  animation:detail-arrive var(--motion-page) var(--motion-ease) both;
+}
+@keyframes detail-arrive {from {opacity:0;} to {opacity:1;}}
+.ledger-app [role=dialog] {animation:sheet-arrive 220ms var(--motion-ease) both;}
+@keyframes sheet-arrive {from {opacity:0; transform:translateY(12px);} to {opacity:1; transform:translateY(0);}}
+.ledger-app .purchase-views {
+  flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; gap:16px;
+}
+.ledger-app .purchase-views button {flex-shrink:0; font-weight:600;}
+.ledger-app .pay-period select {min-height:44px; font-size:16px;}
+.ledger-app .search-field {min-height:44px;}
+@media(prefers-reduced-motion:reduce) {
+  .ledger-app *, .ledger-app *::before, .ledger-app *::after {
+    animation:none !important; transition:none !important; scroll-behavior:auto !important;
+  }
+}
