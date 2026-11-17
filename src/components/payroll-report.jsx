@@ -37,7 +37,7 @@ export function PayrollReport({ slips, ym }) {
     <select aria-label="支給年" value={year} onChange={e=>{setSelectedYear(e.target.value);setChoice("annual");setExpanded("");}}>{shownYears.map(y=><option key={y}>{y}</option>)}</select>
     <select aria-label="集計期間" value={period || "annual"} onChange={e=>setChoice(e.target.value)}><option value="annual">年間</option>{[...new Set([...(period ? [period] : []),...months])].sort().reverse().map(m=><option key={m} value={m}>{Number(m.slice(5))}月</option>)}</select></div></header>
     {!active.length ? <p>この期間の給与明細はありません。<button className="plain-action" onClick={()=>{setSelectedYear(years[0]);setChoice(all[0].date.slice(0,7));}}>最新の明細を見る（{all[0].date}）</button></p> : <>
-    <div className="statement-line take-home"><span>{period ? Number(period.slice(5))+"月支給" : year+"年"}の手取り</span><strong>{yen(total("net"))}</strong></div>
+    <div className="statement-line take-home amount-hero"><span>{period ? Number(period.slice(5))+"月支給" : year+"年"}の手取り</span><strong>{yen(total("net"))}</strong></div>
     <div className="statement-line gross"><span>額面</span><b>{yen(total("gross"))}</b></div>
     {total("gross") > 0 && total("net") >= 0 && total("net") <= total("gross") && <div className="pay-split">
       <div aria-hidden="true"><i style={{width:(100*total("net")/total("gross"))+"%"}}/></div>

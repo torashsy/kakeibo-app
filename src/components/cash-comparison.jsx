@@ -8,7 +8,7 @@ export function CashComparison({ title, income, expense, net, actualIncome, actu
   const shared = Math.min(Math.abs(income), Math.abs(expense));
   const rows = [["収入", income, actualIncome], ["支出", expense, actualSpend]];
   return <figure className="cash-comparison">
-    <figcaption>{title} <strong data-deficit={net < 0}>{net > 0 ? "+" : ""}{yen(net)}</strong></figcaption>
+    <figcaption className="amount-hero"><span>{title}</span><strong data-deficit={net < 0}>{net > 0 ? "+" : ""}{yen(net)}</strong></figcaption>
     {rows.map(([label, amount, actual]) => {
       const status = actual == null || amount === 0 ? "" : actual === amount ? "実績" : actual === 0 ? "予定" : "実績＋予定";
       const excess = Math.abs(amount) - shared;

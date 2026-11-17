@@ -9,7 +9,7 @@ const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',
 
 
 // ユーザーが選べるのは「アクセント色」と「ダークモード」だけ。
-// ダークを基本(既定)とする。
+// 保存済みのテーマを優先する。
 export const DEFAULT_THEME = {
   accent: "#295C59",
   dark: false,
@@ -45,23 +45,22 @@ export const themeVars = (t) => {
   const dark = !!(t && t.dark);
   const WHITE = "#FFFFFF";
 
-  // ベージュ系をやめ、クールでニュートラルなグレーを基調にする(ダーク基本)
   const p = dark
     ? {
-        paper: "#121727", ink: "#EAECEF", line: "#262B31", muted: "#868E99",
+        paper: "#111419", ink: "#F1F3F5", line: "#343B43", muted: "#ABB4BE",
         cardBg: "#171B20", thBg: "#1C2127", groupBg: "#21272E",
         subtotalBg: "#1A1F25", totalCellBg: "#181D22", tabBg: "#12161A",
-        base: "#121727",
+        base: "#111419",
         income: mix(accent, WHITE, 0.26), expense: "#F2765C",
-        accentSoft: mix(accent, "#121727", 0.78),
-        acctBg: mix(accent, "#121727", 0.85),
-        colHl: mix(accent, "#121727", 0.82),        // 年間表の「今月」列の淡いハイライト
+        accentSoft: mix(accent, "#111419", 0.78),
+        acctBg: mix(accent, "#111419", 0.85),
+        colHl: mix(accent, "#111419", 0.82),        // 年間表の「今月」列の淡いハイライト
         zero: "#4A515A",                             // 0円セルの控えめな文字色
-        expenseSoft: mix("#F2765C", "#121727", 0.82), // 警告カードの背景
+        expenseSoft: mix("#F2765C", "#111419", 0.82), // 警告カードの背景
       }
     : {
-        paper: "#FBFAF7", ink: "#232A29", line: "#D9DDDA", muted: "#586460",
-        cardBg: "#FFFFFF", thBg: "#EEF0F3", groupBg: "#E5E8EC",
+        paper: "#FAFAFB", ink: "#1C2025", line: "#D7DADF", muted: "#59616B",
+        cardBg: "#FFFFFF", thBg: "#EEF0F3", groupBg: "#EDEFF2",
         subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#F8FAFC",
         base: "#FFFFFF",
         income: accent, expense: "#94483D",
@@ -75,7 +74,12 @@ export const themeVars = (t) => {
   return {
     "--accent": accent, "--accent-soft": p.accentSoft, "--ink": p.ink, "--paper": p.paper,
     "--line": p.line, "--muted": p.muted, "--income": p.income, "--expense": p.expense,
-    "--chart-ink": dark ? "#A2C3BC" : "#355F58",
+    "--chart-ink": dark ? mix(accent, WHITE, 0.62) : mix(accent, "#18222A", 0.2),
+    "--hairline": dark ? "#FFFFFF1F" : "#1B243314",
+    "--control-bg": dark ? "#242A31" : "#EBEDF0",
+    "--nav-glass": dark ? "rgba(20,24,29,.89)" : "rgba(250,250,251,.88)",
+    "--bill-surface": "linear-gradient(128deg,#1B2732 18%,#283C46 78%,#344A53)",
+    "--bill-ink": "#FAFCFD", "--bill-caption": "#D0DEE4",
     "--card-bg": p.cardBg, "--th-bg": p.thBg, "--group-bg": p.groupBg, "--acct-bg": p.acctBg,
     "--subtotal-bg": p.subtotalBg, "--total-cell-bg": p.totalCellBg,
     "--col-hl": p.colHl, "--zero": p.zero, "--expense-soft": p.expenseSoft,

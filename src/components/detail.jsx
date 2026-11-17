@@ -13,11 +13,11 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, onSave
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
     <div style={{ padding: "4px 2px 8px" }}>
-      <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
-        <button style={{ ...styles.viewToggleBtn, ...(view === "list" ? styles.viewToggleActive : {}) }} onClick={() => setView("list")}>履歴</button>
-        <button style={{ ...styles.viewToggleBtn, ...(view === "card" ? styles.viewToggleActive : {}) }} onClick={() => setView("card")}>月別</button>
-        <button style={{ ...styles.viewToggleBtn, ...(view === "year" ? styles.viewToggleActive : {}) }} onClick={() => setView("year")}>年間</button>
-        <button style={{ ...styles.viewToggleBtn, ...(view === "memo" ? styles.viewToggleActive : {}) }} onClick={() => setView("memo")}>メモ</button>
+      <div className="view-switch" role="group" aria-label="記録の表示">
+        <button aria-pressed={view === "list"} onClick={() => setView("list")}>履歴</button>
+        <button aria-pressed={view === "card"} onClick={() => setView("card")}>月別</button>
+        <button aria-pressed={view === "year"} onClick={() => setView("year")}>年間</button>
+        <button aria-pressed={view === "memo"} onClick={() => setView("memo")}>メモ</button>
       </div>
       {view === "list" && <DetailList key={ym} monthEntries={monthEntries} onEdit={onEdit} />}
       {view === "card" && <DetailCards S={S} config={config} cards={cards} onEdit={onEdit} />}

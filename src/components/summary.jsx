@@ -37,7 +37,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
     <div className="home-overview">
-      {["month","funds","invest","pay"].includes(section) && <nav className="report-sections" aria-label="家計の表示切替">
+      {["month","funds","invest","pay"].includes(section) && <nav className="report-sections view-switch" aria-label="家計の表示切替">
         {[["month","収支"],["funds","残高"],["invest","投資"],["pay","給与"]].map(([id,label])=>
           <button key={id} aria-current={(section===id || (id==="month" && ["flow","spend"].includes(section)))?"page":undefined} onClick={()=>setSection(id)}>{label}</button>)}
       </nav>}
@@ -248,8 +248,12 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initia
   const shown = compact ? ranked.slice(0,3) : view === "merchant" && !allMerchants ? ranked.slice(0,5) : ranked;
   const views = compact ? [["card","カード別"],["category","用途別"]] :
     [["card","カード別"],["category","用途別"],["ledger","明細"],["merchant","利用先別"],...(appleRows.length ? [["apple","Apple決済"]] : [])];
-  return <section className="purchase-report" aria-label="カード利用額">
-    <header><h3>{compact ? Number(ym.slice(5))+"月度のカード利用額" : view === "apple" ? "Apple決済の合計" : "利用合計"}</h3><strong>{yen(total(view === "apple" ? appleRows : monthRows))}</strong></header>
+  return <section className="purchase-report" data-compact={!!compact} aria-label="カード利用額">
+    <header className={compact ? undefined : "amount-hero"}>
+      <h3>{compact ? Number(ym.slice(5))+"月度のカード利用額" : view === "apple" ? "Apple決済の合計" : "利用合計"}</h3>
+      <strong>{yen(total(view === "apple" ? appleRows : monthRows))}</strong>
+      {!compact && <small>{(view === "apple" ? appleRows : monthRows).length}件の明細</small>}
+    </header>
     {monthRows.length ? <>
       <div className="purchase-views" role="group" aria-label="集計の切替">
         {views.map(([id,label]) => <button key={id} aria-pressed={view === id}
@@ -300,7 +304,7 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const ranked = [...groups.values()].sort((a,b)=> b.invested-a.invested);
   const total = ranked.reduce((sum,g)=>sum+g.invested,0);
   const returned = ranked.reduce((sum,g)=>sum+g.returned,0);
-  return <section className="statement portfolio"><h3>投資への純振替</h3><strong className="statement-total">{yen(total-returned)}</strong>
+  return <section className="statement portfolio"><header className="amount-hero"><h3>投資への純振替</h3><strong className="statement-total">{yen(total-returned)}</strong></header>
     <div className="invest-directions">{[["投資へ",total],["口座へ戻った額",returned]].map(([label,amount])=>
       <div key={label}><span>{label}</span><b>{yen(amount)}</b><i aria-hidden="true" style={{width:100*amount/Math.max(total,returned,1)+"%"}}/></div>)}</div>
     <h4 className="list-heading">振替先別</h4>

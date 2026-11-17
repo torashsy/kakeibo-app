@@ -31,6 +31,10 @@ export default function App() {
   const [plans, setPlans] = useState(SEED_PLAN);
   const [closedMonths, setClosedMonths] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
+  useEffect(() => {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.dark ? "#111419" : "#FAFAFB");
+    document.documentElement.style.backgroundColor = theme.dark ? "#111419" : "#FAFAFB";
+  }, [theme.dark]);
   const [loaded, setLoaded] = useState(false);
   const {page, visit, back} = usePageNavigation();
   const tab = page.tab;

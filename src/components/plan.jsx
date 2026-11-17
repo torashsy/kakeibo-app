@@ -233,9 +233,9 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
 
   return (
     <div style={{ marginTop: 4 }}>
-      <div style={{ ...styles.viewToggle, display: "flex", flexWrap: "wrap" }}>
+      <div className="view-switch" role="group" aria-label="計画の表示">
         {[["forecast", "見通し"], ["plan", "予算を編集"], ["diff", "実績と比較"]].map(([v, l]) => (
-          <button key={v} style={{ ...styles.viewToggleBtn, ...(mode === v ? styles.viewToggleActive : {}) }} onClick={() => setMode(v)}>{l}</button>
+          <button key={v} aria-pressed={mode === v} onClick={() => setMode(v)}>{l}</button>
         ))}
       </div>
       {mode === "forecast" && months.includes(ym) && <MonthExplanation plans={plans} ym={ym} key={ym} result={monthResult} entries={entriesByMonth[ym]} past={pastPeriod} />}
