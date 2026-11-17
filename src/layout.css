@@ -505,3 +505,28 @@ html {scrollbar-gutter:stable both-edges;}
     animation:none !important; transition:none !important; scroll-behavior:auto !important;
   }
 }
+
+
+/* Upcoming debits: date totals first, card amounts always visible. */
+.debit-schedule {border-top:var(--report-rule); padding:22px 0; min-width:0;}
+.debit-schedule header,.debit-date,.debit-item {display:flex; justify-content:space-between; align-items:center; gap:16px;}
+.debit-schedule header h3 {font-size:1rem; font-weight:600; margin:0;}
+.debit-schedule header strong {font:600 1.42rem/1.3 var(--num-font); font-variant-numeric:tabular-nums;}
+.debit-period {display:flex; gap:20px; margin-top:8px; border-bottom:1px solid var(--line);}
+.debit-period button {position:relative; min-height:44px; padding:0; background:none; border:0; color:var(--muted); font:inherit; font-size:.85rem; cursor:pointer;}
+.debit-period button[aria-pressed=true] {color:var(--ink); font-weight:600;}
+.debit-period button[aria-pressed=true]::after {content:""; position:absolute; inset:auto 0 -1px; height:2px; background:currentColor;}
+.debit-day {padding:16px 0 12px; border-bottom:1px solid var(--line);}
+.debit-date {font-size:.88rem; margin-bottom:8px;}
+.debit-date time {font-variant-numeric:tabular-nums; font-weight:600;}
+.debit-item {min-height:46px; font-size:.9rem;}
+.debit-item small {display:block; color:var(--muted); font-size:.7rem; line-height:1.4; font-weight:400;}
+.debit-item b,.debit-date b {font-family:var(--num-font); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; font-weight:500;}
+.debit-item>span {min-width:0; overflow-wrap:anywhere;}
+.debit-basis {font-size:.78rem; color:var(--muted);}
+.debit-basis summary {display:flex; align-items:center; gap:8px; min-height:44px; cursor:pointer; list-style:none;}
+.debit-basis summary::-webkit-details-marker {display:none;}
+.debit-basis summary::before {display:none!important;}
+.debit-basis[open] summary span {transform:rotate(90deg);}
+.debit-basis p {margin:0 0 8px; line-height:1.6;}
+.debit-empty {font-size:.85rem; color:var(--muted); padding:16px 0;}

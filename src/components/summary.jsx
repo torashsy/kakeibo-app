@@ -33,6 +33,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
   const claimStates = useMemo(() => cardClaimStates(cards, debt || {}, subs, monthEntries, ym, config.cycleCutoffDay), [cards, debt, subs, monthEntries, ym, config.cycleCutoffDay]);
   const purchases = useMemo(() => classifyCardRows(bankTransactions(snapshot).filter(row => row.id.startsWith("mf-card:"))), [snapshot]);
   const upcoming = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, ym, undefined, 30, scheduledDebits, purchases), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits, purchases]);
+  const following = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, addMonth(ym, 1), undefined, 30, scheduledDebits, purchases), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits, purchases]);
   const forecast = forecasts[ym];
   const showOutlook = ym >= cycleYm(new Date().toLocaleDateString('sv-SE'), config.cycleCutoffDay) && !closedMonths.includes(ym);
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
@@ -52,6 +53,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
+      {showOutlook && <DebitSchedule rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
       <SpendingPurpose compact initialView={spendingView} onOpen={openSpending} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       </>}
       {section === "spend" && <SpendingPurpose initialView={spendingView} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
@@ -71,7 +73,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
 
       {!showOutlook && !hasBal && <p>この月の口座残高は未登録です。</p>}
       {!showOutlook && <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />}
-      {showOutlook && <UpcomingDebitsCard rows={upcoming} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
+      {showOutlook && <DebitSchedule rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
       {showOutlook && <section className="k-group">
         <h3>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</h3>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
@@ -130,15 +132,9 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
   const lowest = points.reduce((min, point) => point.amount < min.amount ? point : min);
   if (compact) {
     const bills = upcoming.filter(row => row.kind === "card" && row.amount > 0);
-    const nextDate = bills[0]?.date;
-    const next = bills.filter(row => row.date === nextDate);
+    const nextDate = bills.at(-1)?.date;
     const afterDebit = points.find(point => point.date === nextDate);
     const depositsBeforeDebit = events.filter(event => event.date <= nextDate && event.change > 0);
-    const totals = new Map();
-    for (const bill of next) {
-      const name = cards?.find(card => card.name === bill.label)?.paymentAccount || "";
-      totals.set(name, (totals.get(name) || 0) + bill.amount);
-    }
     return <section className="cash-position">
       {afterDebit && <header className="balance-head">
         <div><time dateTime={nextDate}>{shortDate(nextDate)}</time><h3>引落後の残高見込み</h3></div><strong>{yen(afterDebit.amount)}</strong>
@@ -149,15 +145,6 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
       {depositsBeforeDebit.map((event,index)=><div className="before-debit" key={event.date+index}>
         <span><time className="date-slot">{shortDate(event.date)}</time>{event.label.startsWith("給与（計画")?"給与入金見込み":event.label}</span><b>＋{yen(event.change)}</b>
       </div>)}
-      {next.length > 0 && <details className="next-claim"><summary>
-        <span><time className="date-slot">{shortDate(nextDate)}</time>カード引落予定<span className="reading-arrow" aria-hidden="true">›</span></span><b>−{yen(next.reduce((sum,r)=>sum+r.amount,0))}</b></summary>
-        {next.map(r=><div className="claim-row" key={r.id}><span>{r.label}</span><b>{yen(r.amount)}</b></div>)}
-        {[...totals].map(([name,amount])=> {
-          const bal = shown[name];
-          return name && bal ? <div key={name} className="claim-account"><span>{name} · {bal.asOf || bal.ym+"月度"} 残高</span><b>{yen(bal.amount)}</b><span>この請求を引いた残額</span><strong>{yen(bal.amount-amount)}</strong></div> :
-            <div key={name} className="claim-row">{name ? name+"の残高未取得" : "引落口座は未登録"}{!name && <button onClick={onOpenCards}>カード管理 ›</button>}</div>;
-        })}
-      </details>}
       {salaryNote && afterDebit && <small className="salary-note">{salaryNote}</small>}
     </section>;
 
@@ -426,42 +413,34 @@ function CardClaimStatusList({ rows }) {
     </div>
   );
 }
-function UpcomingDebitsCard({ rows, missingCount = 0, onOpenCards }) {
-  const [open, setOpen] = useState(true);
-  
-  const nextDate = rows[0]?.date;
-  const nextAmount = rows.filter(row => row.date === nextDate).reduce((sum,row) => sum + row.amount, 0);
-  const total = rows.reduce((sum, row) => sum + row.amount, 0);
-  return (
-    <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
-      <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>次の引き落とし</span>
-        <span style={{ ...alignedAmount, color: rows.length ? RED : MUTED, fontWeight: 600 }}>{rows.length ? yen(-total) : "予定額未確認"}</span>
-      </button>
-      {open && <div style={{ paddingBottom: 4 }}>
-        {nextDate && <p><strong>{shortDate(nextDate)} の引落予定　{yen(nextAmount)}</strong></p>}
-        <p style={{fontSize:12}}>カード分の合計　{rows.some(r => r.kind === "card") ? yen(rows.filter(r => r.kind === "card").reduce((sum,r) => sum + r.amount, 0)) : "金額未確認"}</p>
-        {rows.map((row) => {
-          const state = claimStatus[row.status];
-          return (
-            <div key={row.id} style={{ display: "grid", gridTemplateColumns: "42px minmax(0,1fr) auto", gap: 8, alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${LINE}` }}>
-              <span style={{ color: ACCENT, fontSize: 12.5, fontWeight: 600 }}>{shortDate(row.date)}</span>
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13.5 }}>{row.label}</span>
-              <span style={{ textAlign: "right" }}>
-                <span style={{ display: "block", fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)", fontSize: 13.5 }}>{yen(row.amount)}</span>
-                <span style={{ color: state.color, fontSize: 10.5 }}>{row.fromFeed ? "マネーフォワード予定額" : state.label}</span>
-              </span>
-            </div>
-          );
-        })}
-        {missingCount > 0 && (
-          <button style={{ ...styles.collapseRow, borderBottom: "none", color: MUTED, padding: "10px 0 6px" }} onClick={onOpenCards}>
-            <span style={{ fontSize: 12.5 }}>引落日未設定 {missingCount}枚</span><span style={styles.chev}>›</span>
-          </button>
-        )}
-      </div>}
+function DebitSchedule({ rows, following = [], end, missingCount = 0, onOpenCards }) {
+  const [later, setLater] = useState(false);
+  const visible = later ? following : rows;
+  const total = visible.reduce((sum, row) => sum + row.amount, 0);
+  const dates = [...new Set(visible.map(row => row.date))];
+  return <section className="debit-schedule" aria-label="引き落とし予定">
+    <header><h3>引き落とし予定</h3><strong>{yen(total)}</strong></header>
+    <div className="debit-period" role="group" aria-label="引落予定の期間">
+      <button aria-pressed={!later} onClick={() => setLater(false)}>{shortDate(end)}まで</button>
+      <button aria-pressed={later} onClick={() => setLater(true)}>次月分</button>
     </div>
-  );
+    {dates.map(date => {
+      const bills = visible.filter(row => row.date === date);
+      return <div className="debit-day" key={date}>
+        <div className="debit-date"><time dateTime={date}>{shortDate(date)}</time><b>{yen(bills.reduce((sum,row) => sum + row.amount, 0))}</b></div>
+        {bills.map(row => <div className="debit-item" key={row.id}>
+          <span>{row.label}<small>{row.fromFeed ? "MF予定額" : row.status === "confirmed" ? "確定" : "見込み"}</small></span>
+          <b>{yen(row.amount)}</b>
+        </div>)}
+      </div>;
+    })}
+    {!visible.length && <p className="debit-empty">予定額はまだありません</p>}
+    {visible.some(row => !row.fromFeed && row.status === "forecast") && <details className="debit-basis">
+      <summary>見込みの計算 <span aria-hidden="true">›</span></summary>
+      <p>取得済みの利用額・返金と登録済みの分割予定から計算。利用明細がないカードは登録済みの定期費も含みます。今後の利用で変わります。</p>
+    </details>}
+    {missingCount > 0 && <button className="debit-empty" onClick={onOpenCards}>引落日未設定 {missingCount}枚 ›</button>}
+  </section>;
 }
 
 function BreakdownGroup({ label, total, rows, valueKey, open, onToggle, showMemos = false }) {

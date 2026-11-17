@@ -876,6 +876,23 @@ describe("cycleYm / periodLabel / periodRange", () => {
       { id: "card|2026-07|JCB", date: "2026-08-10", label: "JCB", amount: 30000, status: "confirmed", kind: "card" },
     ]);
   });
+  it("unconfirmed debits include net card use and installments, and a feed bill replaces the estimate", () => {
+    const cards: Card[] = [{id:"c", name:"JCB", cutoffDay:15, paymentDay:10}];
+    const debt = {JCB:{"2026-11":3000,"2026-12":2000}};
+    const purchases = [
+      {account:"JCB",date:"2026-11-01",amount:-12000},
+      {account:"JCB",date:"2026-11-03",amount:2000},
+      {account:"JCB",date:"2026-11-17",amount:-5000},
+    ];
+    const estimate = upcomingDebits([],cards,debt,[],10,"2026-11","2026-11-18",30,[],purchases);
+    expect(estimate).toEqual([expect.objectContaining({date:"2026-12-10",amount:13000,status:"forecast"})]);
+    const later = upcomingDebits([],cards,debt,[],10,"2026-12","2026-11-18",30,[],purchases);
+    expect(later).toEqual([expect.objectContaining({date:"2027-01-12",amount:7000,status:"forecast"})]);
+    const scheduled = [{card:"JCB",date:"2026-12-10",amount:11500}];
+    expect(upcomingDebits([],cards,debt,[],10,"2026-11","2026-11-18",30,scheduled,purchases))
+      .toEqual([expect.objectContaining({amount:11500,fromFeed:true})]);
+    expect(upcomingDebits([],cards,debt,[],10,"2026-11","2026-11-18",30,[{...scheduled[0],amount:0}],purchases)).toEqual([]);
+  });
   it("cycleYm: 締め日が土日祝なら翌営業日まで同じ周期に含める", () => {
     // 2026-01は 1/10(土)・1/11(日)・1/12(成人の日) と続き、締め日10は営業日1/13へ送られる
     expect(cycleYm("2026-01-10", 10)).toBe("2025-12"); // 前周期(12月度)
