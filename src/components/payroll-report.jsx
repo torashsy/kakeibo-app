@@ -38,11 +38,13 @@ export function PayrollReport({ slips, ym }) {
     <select aria-label="集計期間" value={period || "annual"} onChange={e=>setChoice(e.target.value)}><option value="annual">年間</option>{[...new Set([...(period ? [period] : []),...months])].sort().reverse().map(m=><option key={m} value={m}>{Number(m.slice(5))}月</option>)}</select></div></header>
     {!active.length ? <p>この期間の給与明細はありません。<button className="plain-action" onClick={()=>{setSelectedYear(years[0]);setChoice(all[0].date.slice(0,7));}}>最新の明細を見る（{all[0].date}）</button></p> : <>
     <div className="statement-line take-home amount-hero"><span>{period ? Number(period.slice(5))+"月支給" : year+"年"}の手取り</span><strong>{yen(total("net"))}</strong></div>
-    <div className="statement-line gross"><span>額面</span><b>{yen(total("gross"))}</b></div>
-    {total("gross") > 0 && total("net") >= 0 && total("net") <= total("gross") && <div className="pay-split">
-      <div aria-hidden="true"><i style={{width:(100*total("net")/total("gross"))+"%"}}/></div>
-      <small>手取り {Math.round(100*total("net")/total("gross"))}%</small><small>控除 {yen(total("gross")-total("net"))}</small>
-    </div>}
+    <figure className="pay-composition" aria-label="額面に占める手取りと控除">
+      <figcaption><span>額面</span><b>{yen(total("gross"))}</b></figcaption>
+      {total("gross")>0 && total("net")>=0 && total("net")<=total("gross") && <div className="pay-band" aria-hidden="true">
+        <i style={{width:100*total("net")/total("gross")+"%"}}/></div>}
+      <div className="pay-key"><span>手取り{total("gross")>0 && " "+Math.round(100*total("net")/total("gross"))+"%"}</span>
+        <span>控除　{yen(total("gross")-total("net"))}</span></div>
+    </figure>
     <section className="deduction-list pay-earnings"><h4>支給</h4>
       {[...earnings].filter(([,value])=>value!==0).sort((a,b)=>b[1]-a[1]).map(([label,value])=>
         <div className="statement-line deduction" key={label}><span>{label}</span><b>{yen(value)}</b></div>)}

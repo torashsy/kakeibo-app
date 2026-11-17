@@ -136,13 +136,18 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
       const name = cards?.find(card => card.name === bill.label)?.paymentAccount || "";
       totals.set(name, (totals.get(name) || 0) + bill.amount);
     }
-    return <section className="cash-position"><button className="all-balances" onClick={onExpand}>
-      <span aria-hidden="true">›</span><span>口座残高 <small>{accounts.length}口座合計</small></span><b>{yen(start)}</b></button>
+    return <section className="cash-position">
+      {afterDebit && <header className="balance-head">
+        <div><time dateTime={nextDate}>{shortDate(nextDate)}</time><h3>引落後の残高見込み</h3></div><strong>{yen(afterDebit.amount)}</strong>
+        <BalanceSteps points={points.slice(0,points.indexOf(afterDebit)+1)}/>
+      </header>}
+      <button className="all-balances" onClick={onExpand}>
+      <span>現在の残高 <small>{accounts.length}口座<span aria-hidden="true"> ›</span></small></span><b>{yen(start)}</b></button>
       {depositsBeforeDebit.map((event,index)=><div className="before-debit" key={event.date+index}>
         <span><time className="date-slot">{shortDate(event.date)}</time>{event.label.startsWith("給与（計画")?"給与入金見込み":event.label}</span><b>＋{yen(event.change)}</b>
       </div>)}
       {next.length > 0 && <details className="next-claim"><summary>
-        <span><time className="date-slot">{shortDate(nextDate)}</time>カード引落予定</span><b>{yen(next.reduce((sum,r)=>sum+r.amount,0))}</b></summary>
+        <span><time className="date-slot">{shortDate(nextDate)}</time>カード引落予定<span className="reading-arrow" aria-hidden="true">›</span></span><b>−{yen(next.reduce((sum,r)=>sum+r.amount,0))}</b></summary>
         {next.map(r=><div className="claim-row" key={r.id}><span>{r.label}</span><b>{yen(r.amount)}</b></div>)}
         {[...totals].map(([name,amount])=> {
           const bal = shown[name];
@@ -150,7 +155,7 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
             <div key={name} className="claim-row">{name ? name+"の残高未取得" : "引落口座は未登録"}{!name && <button onClick={onOpenCards}>カード管理 ›</button>}</div>;
         })}
       </details>}
-      {afterDebit && <div className="after-debit"><span><time className="date-slot">{shortDate(nextDate)}</time>引落後の見込み<small>{accounts.length}口座合計{salaryNote ? " · 給与未算入" : ""}</small></span><b>{yen(afterDebit.amount)}</b></div>}
+      {salaryNote && afterDebit && <small className="salary-note">{salaryNote}</small>}
     </section>;
 
   }
@@ -170,6 +175,23 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
     </> : <p>登録予定なし</p>}
     {salaryNote && <small>{salaryNote}</small>}
   </section>;
+}
+function BalanceSteps({points}) {
+  const first = points[0], last = points.at(-1);
+  const dates = points.map(point => Date.parse(point.date));
+  const span = dates.at(-1) - dates[0];
+  if (span <= 0) return null;
+  const amounts = points.map(point => point.amount);
+  const low = Math.min(0,...amounts), high = Math.max(0,...amounts);
+  const x = i => 3 + 294*(dates[i]-dates[0])/span;
+  const y = amount => 44 - 37*(amount-low)/(high-low || 1);
+  const line = points.slice(1).map((point,i)=>`H ${x(i+1)} V ${y(point.amount)}`).join(" ");
+  return <div className="balance-plot"><svg className="balance-steps" viewBox="0 0 300 50" preserveAspectRatio="none" role="img" aria-label={shortDate(first.date)+"の"+yen(first.amount)+"から"+shortDate(last.date)+"の"+yen(last.amount)+"までの残高推移"}>
+    <path className="step-zero" d={`M3 ${y(0)} H297`}/>
+    <path className="step-fill" d={`M3 ${y(first.amount)} ${line} V${y(0)} H3 Z`}/>
+    <path className="step-line" d={`M3 ${y(first.amount)} ${line}`}/>
+    {points.map((p,i)=><circle key={p.date+i} cx={x(i)} cy={y(p.amount)} r="2.5"/>)}
+  </svg><div className="balance-dates" aria-hidden="true"><time>{shortDate(first.date)}</time><time>{shortDate(last.date)}</time></div></div>;
 }
 function SubscriptionServices({ rows }) {
   const byService = new Map();
@@ -224,7 +246,7 @@ function CardLedger({ rows }) {
   </div>;
 }
 export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initialView }) {
-  const [basis, setBasis] = useState(initialView?.basis || "card");
+  const [basis, setBasis] = useState(initialView?.basis || (compact ? "category" : "card"));
   const [selection, setSelection] = useState(initialView);
   const [allMerchants, setAllMerchants] = useState(false);
   const monthRows = purchases.filter(row => cycleYm(row.date, cutoff) === ym && spendingGroup(row));
@@ -305,15 +327,15 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const total = ranked.reduce((sum,g)=>sum+g.invested,0);
   const returned = ranked.reduce((sum,g)=>sum+g.returned,0);
   return <section className="statement portfolio"><header className="amount-hero"><h3>投資への純振替</h3><strong className="statement-total">{yen(total-returned)}</strong></header>
-    <div className="invest-directions">{[["投資へ",total],["口座へ戻った額",returned]].map(([label,amount])=>
-      <div key={label}><span>{label}</span><b>{yen(amount)}</b><i aria-hidden="true" style={{width:100*amount/Math.max(total,returned,1)+"%"}}/></div>)}</div>
     <h4 className="list-heading">振替先別</h4>
     {ranked.map(g=><details className="destination" key={g.name}><summary>
-      <span>{g.name}{ranked.length>1 && <small>{total ? Math.round(100*g.invested/total) : 0}%</small>}</span><b>{yen(g.invested)}</b>
+      <span>{g.name}<span className="reading-arrow" aria-hidden="true">›</span>{ranked.length>1 && <small>{total ? Math.round(100*g.invested/total) : 0}%</small>}</span><b>{yen(g.invested)}</b>
       <small className="action-caption">明細 {g.rows.length}件</small>
       {ranked.length>1 && <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>}
     </summary>{g.rows.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(r=><div className="statement-line" key={r.id}><span><time className="date-slot">{shortDate(r.date)}</time>{r.method}{r.amount<0?"・戻し":""}</span><b>{yen(r.amount)}</b></div>)}
     </details>)}
+    <div className="invest-directions">{[["投資へ",total],["口座へ戻った額",returned]].map(([label,amount])=>
+      <div key={label}><span>{label}</span><b>{yen(amount)}</b><i aria-hidden="true" style={{width:100*amount/Math.max(total,returned,1)+"%"}}/></div>)}</div>
     {ranked.filter(g=>ranked.length>1 && g.returned>0).map(g=><div key={g.name} className="statement-line"><span>{g.name}からの戻り</span><b>{yen(g.returned)}</b></div>)}
   </section>;
 }

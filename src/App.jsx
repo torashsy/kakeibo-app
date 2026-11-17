@@ -424,16 +424,17 @@ export default function App() {
 
   if (!loaded) return <div style={{ ...styles.app, ...themeVars(DEFAULT_THEME), display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: MUTED }}>読み込み中…</span></div>;
 
+  const monthCover = tab === "today" && page.section === "month" && !page.parent;
   return (
     <div className="ledger-app" style={{ ...themeVars(theme) }}>
-      <header className="ledger-header">
+      <header className="ledger-header" data-month-cover={monthCover}>
         <div className="ledger-heading">{page.parent && <button className="parent-link" onClick={back} aria-label={pageLabel(page.parent)+"に戻る"}>‹ {pageLabel(page.parent)}</button>}<h1>{pageLabel(page)}</h1></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
           <div className="month-toolbar">
             <div className="ledger-month">
               <button aria-label="前の月" onClick={() => setYm(addMonth(ym, -1))}>‹</button>
               <div className="month-selection">
-                <strong aria-hidden="true">{periodLabel(ym, config.cycleCutoffDay)}</strong>
+                <strong aria-hidden="true">{monthCover ? <><small>{ym.slice(0,4)}年</small>{Number(ym.slice(5))}月{config.cycleCutoffDay > 0 ? "度" : ""}</> : periodLabel(ym, config.cycleCutoffDay)}</strong>
                 <select value={ym} onChange={e => setYm(e.target.value)} aria-label="表示する月"
                   aria-describedby={rangeLabel ? "ledger-period" : undefined}>{months.map(m => <option key={m} value={m}>{periodLabel(m, config.cycleCutoffDay)}</option>)}</select>
                 {rangeLabel && <span id="ledger-period" aria-hidden="true">{rangeLabel}</span>}

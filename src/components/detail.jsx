@@ -55,7 +55,7 @@ export function DetailList({ monthEntries, onEdit }) {
           <React.Fragment key={e.id}>
             {(index === 0 || filtered[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
           <button className="journal-row" aria-label={`編集　${desc || e.note || e.item}　${yen(e.amount)}`} onClick={() => onEdit(e)}>
-            <span className="journal-name"><b><span aria-hidden="true">› </span>{desc || e.note || e.item}</b><small>{[catLabel[e.cat], e.account, (desc || e.note) && e.item].filter(Boolean).join(" · ")}</small></span>
+            <span className="journal-name"><b>{desc || e.note || e.item}<span className="reading-arrow" aria-hidden="true">›</span></b><small>{[catLabel[e.cat], e.account, (desc || e.note) && e.item].filter(Boolean).join(" · ")}</small></span>
             <span className="entry-value"><strong>{yen(e.amount)}</strong></span>
           </button>
           </React.Fragment>
