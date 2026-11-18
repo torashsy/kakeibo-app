@@ -11,11 +11,30 @@
   -webkit-font-smoothing:antialiased;
 }
 .ledger-app .ledger-header {padding:20px var(--page-inset) 12px; gap:8px;}
-.ledger-app .ledger-header[data-month-cover=true] {min-block-size:calc(96px + env(safe-area-inset-top));}
+.ledger-app .ledger-header[data-month-cover=true] {min-block-size:calc(112px + env(safe-area-inset-top));}
 .ledger-app .ledger-heading h1 {font-size:34px; font-weight:700; letter-spacing:-.025em;}
 .ledger-app .month-selection strong {letter-spacing:-.02em;}
-.ledger-header[data-month-cover=true] .month-selection strong {font-size:30px; font-weight:700; letter-spacing:-.025em;}
-.ledger-header[data-month-cover=true] .month-selection strong small {font-size:12px; font-weight:500;}
+.ledger-app .month-toolbar {padding:0; margin:0; border:0;}
+.ledger-app .month-toolbar .ledger-month {
+  display:grid; grid-template-columns:minmax(0,1fr) 132px; grid-template-rows:44px 24px;
+  gap:0; width:100%; padding:0; align-items:center;
+}
+.ledger-app .month-toolbar .month-selection {
+  grid-column:1; grid-row:1; justify-items:start; margin:0; padding:0; min-width:0;
+}
+.ledger-app .month-toolbar .month-selection strong {font-size:18px; font-weight:600; letter-spacing:-.02em;}
+.ledger-app .month-toolbar #ledger-period {grid-column:1; grid-row:2; font-size:12px; letter-spacing:0; color:var(--muted);}
+.ledger-app .month-controls {grid-column:2; grid-row:1; display:flex; align-items:center;}
+.ledger-app .month-controls button {flex:0 0 44px; width:44px; height:44px; padding:0; border-radius:10px;}
+.ledger-app .month-controls .month-reset {position:static; font-size:12px; font-weight:500; color:var(--income); order:0;}
+.ledger-app .month-reset:disabled {visibility:visible; color:var(--muted); opacity:.65;}
+.ledger-app .ledger-header[data-month-cover=true] {row-gap:0; padding-top:12px;}
+.ledger-app .ledger-header[data-month-cover=true] .month-toolbar {padding:0;}
+.ledger-app .ledger-header[data-month-cover=true] .ledger-month {grid-template-rows:44px 44px;}
+.ledger-app .ledger-header[data-month-cover=true] .month-controls {grid-row:2;}
+.ledger-header[data-month-cover=true] .month-toolbar .month-selection {grid-column:1/-1; margin-right:72px;}
+.ledger-header[data-month-cover=true] .month-toolbar .month-selection strong {font-size:22px;}
+.ledger-app .ledger-header[data-month-cover=true] .entry-action {grid-row:1; align-self:start; margin:0; min-height:44px;}
 .ledger-app .entry-action {color:var(--income); font-size:15px; font-weight:500;}
 .ledger-app .ledger-main {padding-inline:var(--page-inset);}
 .ledger-app .report-content,.ledger-app .home-overview {gap:20px;}

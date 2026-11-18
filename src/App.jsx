@@ -432,16 +432,18 @@ export default function App() {
         {(tab === "today" || tab === "records" || tab === "plan") && (
           <div className="month-toolbar">
             <div className="ledger-month">
-              <button aria-label="前の月" onClick={() => setYm(addMonth(ym, -1))}>‹</button>
               <div className="month-selection">
-                <strong aria-hidden="true">{monthCover ? <><small>{ym.slice(0,4)}年</small>{Number(ym.slice(5))}月{config.cycleCutoffDay > 0 ? "度" : ""}</> : periodLabel(ym, config.cycleCutoffDay)}</strong>
+                <strong aria-hidden="true">{periodLabel(ym, config.cycleCutoffDay)}</strong>
                 <select value={ym} onChange={e => setYm(e.target.value)} aria-label="表示する月"
                   aria-describedby={rangeLabel ? "ledger-period" : undefined}>{months.map(m => <option key={m} value={m}>{periodLabel(m, config.cycleCutoffDay)}</option>)}</select>
-                {rangeLabel && <span id="ledger-period" aria-hidden="true">{rangeLabel}</span>}
               </div>
-              <button aria-label="次の月" onClick={() => setYm(addMonth(ym, 1))}>›</button>
+              {rangeLabel && <span id="ledger-period" aria-hidden="true">{rangeLabel}</span>}
+              <div className="month-controls">
+                <button aria-label="前の月" onClick={() => setYm(addMonth(ym, -1))}>‹</button>
+                <button className="month-reset" disabled={ym === currentMonth} aria-label="今月に戻る" onClick={() => setYm(currentMonth)}>今月</button>
+                <button aria-label="次の月" onClick={() => setYm(addMonth(ym, 1))}>›</button>
+              </div>
             </div>
-            <button className="month-reset" disabled={ym === currentMonth} aria-label="今月に戻る" onClick={() => setYm(currentMonth)}>今月</button>
           </div>
         )}
         {(tab === "today" || tab === "records") && <button className="entry-action" onClick={() => setSheet("pick")}>＋ 記録</button>}
