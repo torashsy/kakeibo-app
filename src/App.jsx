@@ -46,6 +46,7 @@ export default function App() {
   const [ym, setYm] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [sheet, setSheet] = useState(null);
   const monthSwipe = useHorizontalSwipe(direction => setYm(month => addMonth(month, direction)), !sheet);
+  const contentMonthSwipe = useHorizontalSwipe(direction => setYm(month => addMonth(month, direction)), !sheet && ["today", "records", "plan"].includes(tab));
   const [importMode, setImportMode] = useState("");
   const [editing, setEditing] = useState(null);
   const [financeFeed, setFinanceFeed] = useState(null);
@@ -451,7 +452,7 @@ export default function App() {
         {(tab === "today" || tab === "records") && <button className="entry-action" onClick={() => setSheet("pick")}>＋ 記録</button>}
       </header>
 
-      <main key={tab} className="ledger-main" data-view={tab}>
+      <main key={tab} className="ledger-main" data-view={tab} {...contentMonthSwipe}>
         {tab === "finance" && <><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></>}
         {tab === "today" && <Summary section={page.section} onSection={section=>visit("today",section,!homeSections.includes(section))} forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => drill("plan")} onOpenCards={() => drill("cards")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}

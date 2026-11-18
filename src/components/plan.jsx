@@ -275,7 +275,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
       )}
 
       {edit && (
-        <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
+        <div data-no-swipe style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetTitle}>{edit.label}・{edit.mlabel}の計画</div>
             <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 8px" }}>標準 {num(edit.std)}</div>
@@ -289,7 +289,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
         </div>
       )}
       {newBucket && (
-        <div style={styles.sheetBackdrop} onClick={() => setNewBucket(null)}>
+        <div data-no-swipe style={styles.sheetBackdrop} onClick={() => setNewBucket(null)}>
           <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetTitle}>項目を追加</div>
             <input value={newBucket.name} onChange={(e) => setNewBucket({ ...newBucket, name: e.target.value })} placeholder="項目名" style={styles.textInput} autoFocus />
@@ -300,7 +300,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
         </div>
       )}
       {salaryEdit && (
-        <div style={styles.sheetBackdrop} onClick={() => setSalaryEdit(null)}>
+        <div data-no-swipe style={styles.sheetBackdrop} onClick={() => setSalaryEdit(null)}>
           <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.sheetHandle} />
             <div style={styles.sheetTitle}>給与</div>

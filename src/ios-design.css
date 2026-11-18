@@ -181,9 +181,7 @@
 }
 .ledger-app .report-sections button {z-index:1;}
 .ledger-app .report-sections button[aria-current=page] {background:transparent; box-shadow:none;}
-.swipe-region {touch-action:pan-y pinch-zoom;}
-.home-overview>.report-content {translate:var(--swipe-drag,0px) 0; transition:translate 160ms var(--motion-ease); animation-name:report-slide;}
-.home-overview[data-swiping=true]>.report-content {transition:none;}
+.home-overview>.report-content {animation-name:report-slide;}
 @keyframes report-slide {from {opacity:0; transform:translateX(var(--report-enter-x,14px));} to {opacity:1; transform:translateX(0);}}
 .ledger-app .history-date+.journal-row {border-radius:12px 12px 0 0;}
 .ledger-app .journal-row:has(+.history-date,+.plain-action),.ledger-app .journal-row:last-child {border-radius:0 0 12px 12px;}
@@ -233,7 +231,6 @@
 .ledger-app .search-field input {font-size:16px;}
 @media(prefers-reduced-motion:reduce) {
   .ledger-app .report-sections::before {transition:none;}
-  .home-overview>.report-content {translate:none;}
 }
 
 @media(max-width:859px) {

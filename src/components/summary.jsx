@@ -1,5 +1,4 @@
 import { homeSections } from "../page-navigation";
-import { useHorizontalSwipe } from "../use-horizontal-swipe";
 import { SearchField } from "./search-field";
 import { spendingGroup, purchaseLabel, needsPurposeReview } from "../spending-groups";
 import { IncomeLines } from "./income-lines";
@@ -20,10 +19,6 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
     setDirection(homeSections.indexOf(next) >= homeSections.indexOf(section) ? 1 : -1);
     onSection(next);
   };
-  const swipe = useHorizontalSwipe(step => {
-    const next = homeSections[homeSections.indexOf(section) + step];
-    if (next) setSection(next);
-  }, homeSections.includes(section));
   const [spendingView, setSpendingView] = useState(null);
   const openSpending = (basis, label) => {
     setSpendingView({ basis, label, ym });
@@ -47,7 +42,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
   const showOutlook = ym >= cycleYm(new Date().toLocaleDateString('sv-SE'), config.cycleCutoffDay) && !closedMonths.includes(ym);
   const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
   return (
-    <div className="home-overview swipe-region" {...swipe} style={{"--report-enter-x":`${direction * 14}px`}}>
+    <div className="home-overview" style={{"--report-enter-x":`${direction * 14}px`}}>
       {homeSections.includes(section) && <nav className="report-sections view-switch" aria-label="家計の表示切替" style={{"--selected-tab":homeSections.indexOf(section)}}>
         {[["month","収支"],["funds","残高"],["invest","投資"],["pay","給与"]].map(([id,label])=>
           <button key={id} aria-current={(section===id || (id==="month" && ["flow","spend"].includes(section)))?"page":undefined} onClick={()=>setSection(id)}>{label}</button>)}

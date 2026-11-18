@@ -74,8 +74,12 @@ async function mount() { await act(async () => root.render(<App />)); }
 async function swipe(selector, from, to) {
   const target=container.querySelector(selector);
   await act(async()=>{
-    for(const [type,x] of [["pointerdown",from],["pointermove",to],["pointerup",to]])
-      target.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerType:"touch",isPrimary:true,pointerId:1,clientX:x,clientY:150}));
+    for(const [type,x] of [["touchstart",from],["touchmove",to],["touchend",to]]) {
+      const point={identifier:1,clientX:x,clientY:150};
+      const event=new Event(type,{bubbles:true,cancelable:true});
+      Object.assign(event,{touches:type==='touchend'?[]:[point],changedTouches:[point]});
+      target.dispatchEvent(event);
+    }
   });
 }
 async function openContracts() {
@@ -91,24 +95,28 @@ async function exportBackup() {
   return JSON.parse(await exportedBlobs[exportedBlobs.length - 1].text());
 }
 
-it("横スワイプは表示だけを切り替え、月と家計データを保持する",async()=>{
+it("本文の横スワイプは月を移動し、選択タブと家計データを保持する",async()=>{
   await mount(); await click("ホーム");
   const original=stored.get("entries");
-  const month=container.querySelector('.month-selection select').value;
-  await swipe('.home-overview',240,100);
-  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('残高');
-  expect(container.querySelector('.month-selection select').value).toBe(month);
-  await swipe('.home-overview',240,100);
-  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('投資');
-  await swipe('.home-overview',240,100);
-  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('給与');
-  await swipe('.home-overview',240,100);
-  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('給与');
   await swipe('.home-overview',100,240);
+  expect(container.querySelector('.month-selection select').value).toBe('2026-09');
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('収支');
+  await click('投資');
+  await swipe('.home-overview',240,100);
+  expect(container.querySelector('.month-selection select').value).toBe('2026-10');
   expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('投資');
   await swipe('.month-toolbar',100,240);
   expect(container.querySelector('.month-selection select').value).toBe('2026-09');
   expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('投資');
+  expect(stored.get('entries')).toBe(original);
+  for(const page of ['記録','計画']) {
+    await click(page);
+    const month=container.querySelector('.month-selection select').value;
+    await swipe('.ledger-main',240,100);
+    expect(container.querySelector('.month-selection select').value).not.toBe(month);
+    await swipe('.ledger-main',100,240);
+    expect(container.querySelector('.month-selection select').value).toBe(month);
+  }
   expect(stored.get('entries')).toBe(original);
 });
 
