@@ -98,11 +98,13 @@
 .ledger-app .history-date {font-size:13px; padding:20px 12px 8px; border:0;}
 .ledger-app .ledger-merchant b,.ledger-app .journal-name>b {font-size:16px; font-weight:500;}
 .ledger-app .pay-period {padding-bottom:16px;}
-.ledger-app .pay-period select {background:var(--control-bg); border:0; border-radius:8px; padding:8px; font-size:15px;}
+.ledger-app .pay-period select {background:var(--control-bg); border:0; border-radius:8px; padding:8px; font-size:16px;}
 .ledger-app .deduction-list h4,.ledger-app .major-heading h3 {font-size:17px; font-weight:600;}
 .ledger-app .pay-band {border-radius:6px; height:14px; overflow:hidden;}
 .ledger-app .statement-line {font-size:15px; padding-block:12px;}
 .ledger-app .statement-line b {font-size:16px; font-weight:500;}
+.ledger-app .statement-line>b {flex-shrink:0; white-space:nowrap; text-align:right;}
+.ledger-app .statement-line>span {min-width:0;}
 .ledger-app .destination-share {height:4px; border-radius:2px;}
 .ledger-app .driver-scale {border-radius:4px; overflow:hidden;}
 .ledger-app .month-explain {margin-top:16px;}
@@ -148,9 +150,51 @@
 .ledger-app .report-sections button {z-index:1;}
 .ledger-app .report-sections button[aria-current=page] {background:transparent; box-shadow:none;}
 .ledger-app .history-date+.journal-row {border-radius:12px 12px 0 0;}
-.ledger-app .journal-row:has(+.history-date),.ledger-app .journal-row:last-child {border-radius:0 0 12px 12px;}
-.ledger-app .history-date+.journal-row:has(+.history-date),.ledger-app .history-date+.journal-row:last-child {border-radius:12px;}
+.ledger-app .journal-row:has(+.history-date,+.plain-action),.ledger-app .journal-row:last-child {border-radius:0 0 12px 12px;}
+.ledger-app .history-date+.journal-row:has(+.history-date,+.plain-action),.ledger-app .history-date+.journal-row:last-child {border-radius:12px;}
 .ledger-app .portfolio .amount-hero {margin-bottom:24px;}
+/* Quiet separators mark rows; space alone separates related sections. */
+.ledger-app .pay-report .deduction-list {border:0; margin-top:24px;}
+.ledger-app .pay-report .deduction-list h4 {margin:0 0 8px;}
+.ledger-app .pay-report .deduction {border:0; min-height:44px; box-sizing:border-box; align-items:baseline;}
+.ledger-app .pay-report .deduction+.deduction {border-top:1px solid var(--hairline);}
+.ledger-app .pay-report .pay-breakdown {margin-top:20px; border-top:1px solid var(--hairline);}
+.ledger-app .pay-report .pay-period {padding-bottom:20px;}
+.ledger-app .pay-period>div {display:flex; gap:6px;}
+.ledger-app .pay-report .pay-period select {margin:0;}
+.ledger-app .pay-composition {padding:0; margin:24px 0;}
+.ledger-app .pay-composition figcaption {font-size:15px;}
+.ledger-app .pay-composition figcaption b {font-size:17px; font-weight:600;}
+.ledger-app .pay-key {font-size:12px; margin-top:8px;}
+.ledger-app .portfolio .destination summary {border-color:var(--hairline);}
+.ledger-app .portfolio .destination .statement-line {font-size:14px;}
+.ledger-app .portfolio .destination .statement-line+.statement-line {border-top:1px solid var(--hairline);}
+.ledger-app .portfolio .date-slot {color:var(--muted);}
+.ledger-app .month-explain .major-heading {border-color:var(--hairline); padding-top:20px; margin-top:12px;}
+.ledger-app .month-explain .driver {padding-top:16px;}
+.ledger-app .month-explain .driver b {font-size:16px; font-weight:600;}
+.ledger-app .month-explain .driver strong {font-size:17px; font-weight:600;}
+.ledger-app .month-explain .calculation summary {font-size:14px;}
+.ledger-app :is(.calculation,.pay-breakdown,.year-sheet,.debit-basis)>summary {
+  display:flex; align-items:center; min-height:44px; box-sizing:border-box; font-size:14px;
+}
+.ledger-app .year-sheet {border-color:var(--hairline);}
+.ledger-app .month-explain .investment-flow {padding-top:20px; margin-top:8px;}
+.ledger-app .month-explain .investment-flow h3 {font-size:17px; font-weight:600;}
+.ledger-app .records-content {padding:0 0 8px;}
+.ledger-app .journal-list {padding:0 0 8px;}
+.ledger-app .journal-row {padding:16px; gap:12px; border:0;}
+.ledger-app .journal-row+.journal-row {position:relative;}
+.ledger-app .journal-row+.journal-row::before {
+  content:""; position:absolute; inset:0 16px auto; border-top:1px solid var(--hairline);
+}
+.ledger-app .journal-name {gap:5px;}
+.ledger-app .journal-name>b {line-height:1.4;}
+.ledger-app .history-date {padding:20px 16px 8px; margin:0; font-weight:500;}
+.ledger-app .journal-list>.history-date:first-child {padding-top:16px;}
+.ledger-app .journal-list>.plain-action {font-size:14px; margin-top:8px;}
+.ledger-app .search-field {font-size:16px;}
+.ledger-app .search-field input {font-size:16px;}
 @media(prefers-reduced-motion:reduce) {
   .ledger-app .report-sections::before {transition:none;}
 }

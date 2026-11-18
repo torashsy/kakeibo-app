@@ -12,7 +12,7 @@ export function Detail({ monthEntries, entries, ym, config, cards, memos, onSave
   const [view, setView] = useState("list");
   const S = useMemo(() => buildStructure(monthEntries, config, cards), [monthEntries, config, cards]);
   return (
-    <div style={{ padding: "4px 2px 8px" }}>
+    <div className="records-content">
       <div className="view-switch" role="group" aria-label="記録の表示">
         <button aria-pressed={view === "list"} onClick={() => setView("list")}>履歴</button>
         <button aria-pressed={view === "card"} onClick={() => setView("card")}>月別</button>
@@ -50,7 +50,7 @@ export function DetailList({ monthEntries, onEdit }) {
     <div>
       <SearchField label="記録を検索" placeholder="店名・口座・金額で検索" value={query} onChange={value=>{setQuery(value);setLimit(5);}} />
       {!filtered.length && <p>一致する記録はありません</p>}
-      <div style={styles.detailCard}>
+      <div className="journal-list">
         {filtered.slice(0,limit).map(({ e, d, desc }, index) => (
           <React.Fragment key={e.id}>
             {(index === 0 || filtered[index - 1].d !== d) && <h3 className="history-date">{d || "日付なし"}</h3>}
