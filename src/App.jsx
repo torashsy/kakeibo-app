@@ -1,4 +1,5 @@
 import { usePageNavigation, pageLabel, homeSections } from "./page-navigation";
+import { useHorizontalSwipe } from "./use-horizontal-swipe";
 import "./layout.css";
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
@@ -44,6 +45,7 @@ export default function App() {
   // 起動時は当月を表示(その月の入力・使いすぎ判定にすぐ入れるように)。矢印で前後の月へ移動できる。
   const [ym, setYm] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [sheet, setSheet] = useState(null);
+  const monthSwipe = useHorizontalSwipe(direction => setYm(month => addMonth(month, direction)), !sheet);
   const [importMode, setImportMode] = useState("");
   const [editing, setEditing] = useState(null);
   const [financeFeed, setFinanceFeed] = useState(null);
@@ -430,7 +432,7 @@ export default function App() {
       <header className="ledger-header" data-month-cover={monthCover}>
         <div className="ledger-heading">{page.parent && !monthCover && <button className="parent-link" onClick={back} aria-label={pageLabel(page.parent)+"に戻る"}>‹ {pageLabel(page.parent)}</button>}<h1>{pageLabel(page)}</h1></div>
         {(tab === "today" || tab === "records" || tab === "plan") && (
-          <div className="month-toolbar">
+          <div className="month-toolbar swipe-region" {...monthSwipe}>
             <div className="ledger-month">
               <div className="month-selection">
                 <strong aria-hidden="true">{periodLabel(ym, config.cycleCutoffDay)}</strong>

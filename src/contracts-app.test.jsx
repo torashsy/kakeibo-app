@@ -71,6 +71,13 @@ function button(name) {
 }
 async function click(name) { await act(async () => button(name).click()); }
 async function mount() { await act(async () => root.render(<App />)); }
+async function swipe(selector, from, to) {
+  const target=container.querySelector(selector);
+  await act(async()=>{
+    for(const [type,x] of [["pointerdown",from],["pointermove",to],["pointerup",to]])
+      target.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerType:"touch",isPrimary:true,pointerId:1,clientX:x,clientY:150}));
+  });
+}
 async function openContracts() {
   await click("定期費");
   // Resolve the lazy feature chunk without replacing the component under test.
@@ -83,6 +90,27 @@ async function exportBackup() {
   expect(exportedBlobs.length).toBeGreaterThan(0);
   return JSON.parse(await exportedBlobs[exportedBlobs.length - 1].text());
 }
+
+it("横スワイプは表示だけを切り替え、月と家計データを保持する",async()=>{
+  await mount(); await click("ホーム");
+  const original=stored.get("entries");
+  const month=container.querySelector('.month-selection select').value;
+  await swipe('.home-overview',240,100);
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('残高');
+  expect(container.querySelector('.month-selection select').value).toBe(month);
+  await swipe('.home-overview',240,100);
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('投資');
+  await swipe('.home-overview',240,100);
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('給与');
+  await swipe('.home-overview',240,100);
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('給与');
+  await swipe('.home-overview',100,240);
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('投資');
+  await swipe('.month-toolbar',100,240);
+  expect(container.querySelector('.month-selection select').value).toBe('2026-09');
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('投資');
+  expect(stored.get('entries')).toBe(original);
+});
 
 describe("契約台帳の保存・バックアップ", () => {
   it("契約JSONだけが壊れていても、既存の家計データを保持する", async () => {
