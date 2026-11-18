@@ -1,0 +1,161 @@
+
+/* iOS presentation rules: grouped content, system type, one navigation material.
+   Financial comparisons and data remain in their respective components. */
+.ledger-app {
+  --page-inset:20px;
+  --figure-size:34px;
+  --report-rule:1px solid var(--hairline);
+  font-size:17px;
+  letter-spacing:0;
+  font-optical-sizing:auto;
+  -webkit-font-smoothing:antialiased;
+}
+.ledger-app .ledger-header {padding:20px var(--page-inset) 12px; gap:8px;}
+.ledger-app .ledger-header[data-month-cover=true] {min-block-size:calc(96px + env(safe-area-inset-top));}
+.ledger-app .ledger-heading h1 {font-size:34px; font-weight:700; letter-spacing:-.025em;}
+.ledger-app .month-selection strong {letter-spacing:-.02em;}
+.ledger-header[data-month-cover=true] .month-selection strong {font-size:30px; font-weight:700; letter-spacing:-.025em;}
+.ledger-header[data-month-cover=true] .month-selection strong small {font-size:12px; font-weight:500;}
+.ledger-app .entry-action {color:var(--income); font-size:15px; font-weight:500;}
+.ledger-app .ledger-main {padding-inline:var(--page-inset);}
+.ledger-app .report-content,.ledger-app .home-overview {gap:20px;}
+/* The selected state is a surface; identical control geometry across all tabs. */
+.ledger-app .view-switch {
+  display:flex; gap:2px; padding:3px; background:var(--control-bg);
+  border:0; border-radius:10px; min-height:44px; box-sizing:border-box; margin:0 0 16px;
+}
+.ledger-app .report-sections.view-switch {margin:0;}
+.ledger-app .view-switch button {
+  flex:1; min-width:0; min-height:38px; padding:6px 4px; font-size:14px;
+  font-weight:500; color:var(--ink); border:0; border-radius:7px;
+}
+.ledger-app .view-switch button:is([aria-current=page],[aria-pressed=true]) {
+  background:var(--selected-control); color:var(--ink); box-shadow:0 1px 3px #00000017; font-weight:600;
+}
+.ledger-app .view-switch::after,.ledger-app .view-switch button::after {display:none;}
+/* Content groups have the same inset. Cards are not interactive unless labelled. */
+.ledger-app .report-content > :is(.overview-result,.cash-position,.debit-schedule,.purchase-report,.home-balance,.home-flow,.k-group,.statement),
+.ledger-app .month-explain,.ledger-app .month-budget {
+  background:var(--card-bg); border:0; border-radius:16px;
+  padding:20px; margin:0; min-width:0; box-sizing:border-box;
+}
+.ledger-app .report-content > .cash-position {padding-bottom:8px;}
+.ledger-app .amount-hero,.ledger-app .balance-head {
+  display:flex; flex-direction:column; align-items:flex-start; gap:6px;
+  margin:0 0 20px; padding:0; background:none; border:0;
+}
+.ledger-app .amount-hero :is(h3,span),.ledger-app .balance-head h3 {
+  font:600 15px/1.35 var(--font); color:var(--muted); letter-spacing:0;
+}
+.ledger-app .amount-hero strong,.ledger-app .balance-head strong {
+  font:700 34px/1.12 var(--num-font); text-align:left; letter-spacing:-.025em; align-self:auto;
+  font-variant-numeric:lining-nums tabular-nums; margin:0;
+}
+.ledger-app .balance-head {gap:4px; margin-bottom:8px;}
+.ledger-app .balance-head time {font-size:12px; margin-bottom:2px;}
+.ledger-app .balance-head strong {font-size:30px;}
+.ledger-app .balance-plot {width:100%; margin-top:8px;}
+.ledger-app .balance-steps {height:44px;}
+.ledger-app .balance-steps .step-fill {opacity:.06;}
+.ledger-app .balance-dates time {font-size:11px;}
+.ledger-app .cash-comparison {display:block; margin:0;}
+.ledger-app .cash-comparison .cash-line {display:block;}
+.ledger-app .cash-reading,.ledger-app .cash-toggle.cash-reading {
+  display:grid; grid-template-columns:50px minmax(20px,1fr) 9ch; gap:10px; min-height:44px;
+}
+.ledger-app .cash-reading>span:first-child {font-size:15px;}
+.ledger-app .cash-reading b {font-size:17px; font-weight:600;}
+.ledger-app .cash-reading .cash-measure {height:6px; border-radius:3px; background:var(--control-bg);}
+.ledger-app .cash-measure i {border-radius:3px;}
+.ledger-app .result-actions {border-top:1px solid var(--hairline); margin-top:12px; padding-top:4px; justify-content:space-between;}
+.ledger-app .result-actions button {color:var(--income); font-size:14px; min-height:40px;}
+.ledger-app .cash-position .all-balances,.ledger-app .cash-position .before-debit {
+  min-height:48px; border-top:1px solid var(--hairline); font-size:14px; flex-wrap:wrap;
+}
+.ledger-app .cash-position .all-balances b,.ledger-app .cash-position .before-debit b {font-size:16px; font-weight:600;}
+.ledger-app .cash-position .before-debit span {font-size:12px;}
+.ledger-app .cash-position .all-balances small {font-size:11px;}
+.ledger-app .debit-schedule header h3,.ledger-app .purchase-report header h3 {font-size:17px; font-weight:600;}
+.ledger-app .debit-schedule header strong,.ledger-app .purchase-report header strong {font-size:22px; font-weight:600; letter-spacing:-.02em;}
+.ledger-app .debit-period {gap:0; background:var(--control-bg); border:0; border-radius:8px; padding:2px; margin-top:16px;}
+.ledger-app .debit-period button {flex:1; min-height:40px; font-size:13px; border-radius:6px;}
+.ledger-app .debit-period button[aria-pressed=true] {background:var(--selected-control); box-shadow:0 1px 3px #00000012; color:var(--ink);}
+.ledger-app .debit-period button::after {display:none;}
+.ledger-app .debit-day {border-color:var(--hairline); padding:18px 0 6px;}
+.ledger-app .debit-date {font-size:13px; color:var(--muted);}
+.ledger-app .debit-item {min-height:52px; font-size:16px;}
+.ledger-app .debit-item b {font-size:17px;}
+.ledger-app .debit-item small {font-size:11px;}
+.ledger-app .debit-basis summary {font-size:12px; color:var(--income);}
+.ledger-app .purchase-track,.ledger-app .investment-track {border-radius:4px; height:5px; overflow:hidden;}
+.ledger-app .purchase-report .purchase-rank {padding-block:12px;}
+.ledger-app .purchase-name {font-size:16px;}
+.ledger-app .purchase-rank b {font-size:17px; font-weight:600;}
+.ledger-app .search-field {border:0; border-radius:10px; min-height:44px;}
+.ledger-app .ledger-day,.ledger-app .journal-row {background:var(--card-bg);}
+.ledger-app .ledger-day {border-radius:12px; padding-inline:12px;}
+.ledger-app .journal-row {padding:14px 12px;}
+.ledger-app .history-date {font-size:13px; padding:20px 12px 8px; border:0;}
+.ledger-app .ledger-merchant b,.ledger-app .journal-name>b {font-size:16px; font-weight:500;}
+.ledger-app .pay-period {padding-bottom:16px;}
+.ledger-app .pay-period select {background:var(--control-bg); border:0; border-radius:8px; padding:8px; font-size:15px;}
+.ledger-app .deduction-list h4,.ledger-app .major-heading h3 {font-size:17px; font-weight:600;}
+.ledger-app .pay-band {border-radius:6px; height:14px; overflow:hidden;}
+.ledger-app .statement-line {font-size:15px; padding-block:12px;}
+.ledger-app .statement-line b {font-size:16px; font-weight:500;}
+.ledger-app .destination-share {height:4px; border-radius:2px;}
+.ledger-app .driver-scale {border-radius:4px; overflow:hidden;}
+.ledger-app .month-explain {margin-top:16px;}
+.ledger-app .month-explain .investment-flow {border-top:1px solid var(--hairline);}
+.ledger-app .plain-action {color:var(--income); min-height:44px;}
+.ledger-app [role=dialog] {border-radius:20px 20px 0 0;}
+/* Navigation alone floats above scrolling content; no glass on financial data. */
+@media(max-width:859px) {
+  .ledger-app {padding-bottom:calc(108px + env(safe-area-inset-bottom));}
+  .ledger-app .ledger-nav {
+    bottom:calc(10px + env(safe-area-inset-bottom)); width:calc(100% - 24px); max-width:580px;
+    padding:5px; border:1px solid var(--hairline); border-radius:30px;
+    background:var(--nav-glass); box-shadow:0 4px 24px #00000012;
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  }
+  .ledger-app .ledger-nav .ledger-tab {border-radius:25px; min-height:54px; font-size:10px; gap:3px; font-weight:500; color:var(--muted);}
+  .ledger-app .ledger-nav .ledger-tab[aria-current] {background:var(--control-bg); box-shadow:none; color:var(--income);}
+  .ledger-app .ledger-tab svg {width:23px; height:23px; stroke-width:1.8;}
+}
+@media(max-width:359px) {
+  .ledger-app {--page-inset:16px;}
+  .ledger-app .report-content > :is(.overview-result,.cash-position,.debit-schedule,.purchase-report,.home-balance,.home-flow,.k-group,.statement),.ledger-app .month-explain {padding-inline:16px;}
+  .ledger-app .amount-hero strong {font-size:30px;}
+  .ledger-app .cash-reading,.ledger-app .cash-toggle.cash-reading {grid-template-columns:46px minmax(12px,1fr) 9ch; gap:6px;}
+  .ledger-app .cash-reading b {font-size:15px;}
+}
+@media(prefers-reduced-transparency:reduce),(prefers-contrast:more) {
+  .ledger-app .ledger-nav {background:var(--card-bg); backdrop-filter:none; -webkit-backdrop-filter:none;}
+}
+
+.ledger-app .purchase-report .amount-hero {display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:6px 12px;}
+.ledger-app .purchase-report .amount-hero strong {text-align:right; font-size:24px;}
+.ledger-app .purchase-report .amount-hero small {grid-column:1/-1;}
+.ledger-app .purchase-report .ledger-day {padding-inline:0; background:none; border-radius:0;}
+
+.ledger-app .report-sections.view-switch {gap:0;}
+.ledger-app .report-sections::before {
+  content:""; position:absolute; inset:3px auto 3px 3px; width:calc((100% - 6px)/4);
+  border-radius:7px; background:var(--selected-control); box-shadow:0 1px 3px #00000017;
+  transform:translateX(calc(var(--selected-tab) * 100%));
+  transition:transform var(--motion-page) var(--motion-ease); pointer-events:none;
+}
+.ledger-app .report-sections button {z-index:1;}
+.ledger-app .report-sections button[aria-current=page] {background:transparent; box-shadow:none;}
+.ledger-app .history-date+.journal-row {border-radius:12px 12px 0 0;}
+.ledger-app .journal-row:has(+.history-date),.ledger-app .journal-row:last-child {border-radius:0 0 12px 12px;}
+.ledger-app .history-date+.journal-row:has(+.history-date),.ledger-app .history-date+.journal-row:last-child {border-radius:12px;}
+.ledger-app .portfolio .amount-hero {margin-bottom:24px;}
+@media(prefers-reduced-motion:reduce) {
+  .ledger-app .report-sections::before {transition:none;}
+}
+
+@media(max-width:859px) {
+  html {scrollbar-gutter:auto; scrollbar-width:none;}
+  html::-webkit-scrollbar {display:none;}
+}

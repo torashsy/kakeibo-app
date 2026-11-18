@@ -44,7 +44,6 @@
 .report-index button[aria-pressed=true] {color:var(--ink);border-bottom-color:currentColor;font-weight:700}
 .ledger-app .report-content>.home-flow,.ledger-app .report-content>.home-spending,.ledger-app .report-content>.home-balance {border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0 18px}
 .ledger-app {--radius:0px}
-.ledger-app :where(section,article,header,nav,main,div,button,select,input,textarea,details,summary,span,table,aside,dialog,li):not(.purpose-ring):not(.purpose-ring span){border-radius:0!important}
 .ledger-app .statement {padding:8px 0;background:transparent;border:0}
 .statement h3{margin:0;font-size:18px}.statement-total,.take-home strong{font:650 clamp(30px,9vw,44px)/1.35 var(--num-font);letter-spacing:-.04em}.statement-total{display:block;text-align:right;margin:6px 0 24px}
 .statement-label,.statement-line,.destination summary{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
@@ -342,15 +341,6 @@ button[aria-expanded="true"] .disclosure-chevron { transform:rotate(90deg); }
 .ledger-main[data-view=today] {padding-top:8px;}
 .ledger-app .home-overview {gap:24px;}
 .ledger-app .cash-comparison {margin:0;}
-@supports(grid-template-columns:subgrid) {
-  .ledger-app .cash-comparison {
-    display:grid; grid-template-columns:clamp(56px,16vw,92px) minmax(0,1fr) max-content; column-gap:12px;
-  }
-  .cash-comparison .amount-hero,.cash-comparison .cash-line,.cash-comparison .cash-reading {grid-column:1/-1;}
-  .ledger-app .cash-comparison .cash-line,.ledger-app .cash-comparison .cash-reading {
-    display:grid; grid-template-columns:subgrid; column-gap:inherit;
-  }
-}
 .cash-comparison .cash-line {display:block; margin:0;}
 .cash-reading,.cash-toggle.cash-reading {
   display:grid; width:100%; min-height:42px; grid-template-columns:clamp(56px,16vw,92px) minmax(0,1fr) minmax(8ch,auto);

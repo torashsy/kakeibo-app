@@ -11,7 +11,7 @@ const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',
 // ユーザーが選べるのは「アクセント色」と「ダークモード」だけ。
 // 保存済みのテーマを優先する。
 export const DEFAULT_THEME = {
-  accent: "#295C59",
+  accent: "#007AFF",
   dark: false,
 };
 
@@ -41,17 +41,18 @@ const mix = (a, b, t) => { const [r1, g1, b1] = hexToRgb(a), [r2, g2, b2] = hexT
 
 // アクセント色 + ダーク/ライトから、画面全体のパレット(CSS変数)を生成する
 export const themeVars = (t) => {
-  const accent = (t && t.accent) || DEFAULT_THEME.accent;
+  const selectedAccent = (t && t.accent) || DEFAULT_THEME.accent;
+  const accent = selectedAccent.toUpperCase() === "#295C59" ? "#007AFF" : selectedAccent;
   const dark = !!(t && t.dark);
   const WHITE = "#FFFFFF";
 
   const p = dark
     ? {
-        paper: "#111419", ink: "#F1F3F5", line: "#343B43", muted: "#ABB4BE",
-        cardBg: "#171B20", thBg: "#1C2127", groupBg: "#21272E",
+        paper: "#000000", ink: "#F5F5F7", line: "#38383A", muted: "#AEAEB2",
+        cardBg: "#1C1C1E", thBg: "#2C2C2E", groupBg: "#2C2C2E",
         subtotalBg: "#1A1F25", totalCellBg: "#181D22", tabBg: "#12161A",
-        base: "#111419",
-        income: mix(accent, WHITE, 0.58), expense: "#EAB5A7",
+        base: "#000000",
+        income: "#64A8FF", expense: "#FF6961",
         accentSoft: mix(accent, "#111419", 0.78),
         acctBg: mix(accent, "#111419", 0.85),
         colHl: mix(accent, "#111419", 0.82),        // 年間表の「今月」列の淡いハイライト
@@ -59,11 +60,11 @@ export const themeVars = (t) => {
         expenseSoft: mix("#F2765C", "#111419", 0.82), // 警告カードの背景
       }
     : {
-        paper: "#FAFAFB", ink: "#1C2025", line: "#D7DADF", muted: "#59616B",
+        paper: "#F2F2F7", ink: "#1C1C1E", line: "#D1D1D6", muted: "#68686D",
         cardBg: "#FFFFFF", thBg: "#EEF0F3", groupBg: "#EDEFF2",
         subtotalBg: "#EDEFF2", totalCellBg: "#F6F7F9", tabBg: "#F8FAFC",
         base: "#FFFFFF",
-        income: accent, expense: "#94483D",
+        income: "#0066CC", expense: "#B3261E",
         accentSoft: mix(accent, WHITE, 0.88),
         acctBg: mix(accent, WHITE, 0.92),
         colHl: mix(accent, WHITE, 0.92),
@@ -74,11 +75,12 @@ export const themeVars = (t) => {
   return {
     "--accent": accent, "--accent-soft": p.accentSoft, "--ink": p.ink, "--paper": p.paper,
     "--line": p.line, "--muted": p.muted, "--income": p.income, "--expense": p.expense,
-    "--chart-ink": dark ? mix(accent, WHITE, 0.62) : mix(accent, "#18222A", 0.2),
+    "--chart-ink": dark ? "#64A8FF" : "#007AFF",
     "--projection-bg": dark ? mix(accent, "#15211E", 0.70) : mix(accent, "#F6F8F4", 0.9),
     "--hairline": dark ? "#FFFFFF1F" : "#1B243314",
-    "--control-bg": dark ? "#242A31" : "#EBEDF0",
-    "--nav-glass": dark ? "rgba(20,24,29,.89)" : "rgba(250,250,251,.88)",
+    "--control-bg": dark ? "#2C2C2E" : "#E5E5EA",
+    "--selected-control": dark ? "#636366" : "#FFFFFF",
+    "--nav-glass": dark ? "rgba(36,36,38,.94)" : "rgba(255,255,255,.94)",
     "--card-bg": p.cardBg, "--th-bg": p.thBg, "--group-bg": p.groupBg, "--acct-bg": p.acctBg,
     "--subtotal-bg": p.subtotalBg, "--total-cell-bg": p.totalCellBg,
     "--col-hl": p.colHl, "--zero": p.zero, "--expense-soft": p.expenseSoft,

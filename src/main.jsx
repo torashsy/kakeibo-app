@@ -2,6 +2,7 @@ import "./storage.js";          // window.storage を用意(App.jsx より前に
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
+import "./ios-design.css";
 
 // iOS/Androidが数字を電話番号として自動リンク化(青文字)するのを抑止する。
 // Artifactプレビューでは index.html の <head> が使われないため、実行時にも念のため差し込む。
