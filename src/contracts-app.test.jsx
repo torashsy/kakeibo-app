@@ -164,7 +164,7 @@ describe("契約台帳の保存・バックアップ", () => {
     for(const [node,value] of [[fields[0],'新しいポイント'],[fields[1],'3456']]) {
       await act(()=>{set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));});
     }
-    const mode=form.querySelector('select');
+    const mode=form.querySelector('select[aria-label="有効期限"]');
     await act(()=>{mode.value='date';mode.dispatchEvent(new Event('change',{bubbles:true}));});
     const date=form.querySelector('input[type="date"]');
     await act(()=>{set.call(date,'2026-11-10');date.dispatchEvent(new Event('input',{bubbles:true}));});

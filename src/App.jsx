@@ -22,6 +22,7 @@ import { mergeFinanceObservations } from './finance';
 import { FinanceFeedPanel } from './components/finance-feed.jsx';
 import { normalizeContracts, unlinkMissingSubscriptions } from './contracts';
 import { reconcileSubscriptions } from './subscription-sync.js';
+import { reconcilePoints } from './point-sync.js';
 
 export default function App() {
   const [entries, setEntries] = useState([]);
@@ -31,7 +32,7 @@ export default function App() {
   const [memos, setMemos] = useState([]);
   const [savedSubs, setSubs] = useState([]);
   const [contracts, setContracts] = useState([]);
-  const [points, setPoints] = useState([]);
+  const [savedPoints, setPoints] = useState([]);
   const [plans, setPlans] = useState(SEED_PLAN);
   const [closedMonths, setClosedMonths] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
@@ -197,6 +198,7 @@ export default function App() {
   }, [financeRefresh]);
   const financeCanApply = financeState.mode === "on" && !financeState.error && loadedLedgerUserId === financeState.userId && isFinanceSessionCurrent(financeState.userId, financeState.authEpoch);
   const subs = useMemo(() => reconcileSubscriptions(savedSubs, financeCanApply ? financeFeed : null), [savedSubs, financeCanApply, financeFeed]);
+  const points = useMemo(() => reconcilePoints(savedPoints, financeCanApply ? financeFeed : null), [savedPoints, financeCanApply, financeFeed]);
   const financeMerge = useMemo(() => mergeFinanceObservations(entries, financeCanApply ? financeFeed : null, config, cards, { closedMonths, suppressed: financeSuppressed }), [entries, financeFeed, financeCanApply, config, cards, closedMonths, financeSuppressed]);
   useEffect(() => {
     if (!loaded || !financeFeed || !financeCanApply || sheet || !financeMerge.changed) return;

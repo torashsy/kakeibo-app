@@ -18,6 +18,7 @@ export function normalizePoints(raw) {
     ...p,id:String(p.id || `point-${i}`),name:p.name.trim(),amount:Math.round(Number(p.amount)),
     expiresOn:validDay(p.expiresOn)?p.expiresOn:'',
     expiryMode:validDay(p.expiresOn)?'date':p.expiryMode==='none'?'none':'unknown',
+    ...(p.unit?{unit:['mile','yenEquivalent'].includes(p.unit)?p.unit:'pt'}:{}),...(p.kind?{kind:p.kind==='benefit'?'benefit':'balance'}:{}),
     status:p.status==='used'?'used':'active',note:typeof p.note==='string'?p.note:'',
   }));
 }
@@ -35,8 +36,8 @@ export function deadlineEvents(subs=[],points=[],today=localDay()) {
     add(sub.endDate,{...common,id:`end:${sub.id}`,kind:'契約終了',amount:null});
   }
   for(const point of normalizePoints(points)) {
-    if(point.status==='used'||point.amount===0)continue;
-    add(point.expiresOn,{id:`point:${point.id}`,source:'point',sourceId:point.id,name:point.name,kind:'ポイント期限',amount:point.amount,unit:'pt'});
+    if(point.hidden||point.status==='used'||point.amount===0)continue;
+    add(point.expiresOn,{id:`point:${point.id}`,source:'point',sourceId:point.id,name:point.name,kind:point.kind==='benefit'?'受取期限':point.unit==='mile'?'マイル期限':'ポイント期限',amount:point.amount,unit:point.unit||'pt'});
   }
   return events.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name,'ja')||a.id.localeCompare(b.id));
 }
