@@ -3,10 +3,10 @@
 .home-overview summary {cursor:pointer;overflow-wrap:anywhere}
 .home-overview summary:focus-visible {outline:2px solid currentColor;outline-offset:2px}
 .home-overview .home-balance,.home-overview .home-spending {padding:16px;border-radius:18px}
-.home-accounts>summary {display:grid;grid-template-columns:1fr auto;align-items:center;min-height:50px;list-style:none}
-.home-accounts>summary span {font-size:13px}
-.home-accounts>summary strong {text-align:right;font-size:clamp(27px,8vw,38px);line-height:1.2;letter-spacing:normal}
-.home-accounts>summary small {color:var(--muted)}
+.home-accounts>header {display:grid;grid-template-columns:1fr auto;align-items:center;min-height:50px;list-style:none}
+.home-accounts>header span {font-size:13px}
+.home-accounts>header strong {text-align:right;font-size:clamp(27px,8vw,38px);line-height:1.2;letter-spacing:normal}
+.home-accounts>header small {color:var(--muted)}
 .home-accounts>summary::-webkit-details-marker,.home-category::-webkit-details-marker {display:none}
 .home-balance>small,.home-spending>small {display:block;font-size:12px;line-height:1.6;margin-top:6px}
 .home-next {display:grid;grid-template-columns:1fr auto;gap:3px 10px;padding:12px 0;border-block:1px solid var(--border)}

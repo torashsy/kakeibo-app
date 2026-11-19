@@ -5,6 +5,26 @@ import { expect, it } from "vitest";
 import { classifyCardRows } from "../card-purposes";
 import { SpendingPurpose } from "./summary";
 
+it('ホームでも全カード・全用途と少数明細を隠さず、利用先も同じ場所で見られる',async()=>{
+  globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+  const host=document.createElement('div'),root=createRoot(host);
+  const categories=['食料品','物販','交通費','サブスク','携帯代','映画館'];
+  const purchases=categories.map((spendingCategory,i)=>({id:String(i),date:'2026-11-15',account:'カード'+i,description:'利用先'+i,amount:-(i+1)*100,spendingCategory}));
+  const find=name=>[...host.querySelectorAll('button')].find(b=>b.textContent===name);
+  try {
+    await act(()=>root.render(<SpendingPurpose compact purchases={purchases} ym="2026-11" cutoff={1}/>));
+    expect(host.querySelectorAll('.purchase-group')).toHaveLength(6);
+    expect(host.querySelectorAll('button.purchase-rank')).toHaveLength(0);
+    expect(host.textContent).not.toContain('すべての用途を見る');
+    await act(()=>find('カード別').click());
+    expect(host.querySelectorAll('.purchase-group')).toHaveLength(6);
+    expect(host.querySelectorAll('.spend-transactions>div')).toHaveLength(6);
+    expect(host.querySelectorAll('.purchase-more')).toHaveLength(0);
+    await act(()=>find('利用先別').click());
+    expect(host.querySelectorAll('.purchase-group')).toHaveLength(6);
+  } finally {await act(()=>root.unmount());}
+});
+
 it("compares card totals and shows review only for the selected period’s unresolved purchases", async () => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const host = document.createElement("div");

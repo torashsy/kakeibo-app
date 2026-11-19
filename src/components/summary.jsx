@@ -19,12 +19,6 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
     setDirection(homeSections.indexOf(next) >= homeSections.indexOf(section) ? 1 : -1);
     onSection(next);
   };
-  const [spendingView, setSpendingView] = useState(null);
-  const openSpending = (basis, label) => {
-    setSpendingView({ basis, label, ym });
-    setSection("spend");
-  };
-  const [cardOpen, setCardOpen] = useState(false);
   // 残高はその月に記録が無ければ直近の月から引き継ぐ(前月末のまま動いていない、という意味)
   const shown = balancesNow || {};
   const hasBal = Object.keys(shown).length > 0;
@@ -40,7 +34,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
   const following = useMemo(() => upcomingDebits(entries || [], cards, debt || {}, subs, config.cycleCutoffDay, addMonth(ym, 1), undefined, 30, scheduledDebits, purchases), [entries, cards, debt, subs, config.cycleCutoffDay, ym, scheduledDebits, purchases]);
   const forecast = forecasts[ym];
   const showOutlook = ym >= cycleYm(new Date().toLocaleDateString('sv-SE'), config.cycleCutoffDay) && !closedMonths.includes(ym);
-  const hasBreakdown = breakdown.length > 0 || claimStates.length > 0;
+  const hasBreakdown = breakdown.length > 0;
   return (
     <div className="home-overview" style={{"--report-enter-x":`${direction * 14}px`}}>
       {homeSections.includes(section) && <nav className="report-sections view-switch" aria-label="家計の表示切替" style={{"--selected-tab":homeSections.indexOf(section)}}>
@@ -53,20 +47,26 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
         <CashComparison title={showOutlook ? "収支見込み" : "収支実績"}
           income={showOutlook ? forecast.income : summary.income} expense={showOutlook ? forecast.spending : summary.expense}
           net={showOutlook ? forecast.net : summary.net} incomeDetails={<IncomeLines entries={monthEntries} forecast={showOutlook ? forecast : null} plans={plans} ym={ym}/>}/>
-        <div className="result-actions"><button onClick={()=>setSection("flow")}>収支実績 ›</button>{showOutlook && <button onClick={onOpenPlan}>計画 ›</button>}</div>
+        <details className="actual-disclosure">
+          <summary>収支実績</summary>
+          <div className="actual-detail">
+            {showOutlook && <CashComparison title="収支実績" income={summary.income} expense={summary.expense} net={summary.net} incomeDetails={<IncomeLines entries={monthEntries}/>}/>}
+            <MonthlySummaryTable summary={summary} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates}/>
+          </div>
+        </details>
       </section>
-      {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact onExpand={()=>setSection("funds")} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
+      {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
       {showOutlook && <DebitSchedule rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
-      <SpendingPurpose compact initialView={spendingView} onOpen={openSpending} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
+      <SpendingPurpose compact purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       </>}
-      {section === "spend" && <SpendingPurpose initialView={spendingView} purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
+      {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
       {section === "flow" && <>
       <section className="home-flow" aria-label="選択月の収入と支出">
         <CashComparison title="収支実績" income={summary.income} expense={summary.expense} net={summary.net} incomeDetails={<IncomeLines entries={monthEntries}/>}/>
       </section>
       <details open className="k-group"><summary>内訳・締め残高</summary>
-      <MonthlySummaryTable summary={summary} cardOpen={cardOpen} setCardOpen={setCardOpen} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
+      <MonthlySummaryTable summary={summary} hasBreakdown={hasBreakdown} breakdown={breakdown} claims={claimStates} />
       <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />
       </details>
 
@@ -94,7 +94,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
     </div>
   );
 }
-function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcoming, slips, forecast, ym, cutoff }) {
+function BalanceTimeline({ cards, onOpenCards, compact, shown, upcoming, slips, forecast, ym, cutoff }) {
   const today = new Date().toLocaleDateString("sv-SE");
   if (ym !== cycleYm(today, cutoff)) return null;
   const accounts = Object.entries(shown);
@@ -144,8 +144,9 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
         <div><time dateTime={nextDate}>{shortDate(nextDate)}</time><h3>引落後の残高見込み</h3></div><strong>{yen(afterDebit.amount)}</strong>
         <BalanceSteps points={points.slice(0,points.indexOf(afterDebit)+1)}/>
       </header>}
-      <button className="all-balances" onClick={onExpand}>
-      <span>現在の残高 <small>{accounts.length}口座<span aria-hidden="true"> ›</span></small></span><b>{yen(start)}</b></button>
+      <div className="all-balances">
+      <span>現在の残高 <small>{accounts.length}口座</small></span><b>{yen(start)}</b></div>
+      <div className="inline-accounts" aria-label="口座別の現在残高">{accounts.map(([name,row])=><div key={name}><span>{name}</span><b>{yen(row.amount)}</b></div>)}</div>
       {depositsBeforeDebit.map((event,index)=><div className="before-debit" key={event.date+index}>
         <span><time className="date-slot">{shortDate(event.date)}</time>{event.label.startsWith("給与（計画")?"給与入金見込み":event.label}</span><b>＋{yen(event.change)}</b>
       </div>)}
@@ -154,9 +155,9 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
 
   }
   return <section className="k-group home-balance" aria-label="残高の見通し">
-    <h3>全口座の残高見通し</h3><details open className="home-accounts"><summary><span>現在 <small>口座別</small></span><strong>{yen(start)}</strong></summary>
+    <h3>全口座の残高見通し</h3><div className="home-accounts"><header><span>現在 <small>口座別</small></span><strong>{yen(start)}</strong></header>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
-    </details>
+    </div>
     {points.length > 1 ? <>
       <table className="balance-events"><thead><tr><th>日付</th><th>入出金予定</th><th>全口座計</th></tr></thead>
         <tbody>{points.slice(1).map(({date,rows,amount}) => <tr key={date}>
@@ -239,7 +240,7 @@ function CardLedger({ rows }) {
     {matches.length>limit && <button className="ledger-more" onClick={()=>setLimit(limit+20)}>続きを見る（残り{matches.length-limit}件）</button>}
   </div>;
 }
-export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initialView }) {
+export function SpendingPurpose({ compact, purchases, ym, cutoff, initialView }) {
   const [basis, setBasis] = useState(initialView?.basis === "apple" ? "merchant" : initialView?.basis || (compact ? "category" : "card"));
   const [expandedGroups, setExpandedGroups] = useState({});
   const monthRows = purchases.filter(row => cycleYm(row.date, cutoff) === ym && spendingGroup(row));
@@ -259,9 +260,8 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initia
   const ranked = [...groups.values()].filter(g => g !== pending)
     .sort((a,b) => b.amount - a.amount || a.label.localeCompare(b.label, "ja"));
   const max = Math.max(1, ...ranked.map(g => Math.abs(g.amount)));
-  const shown = compact ? ranked.slice(0,3) : ranked;
-  const views = compact ? [["card","カード別"],["category","用途別"]] :
-    [["card","カード別"],["category","用途別"],["ledger","明細"],["merchant","利用先別"]];
+  const shown = ranked;
+  const views = [["card","カード別"],["category","用途別"],["ledger","明細"],["merchant","利用先別"]];
   return <section className="purchase-report" data-compact={!!compact} aria-label="カード利用額">
     <header className={compact ? undefined : "amount-hero"}>
       <h3>{compact ? Number(ym.slice(5))+"月度のカード利用額" : "利用合計"}</h3>
@@ -277,23 +277,22 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initia
         shown.map(g => {
           const key = [ym,view,g.label].join('|');
           const expanded = expandedGroups[key] ?? (initialView?.ym === ym && initialView?.label === g.label);
-          const Heading = compact ? 'button' : 'div';
+          const previewCount = g.rows.length <= 6 ? g.rows.length : 3;
           return <div className="purchase-group" key={g.label}>
-            <Heading className="purchase-rank" onClick={compact ? () => onOpen(view, g.label) : undefined}>
+            <div className="purchase-rank">
               <span className="purchase-name">{g.label}</span>
               <b>{g.amount < 0 && <small>返金超過 </small>}{yen(g.amount)}</b>
               <span className="purchase-track" aria-hidden="true"><i data-refund={g.amount < 0}
                 style={{width: 100 * Math.abs(g.amount) / max + "%"}}/></span>
-            </Heading>
-            {!compact && (view === "category" && g.label === "サブスク" ? <SubscriptionServices rows={g.rows}/> : <>
-              <PurchaseLines rows={expanded ? g.rows : g.rows.slice(0,3)} merchant={view === "merchant" ? g.label : undefined} apple={view === "merchant" && g.label === "Apple"} showCategory={view === "category" && g.label === "生活・サービス"}/>
-              {g.rows.length>3 && <button className="purchase-more" aria-expanded={!!expanded} aria-label={g.label+"の明細を"+(expanded?"3件に戻す":"すべて見る")}
-                onClick={()=>setExpandedGroups(previous=>({...previous,[key]:!expanded}))}>{expanded ? "3件に戻す" : `残り${g.rows.length-3}件を見る`} ›</button>}
+            </div>
+            {(view === "category" && g.label === "サブスク" ? <SubscriptionServices rows={g.rows}/> : <>
+              <PurchaseLines rows={expanded ? g.rows : g.rows.slice(0,previewCount)} merchant={view === "merchant" ? g.label : undefined} apple={view === "merchant" && g.label === "Apple"} showCategory={view === "category" && g.label === "生活・サービス"}/>
+              {g.rows.length>previewCount && <button className="purchase-more" aria-expanded={!!expanded} aria-label={g.label+"の明細を"+(expanded?"3件に戻す":"すべて見る")}
+                onClick={()=>setExpandedGroups(previous=>({...previous,[key]:!expanded}))}>{expanded ? "3件に戻す" : `残り${g.rows.length-previewCount}件を見る`} ›</button>}
             </>)}
           </div>;
         })}
       {pending && <PendingPurchases key={ym} rows={pending.rows}/>}
-      {compact && <button className="purchase-more" onClick={() => onOpen(view)}>{view === "card" ? "すべてのカード" : "すべての用途"}を見る ›</button>}
     </> : <p>この月度のカード利用明細はありません。</p>}
   </section>;
 }
@@ -334,20 +333,15 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
 const alignedRow = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", padding: "11px 14px", borderBottom: `1px solid ${LINE}` };
 const alignedAmount = { textAlign: "right", whiteSpace: "nowrap", fontFamily: "var(--num-font)", fontVariantNumeric: "var(--num-variant)", fontSize: "var(--num-size)" };
 
-function MonthlySummaryTable({ summary, cardOpen, setCardOpen, hasBreakdown, breakdown, claims }) {
+function MonthlySummaryTable({ summary, hasBreakdown, breakdown, claims }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={styles.sectionTitle}>今月</div>
+      <div style={styles.sectionTitle}>収支の内訳</div>
       <div style={{ ...styles.detailCard, padding: 0, overflow: "hidden" }}>
         <AlignedSummaryRow label="給与" value={summary.salaryIncome} color={GREEN} />
         <AlignedSummaryRow label="その他" value={summary.otherIncome} color={GREEN} />
-        <button style={{ ...alignedRow, background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", cursor: hasBreakdown ? "pointer" : "default", fontFamily: "inherit", textAlign: "left" }} onClick={() => hasBreakdown && setCardOpen((value) => !value)} aria-expanded={cardOpen}>
-          <span style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, fontSize: 13.5, fontWeight: 600 }}>
-            <span style={{ ...styles.chev, transform: cardOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>カード請求
-          </span>
-          <span style={{ ...alignedAmount, color: RED, fontWeight: 600 }}>{yen(-summary.cardTotal)}</span>
-        </button>
-        {cardOpen && hasBreakdown && <CardBreakdownPanel rows={breakdown} claims={claims} embedded />}
+        <AlignedSummaryRow label="カード請求" value={-summary.cardTotal} color={RED}/>
+        {hasBreakdown && <CardBreakdownPanel rows={breakdown} claims={claims.filter(row=>row.status==='paid')} embedded />}
         <AlignedSummaryRow label="出金" value={-summary.cashOut} color={RED} />
         <AlignedSummaryRow label="投資振替" value={summary.invest} color={ACCENT} last />
       </div>
@@ -362,16 +356,14 @@ function AlignedSummaryRow({ label, value, color, last = false }) {
 // カード請求額の内訳(残債とそれ以外)。カード請求セルをタップした時に展開表示する。
 // 表示のみで収支計算には影響しない。カードに紐づくメモがあれば参考情報として一緒に表示。
 function CardBreakdownPanel({ rows, claims, embedded = false }) {
-  const [debtOpen, setDebtOpen] = useState(false);
-  const [otherOpen, setOtherOpen] = useState(false);
   const debtAll = rows.reduce((a, r) => a + r.debtPortion, 0);
   const otherAll = rows.reduce((a, r) => a + r.otherPortion, 0);
   const debtRows = rows.filter((r) => r.debtPortion > 0);
   const otherRows = rows.filter((r) => r.otherPortion > 0 || r.linkedMemos.length > 0);
   return (
     <div style={embedded ? { background: "var(--subtotal-bg)", padding: "0 14px 5px", borderBottom: `1px solid ${LINE}` } : { ...styles.detailCard, marginBottom: 14 }}>
-      <BreakdownGroup label="残債分" total={debtAll} rows={debtRows} valueKey="debtPortion" open={debtOpen} onToggle={() => setDebtOpen((o) => !o)} />
-      <BreakdownGroup label="残債以外" total={otherAll} rows={otherRows} valueKey="otherPortion" open={otherOpen} onToggle={() => setOtherOpen((o) => !o)} showMemos />
+      {!!debtRows.length && <BreakdownGroup label="残債分" total={debtAll} rows={debtRows} valueKey="debtPortion"/>}
+      {!!otherRows.length && <BreakdownGroup label="残債以外" total={otherAll} rows={otherRows} valueKey="otherPortion" showMemos />}
       <CardClaimStatusList rows={claims} />
     </div>
   );
@@ -386,16 +378,15 @@ const claimStatus = {
 const shortDate = (date) => date ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}` : "";
 
 function CardClaimStatusList({ rows }) {
-  const [open, setOpen] = useState(false);
   if (!rows.length) return null;
   const pending = rows.filter((row) => row.status !== "paid").length;
   return (
     <div>
-      <button style={{ ...styles.collapseRow, borderBottom: "none" }} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: MUTED }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>引落状況</span>
+      <div style={{ ...styles.collapseRow, borderBottom: "none",cursor:'default' }}>
+        <span style={{ fontSize: 13, color: MUTED }}>引落状況</span>
         <span style={{ ...alignedAmount, fontSize: 12, color: MUTED }}>{pending ? `未引落 ${pending}枚` : "引落済"}</span>
-      </button>
-      {open && <div style={{ padding: "0 0 7px 22px" }}>
+      </div>
+      <div style={{ padding: "0 0 7px" }}>
         {rows.map((row) => {
           const state = claimStatus[row.status];
           return (
@@ -411,7 +402,7 @@ function CardClaimStatusList({ rows }) {
             </div>
           );
         })}
-      </div>}
+      </div>
     </div>
   );
 }
@@ -445,17 +436,16 @@ function DebitSchedule({ rows, following = [], end, missingCount = 0, onOpenCard
   </section>;
 }
 
-function BreakdownGroup({ label, total, rows, valueKey, open, onToggle, showMemos = false }) {
+function BreakdownGroup({ label, total, rows, valueKey, showMemos = false }) {
   return (
     <div>
-      <button style={styles.collapseRow} onClick={onToggle} aria-expanded={open}>
+      <div style={{...styles.collapseRow,cursor:'default'}}>
         <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}>
-          <span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>{label}
+          {label}
         </span>
         <span style={styles.detailTotal}>{yen(total)}</span>
-      </button>
-      {open && (
-        <div style={{ padding: "3px 2px 8px 22px" }}>
+      </div>
+        <div style={{ padding: "3px 2px 8px" }}>
           {rows.length === 0 && <div style={{ color: MUTED, fontSize: 12.5, padding: "5px 0" }}>なし</div>}
           {rows.map((r) => (
             <div key={r.name}>
@@ -472,7 +462,6 @@ function BreakdownGroup({ label, total, rows, valueKey, open, onToggle, showMemo
             </div>
           ))}
         </div>
-      )}
     </div>
   );
 }
@@ -523,7 +512,7 @@ function MonthlyNetChart({ entries, ym }) {
 // バーと一言で「使いすぎ/計画内」を判定できるようにする。副次的に収支の実績/計画も添える。
 // 「内訳」を開くと、その月の支出をカード別＋現金(出金)で確認できる(既存の記録から表示。入力は不要)。
 function SpendingMeter({ plans, subs, cards, debt, monthEntries, ym, startDay }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const r = useMemo(() => planVsActualForMonth(plans, subs, monthEntries, ym, debt, cards, startDay), [plans, subs, cards, debt, monthEntries, ym, startDay]);
   const bd = useMemo(() => {
     const cardMap = {}; let cashOut = 0;
@@ -576,23 +565,22 @@ function AnnualOutlookCard({ forecasts, plans, subs, cards, debt, entries, close
   const o = useMemo(() => annualOutlook(plans, subs, entries || [], closedMonths, ym, debt, cards, config?.cycleCutoffDay || 0, forecasts), [forecasts, plans, subs, cards, debt, entries, closedMonths, config?.cycleCutoffDay, ym]);
   return (
     <button style={{ ...styles.detailCard, ...alignedRow, border: `1px solid ${LINE}`, borderRadius: "var(--radius)", background: "var(--card-bg)", marginBottom: 10, fontFamily: "inherit", cursor: onOpenPlan ? "pointer" : "default", textAlign: "left" }} onClick={() => onOpenPlan && onOpenPlan()}>
-      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={styles.chev}>›</span>年度末見込み</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}>年度末の計画へ<span aria-hidden="true"> ↗</span></span>
       <span style={{ ...alignedAmount, fontWeight: 600 }}>{yen(o.balEnd)}</span>
     </button>
   );
 }
 
 function AccountBalances({ shown, hasBal, total, change, partialAccounts, config, ym, net }) {
-  const [open, setOpen] = useState(false);
   if (!hasBal) return null;
   const diff = change == null ? null : change - net;
   return (
     <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
-      <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>口座残高</span>
+      <div style={{ ...styles.collapseRow, borderBottom: `1px solid ${LINE}`,cursor:'default' }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>口座残高</span>
         <span style={{ ...alignedAmount, fontWeight: 600 }}>{yen(total)}</span>
-      </button>
-      {open && <div style={{ paddingBottom: 7 }}>
+      </div>
+      <div style={{ paddingBottom: 7 }}>
         {Object.entries(shown).map(([acc, b]) => {
           const partial = !balanceReachesCycleEnd(b, config.cycleCutoffDay);
           return <div key={acc} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", gap: 8, padding: "8px 0", borderBottom: `1px solid ${LINE}` }}>
@@ -603,7 +591,7 @@ function AccountBalances({ shown, hasBal, total, change, partialAccounts, config
         {change != null && <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 132px", gap: 8, padding: "8px 0", fontSize: 12.5 }}><span style={{ color: MUTED }}>前月比</span><span style={{ ...alignedAmount, fontSize: 12.5, color: change >= 0 ? GREEN : RED }}>{yen(change)}</span></div>}
         {diff != null && Math.abs(diff) >= 1 && <div style={{ color: RED, fontSize: 11.5, padding: "3px 0" }}>⚠ 投資振替を含む口座増減との差 {yen(Math.abs(diff))}</div>}
         {partialAccounts.length > 0 && <div style={{ color: MUTED, fontSize: 10.5, padding: "3px 0", lineHeight: 1.5 }}>{partialAccounts.map(([acc, end]) => `${acc} ${end}`).join("・")}まで未確定</div>}
-      </div>}
+      </div>
     </div>
   );
 }

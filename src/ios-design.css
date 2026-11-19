@@ -238,3 +238,16 @@
   html {scrollbar-gutter:auto; scrollbar-width:none;}
   html::-webkit-scrollbar {display:none;}
 }
+
+/* Small account/category lists are visible; disclosures only reveal more detail in place. */
+.actual-disclosure {border-top:1px solid var(--hairline);margin-top:12px;}
+.actual-disclosure>summary {display:flex;align-items:center;gap:8px;min-height:44px;list-style:none;color:var(--income);font-size:14px;}
+.actual-disclosure>summary::-webkit-details-marker {display:none;}
+.actual-disclosure>summary::before {content:'›';font-size:20px;transition:transform var(--motion-page) var(--motion-ease);}
+.actual-disclosure[open]>summary::before {transform:rotate(90deg);}
+.actual-detail {padding-top:12px;}
+.inline-accounts {padding-bottom:12px;}
+.inline-accounts>div {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:8px 0;font-size:14px;}
+.inline-accounts>div>span {min-width:0;overflow-wrap:anywhere;}
+.inline-accounts b {text-align:right;white-space:nowrap;font-weight:500;font-variant-numeric:tabular-nums;}
+.ledger-app .purchase-report[data-compact=true] .purchase-views {flex-wrap:wrap;overflow:visible;}

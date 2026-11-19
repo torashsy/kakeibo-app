@@ -120,6 +120,22 @@ it("本文の横スワイプは月を移動し、選択タブと家計データ�
   expect(stored.get('entries')).toBe(original);
 });
 
+it("収支実績はホーム内で開閉し、月・ナビゲーション履歴・家計データを保持する",async()=>{
+  await mount();await click('ホーム');
+  const before=stored.get('entries'),history=window.history.state,month=container.querySelector('.month-selection select').value;
+  const disclosure=container.querySelector('.actual-disclosure');
+  expect(disclosure.open).toBe(false);
+  await act(()=>disclosure.querySelector('summary').click());
+  expect(disclosure.open).toBe(true);
+  expect(disclosure.textContent).toContain('収支の内訳');
+  expect(window.history.state).toEqual(history);
+  expect(container.querySelector('.report-sections [aria-current]').textContent).toBe('収支');
+  expect(container.querySelector('.month-selection select').value).toBe(month);
+  await act(()=>disclosure.querySelector('summary').click());
+  expect(disclosure.open).toBe(false);
+  expect(stored.get('entries')).toBe(before);
+});
+
 describe("契約台帳の保存・バックアップ", () => {
   it("ポイントを入力して保存し、ダイアログは本文の重なりから独立する",async()=>{
     await mount();await click('定期費');await click('ポイント・期限');await click('＋ ポイントを追加');
