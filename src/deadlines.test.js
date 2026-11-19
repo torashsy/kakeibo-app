@@ -1,6 +1,15 @@
 import {expect,it} from 'vitest';
 import {deadlineEvents,normalizePoints,daysBetween,validDay} from './deadlines';
 
+it('keeps inferred renewals distinct and suppresses hidden or unconfirmed renewals',()=>{
+  const base={name:'Service',amount:1000,cycle:'monthly',renewal:'2026-11-29',autoRenew:false};
+  const subs=[{...base,id:'inferred',subscriptionSync:{includeInForecast:true,renewalEstimated:true}},
+    {...base,id:'unknown',subscriptionSync:{includeInForecast:false}},
+    {...base,id:'hidden',hidden:true},
+    {...base,id:'canceled',subscriptionSync:{includeInForecast:false},endDate:'2026-12-01'}];
+  expect(deadlineEvents(subs,[],'2026-11-20').map(e=>[e.sourceId,e.kind])).toEqual([['inferred','次回目安'],['canceled','契約終了']]);
+});
+
 it('keeps separate expiry lots and never treats an unknown expiry as unlimited',()=>{
   const points=normalizePoints([{id:'a',name:'Vポイント',amount:300,expiresOn:'2026-11-30'},{id:'b',name:'Vポイント',amount:100,expiryMode:'unknown'},{id:'c',name:'Ponta',amount:80,expiryMode:'none'},{id:'d',name:'invalid',amount:-1}]);
   expect(points).toHaveLength(3);

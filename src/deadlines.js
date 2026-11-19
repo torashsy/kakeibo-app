@@ -27,9 +27,9 @@ export function deadlineEvents(subs=[],points=[],today=localDay()) {
   const events=[];
   const add=(date,item)=>{if(validDay(date))events.push({...item,date,days:daysBetween(date,today)});};
   for(const sub of rollForwardSubs(subs,today)) {
-    if(sub.endDate && sub.endDate<today)continue;
+    if(sub.hidden || sub.endDate && sub.endDate<today)continue;
     const common={name:sub.name,source:'sub',sourceId:sub.id,amount:sub.amount,unit:'yen'};
-    if(!sub.endDate || sub.renewal<=sub.endDate)add(sub.renewal,{...common,id:`renewal:${sub.id}`,kind:sub.autoRenew===false?'更新予定':'自動更新'});
+    if((!sub.subscriptionSync || sub.subscriptionSync.includeInForecast) && (!sub.endDate || sub.renewal<=sub.endDate))add(sub.renewal,{...common,id:`renewal:${sub.id}`,kind:sub.subscriptionSync?.renewalEstimated?'次回目安':sub.autoRenew===false?'更新予定':'自動更新'});
     add(sub.trialEndDate,{...common,id:`trial:${sub.id}`,kind:'無料期間終了',amount:null});
     add(sub.cancelBy,{...common,id:`cancel:${sub.id}`,kind:'解約期限',amount:null});
     add(sub.endDate,{...common,id:`end:${sub.id}`,kind:'契約終了',amount:null});
