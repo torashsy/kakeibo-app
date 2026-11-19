@@ -4,11 +4,12 @@ import { styles } from "../styles";
 
 export function EntrySheet({ onClose, children, label = "記録の入力", portal = false }) {
   const panel = useRef(null);
+  // Capture before a child autoFocus input takes focus during the commit.
+  const returnTo = useRef({ element: document.activeElement, top: window.scrollY });
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
-    const previous = document.activeElement;
-    const top = window.scrollY;
+    const { element: previous, top } = returnTo.current;
     const original = { position:document.body.style.position, top:document.body.style.top, width:document.body.style.width };
     Object.assign(document.body.style, {position:"fixed", top:`-${top}px`, width:"100%"});
     if (!panel.current.contains(document.activeElement)) panel.current.focus({preventScroll:true});
@@ -33,7 +34,7 @@ export function EntrySheet({ onClose, children, label = "記録の入力", porta
       if (previous?.isConnected) previous.focus({preventScroll:true});
     };
   }, []);
-  const sheet = <div style={styles.sheetBackdrop} onClick={onClose}>
+  const sheet = <div data-no-swipe style={styles.sheetBackdrop} onClick={onClose}>
     <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} className="entry-sheet" style={styles.sheet} onClick={event=>event.stopPropagation()}>
       {children}
     </div>

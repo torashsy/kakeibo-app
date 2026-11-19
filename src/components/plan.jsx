@@ -12,6 +12,7 @@ import {
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
 import { AnnualMatrix } from './annual-matrix.jsx';
+import { EntrySheet } from './entry-sheet.jsx';
 
 // 簡素化した計画ビュー。計画は「収入」「変動費」「投資振替」の3本だけを持ち、
 // 支出見込み総額 = 固定費(定期費から自動) + 変動費。年度(4月開始)の月×項目で見る。
@@ -121,7 +122,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
     if (mode !== "plan" || !r.editable) return;
     const l = plans && plans.lines && plans.lines[r.editable];
     const ov = l && l.over && l.over[mo] != null ? String(l.over[mo]) : "";
-    setEdit({ key: r.editable, ym: mo, label: r.label, mlabel: ymLabel(mo), std: (l ? Number(l.std) || 0 : 0), value: ov });
+    setEdit({ key: r.editable, ym: mo, label: r.label.replace(/^・/, ""), mlabel: ymLabel(mo), std: (l ? Number(l.std) || 0 : 0), value: ov });
   };
 
   const openSalary = () => {
@@ -241,7 +242,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
       {mode === "forecast" && months.includes(ym) && <MonthExplanation plans={plans} ym={ym} key={ym} result={monthResult} entries={entriesByMonth[ym]} past={pastPeriod} />}
       {mode==="plan" && months.includes(ym) && <section className="month-budget"><h3>{ymLabel(ym)}の予算</h3>
         {[{label:"給与の設定",salary:true,k:"salaryIncome"}, {label:"その他の収入",editable:PLAN_OTHER_INCOME,k:"otherIncome"},
-          ...variableRows.filter(row=>row.editable),{label:"投資振替",editable:PLAN_INVEST,k:"invest"}].map(row=><button key={row.k} onClick={()=>openEdit(row,ym)}>
+          ...variableRows.filter(row=>row.editable),{label:"投資振替",editable:PLAN_INVEST,k:"invest"}].map(row=><button key={row.k} aria-label={`${row.label.replace(/^・/,"")}を編集`} onClick={()=>openEdit(row,ym)}>
           <span>{row.label.replace(/^・/,"")} <small>編集 ›</small></span><b>{yen(planOf(row.k,ym))}</b></button>)}
       </section>}
       {/* 入力ゼロの月だけ「記録なしで確定」バーを出す(締めると見通しで実績0扱いになる) */}
@@ -275,8 +276,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
       )}
 
       {edit && (
-        <div data-no-swipe style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
-          <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
+        <EntrySheet portal label={`${edit.label}の計画を編集`} onClose={() => setEdit(null)}>
             <div style={styles.sheetTitle}>{edit.label}・{edit.mlabel}の計画</div>
             <div style={{ fontSize: 12, color: MUTED, margin: "0 2px 8px" }}>標準 {num(edit.std)}</div>
             <AmountField value={edit.value} onChange={(v) => setEdit({ ...edit, value: v })} placeholder={String(edit.std)} autoFocus />
@@ -285,23 +285,19 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
               <button style={{ ...styles.saveBtnHalf, background: "var(--card-bg)", color: ACCENT, border: `1px solid ${ACCENT}` }} onClick={commitStd}>毎月の標準に</button>
             </div>
             <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
-          </div>
-        </div>
+        </EntrySheet>
       )}
       {newBucket && (
-        <div data-no-swipe style={styles.sheetBackdrop} onClick={() => setNewBucket(null)}>
-          <div style={styles.miniSheet} onClick={(e) => e.stopPropagation()}>
+        <EntrySheet portal label="予算の項目を追加" onClose={() => setNewBucket(null)}>
             <div style={styles.sheetTitle}>項目を追加</div>
             <input value={newBucket.name} onChange={(e) => setNewBucket({ ...newBucket, name: e.target.value })} placeholder="項目名" style={styles.textInput} autoFocus />
             <div style={{ marginTop: 8 }}><AmountField value={newBucket.amount} onChange={(v) => setNewBucket({ ...newBucket, amount: v })} placeholder="毎月の金額" /></div>
             <button style={{ ...styles.saveBtn, ...(!newBucket.name.trim() ? { opacity: 0.45 } : {}) }} disabled={!newBucket.name.trim()} onClick={commitBucket}>追加</button>
             <button style={styles.cancelBtn} onClick={() => setNewBucket(null)}>閉じる</button>
-          </div>
-        </div>
+        </EntrySheet>
       )}
       {salaryEdit && (
-        <div data-no-swipe style={styles.sheetBackdrop} onClick={() => setSalaryEdit(null)}>
-          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+        <EntrySheet portal label="給与の計画を編集" onClose={() => setSalaryEdit(null)}>
             <div style={styles.sheetHandle} />
             <div style={styles.sheetTitle}>給与</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -315,8 +311,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
             <SalaryRulePreview edit={salaryEdit} />
             <button style={{ ...styles.saveBtn, ...(!evalAmount(salaryEdit.standard) ? { opacity: 0.45 } : {}) }} disabled={!evalAmount(salaryEdit.standard)} onClick={commitSalary}>保存</button>
             <button style={styles.cancelBtn} onClick={() => setSalaryEdit(null)}>閉じる</button>
-          </div>
-        </div>
+        </EntrySheet>
       )}
     </div>
   );

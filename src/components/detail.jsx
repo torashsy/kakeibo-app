@@ -73,16 +73,16 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
   }
   if (its.length === 1) {
     return (
-      <button style={styles.itemRow} onClick={() => onEdit(its[0])}>
+      <button style={styles.itemRow} aria-label={`${label}を編集 ${yen(its[0].amount)}`} onClick={() => onEdit(its[0])}>
         <span style={styles.itemRowLeft}><span style={styles.chev} aria-hidden="true">›</span><span style={styles.detailItem}>{label}</span></span>
         <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(its[0].amount)}</span></span>
       </button>
     );
   }
-  const isOpen = !!open[gkey];
+  const isOpen = open[gkey] ?? its.length <= 6;
   return (
     <div>
-      <button style={styles.itemRow} aria-expanded={isOpen} onClick={() => toggle(gkey)}>
+      <button style={styles.itemRow} aria-expanded={isOpen} onClick={() => toggle(gkey, isOpen)}>
         <span style={styles.itemRowLeft}>
           <span style={{ ...styles.chev, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", width: 16 }}>›</span>
           <span style={styles.detailItem}>{label}</span><span style={styles.countBadge}>{its.length}件</span>
@@ -90,8 +90,8 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
         <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(total)}</span></span>
       </button>
       {isOpen && its.map((e, i) => (
-        <button key={e.id} style={styles.editSubRow} onClick={() => onEdit(e)}>
-          <span style={{ color: MUTED, fontSize: 12.5 }}><span style={styles.chev} aria-hidden="true">›</span> {i + 1}件目</span>
+        <button key={e.id} style={{ ...styles.editSubRow, gap: 12, minHeight: 44 }} aria-label={`${label}の記録を編集 ${yen(e.amount)}`} onClick={() => onEdit(e)}>
+          <span style={{ minWidth: 0, color: MUTED, fontSize: 12.5, textAlign: "left", overflowWrap: "anywhere" }}>{[entryDate(e)?.slice(5).replace("-", "/"), parseTxnKey(e.src)?.desc || e.note].filter(Boolean).join(" · ") || `${i + 1}件目`}</span>
           <span style={styles.editRowRight}><span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{yen(e.amount)}</span></span>
         </button>
       ))}
@@ -101,9 +101,7 @@ export function ItemRow({ label, node, gkey, open, toggle, onEdit }) {
 
 export function DetailCards({ S, config, cards, onEdit }) {
   const [open, setOpen] = useState({});
-  const [sections, setSections] = useState({ salary: false, card: false });
-  const toggle = (key) => setOpen((o) => ({ ...o, [key]: !o[key] }));
-  const toggleSection = (key) => setSections((value) => ({ ...value, [key]: !value[key] }));
+  const toggle = (key, current) => setOpen((o) => ({ ...o, [key]: !current }));
   const rowProps = { open, toggle, onEdit };
 
   // 給与
@@ -119,11 +117,11 @@ export function DetailCards({ S, config, cards, onEdit }) {
   const activeBalances = S.accounts.filter((acc) => S.get("account", "残高", acc).entries.length > 0);
   const section = (key, label, total, children, count) => (
     <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
-      <button style={{ ...styles.collapseRow, borderBottom: sections[key] ? `1px solid ${LINE}` : "none" }} onClick={() => toggleSection(key)} aria-expanded={!!sections[key]}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: sections[key] ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>{label}{count > 0 && <span style={styles.countBadge}>{count}</span>}</span>
+      <div style={{ ...styles.collapseRow, cursor: "default", borderBottom: `1px solid ${LINE}` }}>
+        <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}>{label}{count > 0 && <span style={styles.countBadge}>{count}</span>}</h3>
         <span style={{ ...styles.detailTotal, color: total < 0 ? RED : INK }}>{yen(total)}</span>
-      </button>
-      {sections[key] && <div style={{ paddingBottom: 4 }}>{children}</div>}
+      </div>
+      <div style={{ paddingBottom: 4 }}>{children}</div>
     </div>
   );
 

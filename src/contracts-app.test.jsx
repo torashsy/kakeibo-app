@@ -136,6 +136,25 @@ it("収支実績はホーム内で開閉し、月・ナビゲーション履歴�
   expect(stored.get('entries')).toBe(before);
 });
 
+it("計画の編集はナビより上に開き、閉じると元の位置と入力ボタンへ戻る",async()=>{
+  await mount();await click('計画');await click('予算を編集');
+  const saved=stored.get('plans'),entries=stored.get('entries');
+  const opener=button('その他の収入を編集');opener.focus();
+  await act(()=>opener.click());
+  const dialog=container.querySelector('[role="dialog"]');
+  expect(dialog).not.toBeNull();
+  expect(dialog.closest('.ledger-main')).toBeNull();
+  expect(document.body.style.position).toBe('fixed');
+  const month=container.querySelector('.month-selection select').value;
+  await swipe('[role="dialog"]',240,100);
+  expect(container.querySelector('.month-selection select').value).toBe(month);
+  await act(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.body.style.position).not.toBe('fixed');
+  expect(document.activeElement).toBe(opener);
+  expect(stored.get('plans')).toBe(saved);expect(stored.get('entries')).toBe(entries);
+});
+
 describe("契約台帳の保存・バックアップ", () => {
   it("ポイントを入力して保存し、ダイアログは本文の重なりから独立する",async()=>{
     await mount();await click('定期費');await click('ポイント・期限');await click('＋ ポイントを追加');
