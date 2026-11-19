@@ -3,7 +3,7 @@ import { useHorizontalSwipe } from "./use-horizontal-swipe";
 import { normalizePoints } from "./deadlines";
 import "./layout.css";
 import React, { useState, useEffect, useMemo } from "react";
-import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
+import { MUTED, DEFAULT_THEME, themeVars, migrateTheme } from './theme.js';
 import { bankTransactions } from "./bank-feed";
 import { monthForecast, upcomingDebits, cycleStartDate, fyStartOf, planMonths, ymLabel, uid, cycleEndDate, balancesAsOf, balTotalAsOf, INTERNAL_TRANSFER_ITEM, addMonth, evalAmount, decodeImportPayload, currentCycleYm, periodLabel, periodRange, migrateEntry, migrateConfig, migrateCard, migratePlan, DEFAULT_CONFIG, acctRole, shouldReplaceBalance, DEFAULT_CARDS, SEED_ENTRIES, SEED_DEBT, SEED_MEMOS, SEED_SUBS, SEED_PLAN, computeSummary, rollForwardSubs, toggleMonthClosed } from './utils';
 import { styles } from './styles.js';
@@ -35,8 +35,8 @@ export default function App() {
   const [closedMonths, setClosedMonths] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   useEffect(() => {
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.dark ? "#111419" : "#FAFAFB");
-    document.documentElement.style.backgroundColor = theme.dark ? "#111419" : "#FAFAFB";
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.dark ? "#0D0E10" : "#FAFAFB");
+    document.documentElement.style.backgroundColor = theme.dark ? "#0D0E10" : "#FAFAFB";
   }, [theme.dark]);
   const [loaded, setLoaded] = useState(false);
   const {page, visit, back} = usePageNavigation();
@@ -92,7 +92,7 @@ export default function App() {
         setCards(Array.isArray(rawCards) && rawCards.length ? rawCards.map(migrateCard) : DEFAULT_CARDS);
         const rawDebt = d && d.value ? JSON.parse(d.value) : null;
         setDebt(rawDebt && typeof rawDebt === "object" ? rawDebt : SEED_DEBT);
-        setTheme(th && th.value ? { ...DEFAULT_THEME, ...JSON.parse(th.value) } : DEFAULT_THEME);
+        setTheme(migrateTheme(th?.value ? JSON.parse(th.value) : null));
         const rawMemos = mm && mm.value ? JSON.parse(mm.value) : null;
         setMemos(Array.isArray(rawMemos) ? rawMemos : SEED_MEMOS);
         const rawSubs = sb && sb.value ? JSON.parse(sb.value) : null;

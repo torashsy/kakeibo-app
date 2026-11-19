@@ -119,7 +119,7 @@ export function Subs({ subs, onSave, cards, ym, initialEditId, onCloseEdit }) {
             <label style={styles.fieldLabel}>周期</label>
             <div style={styles.kindRow}>
               {[["monthly", "月額"], ["yearly", "年払い"]].map(([v, l]) => (
-                <button key={v} style={{ ...styles.kindBtn, ...(edit.cycle === v ? { background: "var(--accent)", color: "#fff", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, cycle: v })}>{l}</button>
+                <button key={v} style={{ ...styles.kindBtn, ...(edit.cycle === v ? { background: "var(--accent)", color: "var(--on-accent)", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, cycle: v })}>{l}</button>
               ))}
             </div>
             <label style={styles.fieldLabel}>支払いカード（任意）</label>
@@ -132,8 +132,8 @@ export function Subs({ subs, onSave, cards, ym, initialEditId, onCloseEdit }) {
             <label style={styles.fieldLabel}>更新日</label>
             <ClearableCalendarInput value={edit.renewal ?? ""} onChange={(value) => setEdit({ ...edit, renewal: value, renewalDay: value ? Number(value.slice(8, 10)) : undefined })} style={styles.textInput} />
             <div style={styles.kindRow}>
-              <button style={{ ...styles.kindBtn, ...(edit.autoRenew !== false ? { background: "var(--accent)", color: "#fff", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, autoRenew: true })}>{edit.cycle === "yearly" ? "毎年自動更新" : "毎月自動更新"}</button>
-              <button style={{ ...styles.kindBtn, ...(edit.autoRenew === false ? { background: "var(--accent)", color: "#fff", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, autoRenew: false })}>固定</button>
+              <button style={{ ...styles.kindBtn, ...(edit.autoRenew !== false ? { background: "var(--accent)", color: "var(--on-accent)", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, autoRenew: true })}>{edit.cycle === "yearly" ? "毎年自動更新" : "毎月自動更新"}</button>
+              <button style={{ ...styles.kindBtn, ...(edit.autoRenew === false ? { background: "var(--accent)", color: "var(--on-accent)", border: "1px solid var(--accent)" } : {}) }} onClick={() => setEdit({ ...edit, autoRenew: false })}>固定</button>
             </div>
             <label style={styles.fieldLabel}>開始日</label>
             <ClearableCalendarInput value={edit.startDate ?? ""} onChange={(value) => setEdit({ ...edit, startDate: value })} style={styles.textInput} />

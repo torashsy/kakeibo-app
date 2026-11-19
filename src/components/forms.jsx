@@ -145,7 +145,7 @@ export function CardForm({ ym, config, cards, entries, editing, onClose, onAdd, 
           <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button></>
         ) : (
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "#fff", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>続ける</button>
+            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>続ける</button>
             <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>保存</button>
           </div>
         )}
@@ -213,7 +213,7 @@ export function AccountForm({ ym, config, entries, editing, onClose, onAdd, onUp
           <><button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>更新</button><button style={styles.deleteBtn} onClick={() => { onDelete(editing.id); onClose(); }}>削除</button></>
         ) : (
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "#fff", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>続ける</button>
+            <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4, background: "var(--card-bg)", color: ACCENT, border: `1.5px solid ${ACCENT}` }} onClick={() => saveOne(true)} disabled={!canSave}>続ける</button>
             <button style={{ ...styles.saveBtnHalf, opacity: canSave ? 1 : 0.4 }} onClick={() => saveOne(false)} disabled={!canSave}>保存</button>
           </div>
         )}
