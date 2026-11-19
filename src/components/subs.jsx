@@ -5,21 +5,12 @@ import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
 import { ClearableCalendarInput } from './calendar-input.jsx';
 import { EntrySheet } from './entry-sheet.jsx';
+import { subscriptionStatus, subscriptionToday } from '../subscription-sync.js';
 
 // 定期費(サブスク・通信費・光熱費・保険など、毎月/毎年決まって出ていく支払い)の台帳。
 // 計画タブの「固定費」の土台になり、分類ごとの小計で解約検討にも使える。収支の実績集計には影響しない。
 const CATEGORIES = ["サブスク", "通信", "光熱", "保険", "その他"];
 
-// 更新日までの残り日数(日付のみで計算)。renewal が無ければ null。
-const daysUntil = (renewal) => {
-  if (!renewal) return null;
-  const [y, m, d] = renewal.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const target = new Date(y, m - 1, d);
-  return Math.round((target - today) / 86400000);
-};
-const SOON_DAYS = 14; // この日数以内の更新を「間近」としてハイライト
 const renewalSort = (a, b) => {
   if (a.renewal && b.renewal) return a.renewal < b.renewal ? -1 : a.renewal > b.renewal ? 1 : 0;
   if (a.renewal) return -1;
@@ -30,18 +21,22 @@ const renewalSort = (a, b) => {
 export function Subs({ subs, onSave, cards, ym, initialEditId, onCloseEdit }) {
   const [edit, setEdit] = useState(()=>subs.find(s=>s.id===initialEditId)||null);
   const closeEdit=()=>{setEdit(null);onCloseEdit?.();};
-  const [openGroups, setOpenGroups] = useState({});
+  const today = subscriptionToday();
+  const visibleSubs = subs.filter(s => !s.hidden);
   const activeSubs = useMemo(() => subs.filter((s) => subActiveForMonth(s, ym)), [subs, ym]);
   const monthTotal = useMemo(() => activeSubs.reduce((a, s) => a + subMonthly(s), 0), [activeSubs]);
   const yearTotal = useMemo(() => activeSubs.reduce((a, s) => a + subYearly(s), 0), [activeSubs]);
-  // 分類ごとにまとめ、各分類の中は更新日順。分類は登録順(CATEGORIES優先)で並べる。
+  // 契約状態ごとに並べ、更新日と解約状態を一覧に出す。
   const groups = useMemo(() => {
     const map = new Map();
-    for (const s of subs) { const k = (s.category || "その他").trim() || "その他"; if (!map.has(k)) map.set(k, []); map.get(k).push(s); }
+    for (const s of visibleSubs) {
+      const k = s.subscriptionSync?.status === 'canceled' || (s.endDate && s.endDate < today) ? '解約・終了' : s.subscriptionSync?.status === 'unconfirmed' ? '継続未確認' : '定期支払い';
+      if (!map.has(k)) map.set(k, []); map.get(k).push(s);
+    }
     for (const arr of map.values()) arr.sort(renewalSort);
-    const order = (k) => { const i = CATEGORIES.indexOf(k); return i < 0 ? CATEGORIES.length : i; };
+    const order = k => ['定期支払い', '継続未確認', '解約・終了'].indexOf(k);
     return Array.from(map.entries()).sort((a, b) => order(a[0]) - order(b[0]));
-  }, [subs]);
+  }, [subs, today]);
 
   const commit = () => {
     if (!edit.name.trim()) return;
@@ -51,53 +46,47 @@ export function Subs({ subs, onSave, cards, ym, initialEditId, onCloseEdit }) {
     const next = edit.id ? subs.map((x) => (x.id === edit.id ? s : x)) : [...subs, { ...s, id: uid() }];
     onSave(next); closeEdit();
   };
-  const remove = () => { onSave(subs.filter((x) => x.id !== edit.id)); closeEdit(); };
+  const remove = () => { onSave(edit.subscriptionSync ? subs.map(x => x.id === edit.id ? { ...x, hidden: true } : x) : subs.filter(x => x.id !== edit.id)); closeEdit(); };
   const newSub = () => setEdit({ name: "", amount: "", cycle: "monthly", category: "", card: "", renewal: "", startDate: "", endDate: "", autoRenew: true, plan: "", note: "" });
 
   return (
     <div>
       <div style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 12 }}>
         <div style={styles.subtotalRow}><span>月換算</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(monthTotal)}</span></span></div>
-        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span>年合計</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(yearTotal)}</span></span></div>
+        <div style={{ ...styles.subtotalRow, borderTop: "none", marginTop: 0 }}><span>年換算</span><span style={styles.editRowRight}><span style={styles.subtotalNum}>{yen(yearTotal)}</span></span></div>
       </div>
-      <div style={styles.detailHead}><span>一覧（{subs.length}）</span><button style={styles.addBtn} onClick={newSub}>＋ 追加</button></div>
-      {subs.length === 0 ? (
+      <div style={styles.detailHead}><span>定期費（{visibleSubs.length}）</span><button style={styles.addBtn} onClick={newSub}>＋ 追加</button></div>
+      {visibleSubs.length === 0 ? (
         <div style={styles.detailCard}><div style={{ color: MUTED, fontSize: 13, padding: 6 }}>登録なし</div></div>
       ) : (
         groups.map(([cat, items]) => {
           const catMonthly = items.filter((s) => subActiveForMonth(s, ym)).reduce((a, s) => a + subMonthly(s), 0);
-          const open = openGroups[cat] !== false;
           return (
             <div key={cat} style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
-              <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpenGroups((value) => ({ ...value, [cat]: !open }))} aria-expanded={open}>
-                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>{cat}<span style={styles.countBadge}>{items.length}</span></span>
+              <div style={{ ...styles.collapseRow, borderBottom: `1px solid ${LINE}` }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}>{cat}<span style={styles.countBadge}>{items.length}</span></span>
                 <span style={{ ...styles.detailTotal, color: INK }}>{yen(catMonthly)}</span>
-              </button>
-              {open && <div style={{ paddingBottom: 4 }}>
+              </div>
+              <div style={{ paddingBottom: 4 }}>
                 {items.map((s) => {
-                  const d = daysUntil(s.renewal);
-                  const soon = d != null && d >= 0 && d <= SOON_DAYS;
-                  const past = d != null && d < 0;
-                  const ended = !!s.endDate && s.endDate < new Date().toISOString().slice(0, 10);
+                  const ended = s.subscriptionSync?.status === 'canceled' || !!s.endDate && s.endDate < today;
+                  const synced = s.subscriptionSync;
+                  const cycleLabel = synced && !synced.cycleKnown ? '周期未確認' : s.cycle === 'yearly' ? '年額' : '月額';
                   return (
-                    <button key={s.id} style={{ ...styles.itemRow, ...(soon ? { color: "var(--accent)" } : {}) }} onClick={() => setEdit({ ...s, amount: s.amount ? String(s.amount) : "", category: s.category || "" })}>
-                      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 600, color: INK }}><span style={styles.chev} aria-hidden="true">›</span> {s.name}{s.plan ? <small style={styles.subCycle}>　{s.plan}</small> : null}</span>
-                        <span style={{ ...styles.subMeta, marginTop: 4 }}>
-                          <small style={styles.subCycle}>{s.cycle === "yearly" ? "年額" : "月額"}</small>
-                        {ended ? <span style={styles.subDuePast}>解約済み</span> : soon && <span style={styles.subDue}>{d === 0 ? "本日更新" : `更新まであと${d}日`}</span>}
-                        {!ended && past && <span style={styles.subDuePast}>更新日を過ぎています</span>}
-                        {s.card && <span style={styles.brandTag}>{s.card}</span>}
-                        {s.renewal && <span style={styles.brandTag}>更新 {s.renewal}</span>}
-                        {s.cancelBy && <span style={styles.brandTag}>解約期限 {s.cancelBy}</span>}
-                        {s.trialEndDate && <span style={styles.brandTag}>無料期間 {s.trialEndDate}まで</span>}
-                        </span>
+                    <button key={s.id} className="subscription-row" style={{ ...styles.itemRow, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', columnGap: 12, rowGap: 5, padding: '17px 0', textAlign: 'left' }} onClick={() => setEdit({ ...s, amount: s.amount !== '' ? String(s.amount) : "", category: s.category || "" })}>
+                      <span style={{ minWidth: 0, fontSize: 15, fontWeight: 600, color: INK, overflowWrap: 'anywhere' }}>{s.name}</span>
+                      <span style={{ ...styles.detailTotal, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{s.amount === '' ? '—' : yen(s.amount)}</span>
+                      <span style={{ color: MUTED, fontSize: 12, overflowWrap: 'anywhere' }}>{s.plan || 'プラン未確認'}{synced ? ` · ${synced.channel}` : ''}</span>
+                      <span style={{ color: MUTED, fontSize: 12, textAlign: 'right' }}>{cycleLabel}{synced?.cycleBasis === '請求間隔' ? '（推定）' : ''}</span>
+                      <span style={{ gridColumn: '1 / -1', color: MUTED, fontSize: 12, display: 'flex', flexWrap: 'wrap', columnGap: 12, rowGap: 4 }}>
+                        <span>{subscriptionStatus(s, today)}</span>
+                        {ended ? s.endDate && <span>{s.endDate}まで</span> : synced?.status === 'unconfirmed' && (!s.renewal || s.renewal < today) ? <span>{synced.lastChargedOn ? `最終請求 ${synced.lastChargedOn}` : '更新日未確認'}</span> : s.renewal ? <span>{synced?.renewalEstimated ? '次回目安' : '更新'} {s.renewal}</span> : <span>更新日未確認</span>}
+                        <span style={{ marginLeft: 'auto' }} aria-hidden="true">›</span>
                       </span>
-                      <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(s.amount)}</span></span>
                     </button>
                   );
                 })}
-              </div>}
+              </div>
             </div>
           );
         })
@@ -106,6 +95,13 @@ export function Subs({ subs, onSave, cards, ym, initialEditId, onCloseEdit }) {
         <EntrySheet portal label="定期費を編集" onClose={closeEdit}>
             <div style={styles.sheetHandle} />
             <div style={styles.sheetTitle}>{edit.id ? "定期費を編集" : "定期費を追加"}</div>
+            {edit.subscriptionSync && <section style={{ marginBottom: 20 }} aria-label="請求の確認情報">
+              <div style={{ color: MUTED, fontSize: 13, marginBottom: 8 }}>{subscriptionStatus(edit, today)}{edit.subscriptionSync.canceledOn ? ` · 解約手続き ${edit.subscriptionSync.canceledOn}` : ''}</div>
+              <div style={{ color: MUTED, fontSize: 12, marginBottom: 10 }}>{edit.subscriptionSync.evidence.length ? '契約メールと請求実績で確認' : '請求実績から推定'}{edit.subscriptionSync.lastChargedOn ? ` · 最終請求 ${edit.subscriptionSync.lastChargedOn}` : ''}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '7px 12px', fontSize: 13 }}>
+                {edit.subscriptionSync.history.slice(-6).reverse().map(h => <React.Fragment key={`${h.id}:${h.amount}`}><span>{h.date}</span><span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{yen(h.amount)}</span></React.Fragment>)}
+              </div>
+            </section>}
             <label style={styles.fieldLabel}>名前</label>
             <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="例）Netflix / 通信費" style={styles.textInput} autoFocus />
             <label style={styles.fieldLabel}>分類</label>

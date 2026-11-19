@@ -84,6 +84,8 @@ export interface Sub {
   endDate?: string;     // 終了予定日/解約日。これより後の計画には含めない
   trialEndDate?: string; // 無料期間の終了日。支出を自動計上しない
   cancelBy?: string;     // 解約手続きの期限。更新日とは別に管理
+  hidden?: boolean;
+  subscriptionSync?: { includeInForecast: boolean; [key: string]: unknown };
   plan?: string;
   note?: string;
 }
@@ -580,7 +582,7 @@ export const PLAN_INVEST = "invest";
 export const subMonthly = (s: Sub): number => (s && s.cycle === "yearly" ? (Number(s.amount) || 0) / 12 : (Number(s && s.amount) || 0));
 export const subYearly = (s: Sub): number => (s && s.cycle === "yearly" ? (Number(s.amount) || 0) : (Number(s && s.amount) || 0) * 12);
 // 定期費(subs)の月あたり固定費合計。計画の「固定費」はこれを土台にする。
-export const fixedMonthly = (subs: Sub[] | null | undefined): number => (subs || []).reduce((a, s) => a + subMonthly(s), 0);
+export const fixedMonthly = (subs: Sub[] | null | undefined): number => (subs || []).filter(s => !s.hidden && (!s.subscriptionSync || s.subscriptionSync.includeInForecast)).reduce((a, s) => a + subMonthly(s), 0);
 
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 const daysInMonth = (ym: string): number => {
@@ -593,6 +595,7 @@ export const recurringDate = (s: Sub, serviceYm: string): string => {
   return `${serviceYm}-${String(Math.min(day, daysInMonth(serviceYm))).padStart(2, "0")}`;
 };
 export const subActiveForMonth = (s: Sub, ym: string): boolean => {
+  if (s.hidden || (s.subscriptionSync && !s.subscriptionSync.includeInForecast)) return false;
   const occurrence = recurringDate(s, ym);
   return (!validDate(s.startDate) || occurrence >= s.startDate) && (!validDate(s.endDate) || occurrence <= s.endDate);
 };
@@ -2097,7 +2100,7 @@ export function rollForwardSubs(subs: Sub[], todayStr?: string): Sub[] {
   const today = todayStr || new Date().toISOString().slice(0, 10);
   let changed = false;
   const next = subs.map((s) => {
-    if (!s.renewal || s.autoRenew === false) return s;
+    if (!s.renewal || s.autoRenew === false || s.subscriptionSync) return s;
     if (validDate(s.endDate) && s.endDate < today) return s;
     const renewalDay = s.renewalDay || Number(s.renewal.slice(8, 10));
     let r = s.renewal, guard = 0;
