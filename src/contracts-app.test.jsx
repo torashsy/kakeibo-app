@@ -121,6 +121,60 @@ it("本文の横スワイプは月を移動し、選択タブと家計データ�
 });
 
 describe("契約台帳の保存・バックアップ", () => {
+  it("ポイントを入力して保存し、ダイアログは本文の重なりから独立する",async()=>{
+    await mount();await click('定期費');await click('ポイント・期限');await click('＋ ポイントを追加');
+    const form=container.querySelector('.deadline-editor');
+    const fields=form.querySelectorAll('input');
+    const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
+    for(const [node,value] of [[fields[0],'新しいポイント'],[fields[1],'3456']]) {
+      await act(()=>{set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));});
+    }
+    const mode=form.querySelector('select');
+    await act(()=>{mode.value='date';mode.dispatchEvent(new Event('change',{bubbles:true}));});
+    const date=form.querySelector('input[type="date"]');
+    await act(()=>{set.call(date,'2026-11-10');date.dispatchEvent(new Event('input',{bubbles:true}));});
+    expect(form.closest('.ledger-main')).toBeNull();
+    await click('保存');
+    expect(container.querySelector('.deadline-editor')).toBeNull();
+    expect(JSON.parse(stored.get('points'))[0]).toMatchObject({name:'新しいポイント',amount:3456,expiresOn:'2026-11-10'});
+    expect(container.querySelector('.ledger-main').dataset.view).toBe('recurring');
+    await act(()=>container.querySelector('.point-balances button').click());
+    await click('記録を削除');
+    expect(JSON.parse(stored.get('points'))).toHaveLength(1);
+    await click('削除する');
+    expect(JSON.parse(stored.get('points'))).toEqual([]);
+  });
+  it("期限一覧から定期費を開き、期限だけ更新して料金を保持する",async()=>{
+    await mount();await click('定期費');await click('ポイント・期限');await click('すべて');
+    await act(()=>[...container.querySelectorAll('.deadline-list button')].find(n=>n.textContent.includes('検証通信費')).click());
+    const dialog=container.querySelector('[role="dialog"]');
+    expect(dialog.closest('.ledger-main')).toBeNull();
+    const label=[...dialog.querySelectorAll('label')].find(n=>n.textContent==='解約手続きの期限');
+    const input=label.nextElementSibling.querySelector('input');
+    await act(()=>{
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'2026-11-25');
+      input.dispatchEvent(new Event('change',{bubbles:true}));
+    });
+    await click('更新');
+    const saved=JSON.parse(stored.get('subs'));
+    expect(saved.find(s=>s.id==='keep-fee')).toMatchObject({amount:1000,cancelBy:'2026-11-25'});
+  });
+  it("ポイントの利用状態を保存・再読込・バックアップし、家計の金額を変えない",async()=>{
+    const point={id:'p1',name:'検証ポイント',amount:1200,expiryMode:'date',expiresOn:'2026-11-10',status:'active',note:'期間限定'};
+    stored.set('points',JSON.stringify([point]));
+    const before=stored.get('entries');
+    await mount();await click('定期費');await click('ポイント・期限');
+    expect(container.textContent).toContain('検証ポイント');
+    const row=container.querySelector('.point-balances button');
+    await act(()=>row.click());await click('利用済みにする');
+    expect(JSON.parse(stored.get('points'))[0]).toMatchObject({...point,status:'used'});
+    expect(stored.get('entries')).toBe(before);
+    await act(async()=>root.unmount());root=createRoot(container);await mount();
+    const backup=await exportBackup();
+    expect(backup.points[0]).toMatchObject({...point,status:'used'});
+    expect(backup.entries).toEqual([]);expect(backup.subs).toEqual(savedSubs);
+  });
+
   it("契約JSONだけが壊れていても、既存の家計データを保持する", async () => {
     stored.set("contracts", "{invalid-json");
     await mount();
@@ -205,6 +259,8 @@ describe("契約台帳の保存・バックアップ", () => {
   });
 
   it("契約欄のない旧バックアップでも契約を保持し、失われた定期費のリンクだけを解除する", async () => {
+    const point={id:'keep-point',name:'残すポイント',amount:100,expiryMode:'unknown',status:'active',expiresOn:'',note:''};
+    stored.set('points',JSON.stringify([point]));
     await mount();
     await click("設定");
     const legacyFee = { ...savedSubs[0], amount: 1500 };
@@ -221,6 +277,7 @@ describe("契約台帳の保存・バックアップ", () => {
     expect(window.alert).not.toHaveBeenCalled();
     expect(container.textContent).toContain("バックアップから復元しました");
     const restored = await exportBackup();
+    expect(restored.points).toEqual([point]);
     expect(restored.contracts).toHaveLength(2);
     expect(restored.contracts.find((item) => item.id === "saved-line")).toEqual(savedContracts[0]);
     const originalDevice = { ...savedContracts[1] };

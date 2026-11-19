@@ -82,6 +82,8 @@ export interface Sub {
   autoRenew?: boolean;  // false のとき更新日を自動で繰り越さない。未設定は既存互換で true
   startDate?: string;   // 利用開始日。これより前の計画には含めない
   endDate?: string;     // 終了予定日/解約日。これより後の計画には含めない
+  trialEndDate?: string; // 無料期間の終了日。支出を自動計上しない
+  cancelBy?: string;     // 解約手続きの期限。更新日とは別に管理
   plan?: string;
   note?: string;
 }

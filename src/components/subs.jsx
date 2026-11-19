@@ -4,6 +4,7 @@ import { yen, uid, subMonthly, subYearly, subActiveForMonth, evalAmount } from '
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
 import { ClearableCalendarInput } from './calendar-input.jsx';
+import { EntrySheet } from './entry-sheet.jsx';
 
 // 定期費(サブスク・通信費・光熱費・保険など、毎月/毎年決まって出ていく支払い)の台帳。
 // 計画タブの「固定費」の土台になり、分類ごとの小計で解約検討にも使える。収支の実績集計には影響しない。
@@ -26,8 +27,9 @@ const renewalSort = (a, b) => {
   return 0;
 };
 
-export function Subs({ subs, onSave, cards, ym }) {
-  const [edit, setEdit] = useState(null);
+export function Subs({ subs, onSave, cards, ym, initialEditId, onCloseEdit }) {
+  const [edit, setEdit] = useState(()=>subs.find(s=>s.id===initialEditId)||null);
+  const closeEdit=()=>{setEdit(null);onCloseEdit?.();};
   const [openGroups, setOpenGroups] = useState({});
   const activeSubs = useMemo(() => subs.filter((s) => subActiveForMonth(s, ym)), [subs, ym]);
   const monthTotal = useMemo(() => activeSubs.reduce((a, s) => a + subMonthly(s), 0), [activeSubs]);
@@ -47,9 +49,9 @@ export function Subs({ subs, onSave, cards, ym }) {
     const renewalDay = edit.renewal ? Number(edit.renewal.slice(8, 10)) : undefined;
     const s = { ...edit, name: edit.name.trim(), category: (edit.category || "").trim(), amount: Math.round(evalAmount(edit.amount) || 0), cycle: edit.cycle || "monthly", renewalDay };
     const next = edit.id ? subs.map((x) => (x.id === edit.id ? s : x)) : [...subs, { ...s, id: uid() }];
-    onSave(next); setEdit(null);
+    onSave(next); closeEdit();
   };
-  const remove = () => { onSave(subs.filter((x) => x.id !== edit.id)); setEdit(null); };
+  const remove = () => { onSave(subs.filter((x) => x.id !== edit.id)); closeEdit(); };
   const newSub = () => setEdit({ name: "", amount: "", cycle: "monthly", category: "", card: "", renewal: "", startDate: "", endDate: "", autoRenew: true, plan: "", note: "" });
 
   return (
@@ -64,10 +66,10 @@ export function Subs({ subs, onSave, cards, ym }) {
       ) : (
         groups.map(([cat, items]) => {
           const catMonthly = items.filter((s) => subActiveForMonth(s, ym)).reduce((a, s) => a + subMonthly(s), 0);
-          const open = !!openGroups[cat];
+          const open = openGroups[cat] !== false;
           return (
             <div key={cat} style={{ ...styles.detailCard, padding: "0 14px", marginBottom: 10 }}>
-              <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpenGroups((value) => ({ ...value, [cat]: !value[cat] }))} aria-expanded={open}>
+              <button style={{ ...styles.collapseRow, borderBottom: open ? `1px solid ${LINE}` : "none" }} onClick={() => setOpenGroups((value) => ({ ...value, [cat]: !open }))} aria-expanded={open}>
                 <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 600 }}><span style={{ ...styles.chev, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>›</span>{cat}<span style={styles.countBadge}>{items.length}</span></span>
                 <span style={{ ...styles.detailTotal, color: INK }}>{yen(catMonthly)}</span>
               </button>
@@ -87,6 +89,8 @@ export function Subs({ subs, onSave, cards, ym }) {
                         {!ended && past && <span style={styles.subDuePast}>更新日を過ぎています</span>}
                         {s.card && <span style={styles.brandTag}>{s.card}</span>}
                         {s.renewal && <span style={styles.brandTag}>更新 {s.renewal}</span>}
+                        {s.cancelBy && <span style={styles.brandTag}>解約期限 {s.cancelBy}</span>}
+                        {s.trialEndDate && <span style={styles.brandTag}>無料期間 {s.trialEndDate}まで</span>}
                         </span>
                       </span>
                       <span style={styles.editRowRight}><span style={styles.detailTotal}>{yen(s.amount)}</span></span>
@@ -99,8 +103,7 @@ export function Subs({ subs, onSave, cards, ym }) {
         })
       )}
       {edit && (
-        <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
-          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+        <EntrySheet portal label="定期費を編集" onClose={closeEdit}>
             <div style={styles.sheetHandle} />
             <div style={styles.sheetTitle}>{edit.id ? "定期費を編集" : "定期費を追加"}</div>
             <label style={styles.fieldLabel}>名前</label>
@@ -134,6 +137,10 @@ export function Subs({ subs, onSave, cards, ym }) {
             </div>
             <label style={styles.fieldLabel}>開始日</label>
             <ClearableCalendarInput value={edit.startDate ?? ""} onChange={(value) => setEdit({ ...edit, startDate: value })} style={styles.textInput} />
+            <label style={styles.fieldLabel}>無料期間の終了日</label>
+            <ClearableCalendarInput value={edit.trialEndDate ?? ""} onChange={(value) => setEdit({ ...edit, trialEndDate: value })} style={styles.textInput} />
+            <label style={styles.fieldLabel}>解約手続きの期限</label>
+            <ClearableCalendarInput value={edit.cancelBy ?? ""} onChange={(value) => setEdit({ ...edit, cancelBy: value })} style={styles.textInput} />
             <label style={styles.fieldLabel}>終了予定日・解約日</label>
             <ClearableCalendarInput value={edit.endDate ?? ""} onChange={(value) => setEdit({ ...edit, endDate: value })} style={styles.textInput} />
             <label style={styles.fieldLabel}>プラン名（任意）</label>
@@ -142,9 +149,8 @@ export function Subs({ subs, onSave, cards, ym }) {
             <textarea value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="解約条件や備考など" style={styles.memoTextarea} />
             <button style={{ ...styles.saveBtn, opacity: edit.name.trim() && !(edit.startDate && edit.endDate && edit.endDate < edit.startDate) ? 1 : 0.4 }} onClick={commit} disabled={!edit.name.trim() || !!(edit.startDate && edit.endDate && edit.endDate < edit.startDate)}>{edit.id ? "更新" : "追加"}</button>
             {edit.id && <button style={styles.deleteBtn} onClick={remove}>削除</button>}
-            <button style={styles.cancelBtn} onClick={() => setEdit(null)}>閉じる</button>
-          </div>
-        </div>
+            <button style={styles.cancelBtn} onClick={closeEdit}>閉じる</button>
+        </EntrySheet>
       )}
     </div>
   );

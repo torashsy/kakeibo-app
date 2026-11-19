@@ -1,5 +1,6 @@
 import { usePageNavigation, pageLabel, homeSections } from "./page-navigation";
 import { useHorizontalSwipe } from "./use-horizontal-swipe";
+import { normalizePoints } from "./deadlines";
 import "./layout.css";
 import React, { useState, useEffect, useMemo } from "react";
 import { MUTED, DEFAULT_THEME, themeVars } from './theme.js';
@@ -29,6 +30,7 @@ export default function App() {
   const [memos, setMemos] = useState([]);
   const [subs, setSubs] = useState([]);
   const [contracts, setContracts] = useState([]);
+  const [points, setPoints] = useState([]);
   const [plans, setPlans] = useState(SEED_PLAN);
   const [closedMonths, setClosedMonths] = useState([]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
@@ -58,7 +60,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [e, c, cd, d, th, mm, sb, pl, cm, fs, ct] = await Promise.all([
+        const [e, c, cd, d, th, mm, sb, pl, cm, fs, ct, pt] = await Promise.all([
           window.storage.get("entries", true).catch(() => null),
           window.storage.get("config", true).catch(() => null),
           window.storage.get("cards", true).catch(() => null),
@@ -70,6 +72,7 @@ export default function App() {
           window.storage.get("closedMonths", true).catch(() => null),
           window.storage.get("financeSuppressed", true).catch(() => null),
           window.storage.get("contracts", true).catch(() => null),
+          window.storage.get("points", true).catch(() => null),
         ]);
         const rawEntries = e && e.value ? JSON.parse(e.value) : null;
         if (rawEntries) {
@@ -100,6 +103,7 @@ export default function App() {
         let rawContracts = [];
         try { rawContracts = ct && ct.value ? JSON.parse(ct.value) : []; } catch {}
         setContracts(unlinkMissingSubscriptions(normalizeContracts(rawContracts), rolledSubs));
+        try { setPoints(normalizePoints(pt?.value ? JSON.parse(pt.value) : [])); } catch { setPoints([]); }
         // 更新日を過ぎたサブスクを自動で繰り越した場合はそのまま保存(次回起動時も同じ結果に)
         if (rolledSubs !== loadedSubs) { try { window.storage.set("subs", JSON.stringify(rolledSubs), true); } catch {} }
         const rawPlans = pl && pl.value ? JSON.parse(pl.value) : null;
@@ -250,6 +254,7 @@ export default function App() {
     if (next !== contracts) { setContracts(next); save("contracts", next); }
   };
   const commitContracts = (n) => { const next = normalizeContracts(n); setContracts(next); save("contracts", next); };
+  const commitPoints = (n) => { const next=normalizePoints(n); setPoints(next); save("points",next); };
   const commitContractBundle = (next) => {
     // 最終的な組を一度ずつ保存する。Reactのupdaterに保存の副作用を置かない。
     const nextSubs = next.subs === subs ? subs : rollForwardSubs(next.subs);
@@ -267,6 +272,7 @@ export default function App() {
     if (Array.isArray(d.cards)) commitCards(d.cards.map(migrateCard), false);
     if (d.debt && typeof d.debt === "object") commitDebt(d.debt);
     if (Array.isArray(d.memos)) commitMemos(d.memos);
+    if (Array.isArray(d.points)) commitPoints(d.points);
     if (Array.isArray(d.subs) && Array.isArray(d.contracts)) commitContractBundle({ subs: d.subs, contracts: d.contracts });
     else if (Array.isArray(d.subs)) commitSubs(d.subs);
     else if (Array.isArray(d.contracts)) commitContracts(unlinkMissingSubscriptions(normalizeContracts(d.contracts), subs));
@@ -457,9 +463,9 @@ export default function App() {
         {tab === "today" && <Summary section={page.section} onSection={section=>visit("today",section,!homeSections.includes(section))} forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => drill("plan")} onOpenCards={() => drill("cards")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView forecasts={forecasts} plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); drill("recurring"); }} />}
-        {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
+        {tab === "recurring" && <Recurring points={points} onSavePoints={commitPoints} subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
         {tab === "settings" && <div className="sync-link"><CloudBadge /><button onClick={()=>drill("finance")}>同期状態を見る ›</button></div>}
-        {tab === "settings" && <Settings config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => drill("design")} onOpenCards={() => drill("cards")} onRemoveItem={removeConfigItem} />}
+        {tab === "settings" && <Settings points={points} config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => drill("design")} onOpenCards={() => drill("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} />}
         {tab === "cards" && <><CardList accounts={config.accounts} cards={cards} onSaveCards={commitCards} onRemoveCard={removeCard} /></>}
       </main>
