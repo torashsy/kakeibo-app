@@ -125,3 +125,8 @@
 .purchase-track i[data-refund=true] {background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 4px)}
 .purchase-more {min-height:44px; padding:6px 0; font-weight:600; font-size:14px}
 .purchase-report button:focus-visible {outline:2px solid var(--ink); outline-offset:2px}
+.ledger-app .purchase-report div.purchase-rank {cursor:default;}
+.ledger-app .purchase-report div.purchase-rank .purchase-name::after {content:none;}
+.purchase-group>.spend-transactions {padding-bottom:8px;}
+.subscription-services .subscription-service>header {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;min-height:44px;align-items:center;}
+.subscription-services .subscription-service>header span {overflow-wrap:anywhere;}

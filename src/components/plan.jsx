@@ -342,7 +342,7 @@ function SalaryRulePreview({ edit }) {
 }
 
 function MonthExplanation({result, entries, past, plans, ym}) {
-  const [expanded,setExpanded] = useState(false);
+  const [expanded,setExpanded] = useState(true);
   const items = new Map();
   function add(label, amount, recorded, source="", date="") {
     if (!amount) return;

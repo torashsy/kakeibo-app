@@ -21,8 +21,12 @@ it("compares card totals and shows review only for the selected period’s unres
     expect(find("カード別").getAttribute("aria-pressed")).toBe("true");
     const card = host.querySelector(".purchase-rank");
     expect(card.textContent).toContain("返金超過 -¥100");
-    await act(()=>card.click());
     expect(host.querySelectorAll(".spend-transactions > div")).toHaveLength(2);
+    expect(find("Apple決済")).toBeUndefined();
+    await act(()=>find("利用先別").click());
+    const apple=[...host.querySelectorAll('.purchase-group')].find(group=>group.querySelector('.purchase-name').textContent==='Apple');
+    expect(apple.querySelector('.spend-transactions').textContent).toContain('¥100');
+    expect(host.querySelectorAll('.spend-transactions > div')).toHaveLength(2);
     await act(()=>find("明細").click());
     expect(host.querySelectorAll(".card-ledger li")).toHaveLength(2);
     expect(host.querySelector(".ledger-refund").textContent).toContain("返金");

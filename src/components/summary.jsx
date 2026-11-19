@@ -154,7 +154,7 @@ function BalanceTimeline({ cards, onOpenCards, compact, onExpand, shown, upcomin
 
   }
   return <section className="k-group home-balance" aria-label="残高の見通し">
-    <h3>全口座の残高見通し</h3><details className="home-accounts"><summary><span>現在 <small>口座別</small></span><strong>{yen(start)}</strong></summary>
+    <h3>全口座の残高見通し</h3><details open className="home-accounts"><summary><span>現在 <small>口座別</small></span><strong>{yen(start)}</strong></summary>
       {accounts.map(([name,row]) => <div style={styles.settingRow} key={name}><span>{name}　<small>{row.asOf || row.ym + "月度"}</small></span><b>{yen(row.amount)}</b></div>)}
     </details>
     {points.length > 1 ? <>
@@ -197,14 +197,14 @@ function SubscriptionServices({ rows }) {
     service.rows.push(row);
   }
   return <div className="subscription-services">{[...byService.values()].sort((a,b)=>b.amount-a.amount).map(service=>
-    <details key={service.name}><summary><span>{service.name}</span><b>{yen(service.amount)}</b></summary>
-      {service.rows.map(row=><div key={row.id}><time>{shortDate(row.date)}</time><span>{row.account}{row.spendingCategory?.endsWith("（推定）") && <small> · 推定</small>}</span><b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b></div>)}
-    </details>)}</div>;
+    <section className="subscription-service" key={service.name}><header><span>{service.name}</span><b>{yen(service.amount)}</b></header>
+      <PurchaseLines rows={service.rows} merchant={service.name}/>
+    </section>)}</div>;
 }
-function PurchaseLines({ rows, apple=false, showCategory=false }) {
+function PurchaseLines({ rows, apple=false, showCategory=false, merchant }) {
   return <div className="spend-transactions">{rows.map(row=><div key={row.id}>
     <time dateTime={row.date}>{shortDate(row.date)}</time>
-    <span>{purchaseLabel(row)}{apple && <small>{row.appleProduct ? row.spendingCategory : row.account}</small>}{showCategory && <small>{row.spendingCategory==="その他の分類済み" ? row.mfMinor || row.mfMajor : row.spendingCategory}</small>}</span>
+    <span>{merchant && purchaseLabel(row) === merchant ? row.account || merchant : purchaseLabel(row)}{apple && <small>{row.appleProduct ? row.spendingCategory : row.account}</small>}{showCategory && <small>{row.spendingCategory==="その他の分類済み" ? row.mfMinor || row.mfMajor : row.spendingCategory}</small>}</span>
     <b>{row.amount>0?"返金 ":""}{yen(Math.abs(row.amount))}</b>
   </div>)}</div>;
 }
@@ -240,12 +240,10 @@ function CardLedger({ rows }) {
   </div>;
 }
 export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initialView }) {
-  const [basis, setBasis] = useState(initialView?.basis || (compact ? "category" : "card"));
-  const [selection, setSelection] = useState(initialView);
-  const [allMerchants, setAllMerchants] = useState(false);
+  const [basis, setBasis] = useState(initialView?.basis === "apple" ? "merchant" : initialView?.basis || (compact ? "category" : "card"));
+  const [expandedGroups, setExpandedGroups] = useState({});
   const monthRows = purchases.filter(row => cycleYm(row.date, cutoff) === ym && spendingGroup(row));
-  const appleRows = monthRows.filter(row => row.appleBilling);
-  const view = basis === "apple" && !appleRows.length ? "category" : basis;
+  const view = basis;
   const total = rows => -rows.reduce((sum, row) => sum + row.amount, 0);
   const groups = new Map();
   for (const row of monthRows) {
@@ -261,41 +259,41 @@ export function SpendingPurpose({ compact, onOpen, purchases, ym, cutoff, initia
   const ranked = [...groups.values()].filter(g => g !== pending)
     .sort((a,b) => b.amount - a.amount || a.label.localeCompare(b.label, "ja"));
   const max = Math.max(1, ...ranked.map(g => Math.abs(g.amount)));
-  const shown = compact ? ranked.slice(0,3) : view === "merchant" && !allMerchants ? ranked.slice(0,5) : ranked;
+  const shown = compact ? ranked.slice(0,3) : ranked;
   const views = compact ? [["card","カード別"],["category","用途別"]] :
-    [["card","カード別"],["category","用途別"],["ledger","明細"],["merchant","利用先別"],...(appleRows.length ? [["apple","Apple決済"]] : [])];
+    [["card","カード別"],["category","用途別"],["ledger","明細"],["merchant","利用先別"]];
   return <section className="purchase-report" data-compact={!!compact} aria-label="カード利用額">
     <header className={compact ? undefined : "amount-hero"}>
-      <h3>{compact ? Number(ym.slice(5))+"月度のカード利用額" : view === "apple" ? "Apple決済の合計" : "利用合計"}</h3>
-      <strong>{yen(total(view === "apple" ? appleRows : monthRows))}</strong>
-      {!compact && <small>{(view === "apple" ? appleRows : monthRows).length}件の明細</small>}
+      <h3>{compact ? Number(ym.slice(5))+"月度のカード利用額" : "利用合計"}</h3>
+      <strong>{yen(total(monthRows))}</strong>
+      {!compact && <small>{monthRows.length}件の明細</small>}
     </header>
     {monthRows.length ? <>
       <div className="purchase-views" role="group" aria-label="集計の切替">
         {views.map(([id,label]) => <button key={id} aria-pressed={view === id}
-          onClick={() => {setBasis(id); setSelection(null); setAllMerchants(false);}}>{label}</button>)}
+          onClick={() => setBasis(id)}>{label}</button>)}
       </div>
       {view === "ledger" ? <CardLedger key={ym} rows={monthRows}/> :
-        view === "apple" ? <PurchaseLines rows={appleRows} apple/> :
         shown.map(g => {
-          const open = !compact && selection?.ym === ym && selection?.label === g.label;
+          const key = [ym,view,g.label].join('|');
+          const expanded = expandedGroups[key] ?? (initialView?.ym === ym && initialView?.label === g.label);
+          const Heading = compact ? 'button' : 'div';
           return <div className="purchase-group" key={g.label}>
-            <button type="button" className="purchase-rank" aria-expanded={compact ? undefined : open}
-              onClick={() => compact ? onOpen(view, g.label) : setSelection(open ? null : {ym, label:g.label})}>
-              <span className="disclosure-chevron" aria-hidden="true">›</span>
+            <Heading className="purchase-rank" onClick={compact ? () => onOpen(view, g.label) : undefined}>
               <span className="purchase-name">{g.label}</span>
               <b>{g.amount < 0 && <small>返金超過 </small>}{yen(g.amount)}</b>
               <span className="purchase-track" aria-hidden="true"><i data-refund={g.amount < 0}
                 style={{width: 100 * Math.abs(g.amount) / max + "%"}}/></span>
-            </button>
-            {open && (view === "category" && g.label === "サブスク" ? <SubscriptionServices rows={g.rows}/> :
-              <PurchaseLines rows={g.rows} showCategory={view === "category" && g.label === "生活・サービス"}/>)}
+            </Heading>
+            {!compact && (view === "category" && g.label === "サブスク" ? <SubscriptionServices rows={g.rows}/> : <>
+              <PurchaseLines rows={expanded ? g.rows : g.rows.slice(0,3)} merchant={view === "merchant" ? g.label : undefined} apple={view === "merchant" && g.label === "Apple"} showCategory={view === "category" && g.label === "生活・サービス"}/>
+              {g.rows.length>3 && <button className="purchase-more" aria-expanded={!!expanded} aria-label={g.label+"の明細を"+(expanded?"3件に戻す":"すべて見る")}
+                onClick={()=>setExpandedGroups(previous=>({...previous,[key]:!expanded}))}>{expanded ? "3件に戻す" : `残り${g.rows.length-3}件を見る`} ›</button>}
+            </>)}
           </div>;
         })}
       {pending && <PendingPurchases key={ym} rows={pending.rows}/>}
       {compact && <button className="purchase-more" onClick={() => onOpen(view)}>{view === "card" ? "すべてのカード" : "すべての用途"}を見る ›</button>}
-      {!compact && view === "merchant" && ranked.length > 5 && <button className="purchase-more" onClick={() => setAllMerchants(!allMerchants)}>
-        {allMerchants ? "上位5件に戻る" : "すべての利用先を見る"}</button>}
     </> : <p>この月度のカード利用明細はありません。</p>}
   </section>;
 }
@@ -322,7 +320,7 @@ function InvestmentDetails({ entries, snapshot, ym, cutoff }) {
   const returned = ranked.reduce((sum,g)=>sum+g.returned,0);
   return <section className="statement portfolio"><header className="amount-hero"><h3>投資への純振替</h3><strong className="statement-total">{yen(total-returned)}</strong></header>
     <h4 className="list-heading">振替先別</h4>
-    {ranked.map(g=><details className="destination" key={g.name}><summary>
+    {ranked.map(g=><details open className="destination" key={g.name}><summary>
       <span>{g.name}<span className="reading-arrow" aria-hidden="true">›</span>{ranked.length>1 && <small>{total ? Math.round(100*g.invested/total) : 0}%</small>}</span><b>{yen(g.invested)}</b>
       <small className="action-caption">明細 {g.rows.length}件</small>
       {ranked.length>1 && <i className="destination-share" style={{width:(total ? 100*g.invested/total : 0)+"%"}}/>}
