@@ -33,3 +33,29 @@ it('opens each bill in place, shows signed refunds and keeps month switching and
     expect(location.href).toBe(url);
   }finally{await act(()=>root.unmount());}
 });
+
+it('keeps the amount gap visible while separating optional evidence from the spending breakdown',async()=>{
+  const host=document.createElement('div'),root=createRoot(host);
+  const row={id:'v',date:'2026-12-04',label:'VIEW',amount:9000,kind:'card',fromFeed:true};
+  const purchases=[{id:'p',date:'2026-10-23',account:'VIEW CARD',description:'交通チャージ',amount:-6000,spendingCategory:'交通費'}];
+  const reviews={'VIEW|2026-12-04':{status:'unresolved',billAmount:9000,difference:3000,
+    candidates:[{id:'p',date:'2026-10-23',amount:6000}],note:'前回にも同じ差額があります。',evidenceSummary:'支払方法変更の受付記録。対象利用は不明。'}};
+  try {
+    await act(()=>root.render(<DebitSchedule rows={[row]} end="2026-12-10" cards={[{id:'v',name:'VIEW',cutoffDay:5,paymentDay:4}]} purchases={purchases} reviews={reviews} cutoff={10}/>));
+    const card=host.querySelector('.debit-disclosure');
+    await act(()=>card.querySelector('summary').click());
+    expect(host.querySelector('.debit-composition').textContent).toContain('¥6,000');
+    expect(host.querySelector('.debit-gap-amount').textContent).toBe('内訳確認中¥3,000');
+    expect(host.querySelector('.debit-detail').textContent).not.toContain('¥9,000');
+    expect(host.querySelector('.debit-detail-title').textContent).toContain('推定');
+    const evidence=host.querySelector('.debit-evidence');
+    expect(evidence.open).toBe(false);
+    const url=location.href;
+    await act(()=>evidence.querySelector('summary').click());
+    expect(evidence.open).toBe(true);
+    expect(card.open).toBe(true);
+    expect(evidence.textContent).toContain(reviews['VIEW|2026-12-04'].evidenceSummary);
+    expect(location.href).toBe(url);
+    expect(host.querySelectorAll('.debit-purchases li')).toHaveLength(1);
+  }finally{await act(()=>root.unmount());}
+});

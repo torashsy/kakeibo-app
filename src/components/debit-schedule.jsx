@@ -4,48 +4,47 @@ import {debitBreakdown} from '../debit-breakdown';
 import './debit-schedule.css';
 
 const shortDate = date => date ? `${Number(date.slice(5,7))}/${Number(date.slice(8,10))}` : '';
-const signed = amount => `${amount < 0 ? '−' : '+'}${yen(Math.abs(amount))}`;
+const money = amount => `${amount < 0 ? '−' : ''}${yen(Math.abs(amount))}`;
 
 function DebitDetails({bill, context}) {
   const detail = useMemo(()=>debitBreakdown(bill,context),[bill,context]);
   const [showAll,setShowAll] = useState(false);
   const leading = detail.lines.filter(line=>line.amount>0).slice(0,2);
-  const max = Math.max(1,...detail.groups.map(row=>Math.abs(row.amount)));
+  const parts = [...detail.groups.map(row=>({...row,id:`group:${row.label}`})),
+    ...(detail.debtTotal ? [{id:'debt',label:'分割・登録予定',amount:detail.debtTotal}] : []),
+    ...detail.fixedLines.map(row=>({...row,id:`fixed:${row.id}`}))];
+  const max = Math.max(1,...parts.map(row=>Math.abs(row.amount)));
   const preview = detail.lines.length <= 6 ? detail.lines.length : 3;
   const visible = showAll ? detail.lines : detail.lines.slice(0,preview);
   return <details className="debit-disclosure">
     <summary className="debit-item">
-      <span className="debit-card-name">{bill.label}<small>{bill.fromFeed ? 'MF予定額' : bill.status === 'confirmed' ? '確定' : '見込み'} · 内訳 <i aria-hidden="true">›</i></small></span>
-      <b>{yen(bill.amount)}</b>
-      <span className="debit-preview">{leading.length ? leading.map(line=>`${line.label} ${yen(line.amount)}`).join(' / ') : detail.debtTotal ? `分割・登録予定 ${yen(detail.debtTotal)}` : detail.fixedLines.length ? detail.fixedLines.map(row=>row.label).join('・') : '内訳の取得待ち'}</span>
+      <span className="debit-card-name">{bill.label}<small>{bill.fromFeed ? 'MF予定額' : bill.status === 'confirmed' ? '確定' : '見込み'}</small></span>
+      <b>{yen(bill.amount)}</b><i className="debit-chevron" aria-hidden="true">›</i>
+      <span className="debit-preview">{leading.length ? leading.map(line=><span key={line.id}><span>{line.label}</span><span>{money(line.amount)}</span></span>) : <span><span>{detail.debtTotal ? '分割・登録予定' : detail.fixedLines.length ? detail.fixedLines.map(row=>row.label).join('・') : '内訳の取得待ち'}</span></span>}</span>
     </summary>
     <div className="debit-detail">
+      <div className="debit-detail-title"><h4>内訳</h4><small>{detail.inferred ? '利用日から推定' : '定期費の予定'}</small></div>
+      {!!parts.length && <dl className="debit-composition" aria-label={bill.label+'の内訳（予定）'}>{parts.map(part=><div key={part.id}>
+        <dt>{part.label}</dt><dd>{money(part.amount)}</dd>
+        <span className="debit-track" aria-hidden="true"><i style={{width:`${100*Math.abs(part.amount)/max}%`}}/></span>
+      </div>)}</dl>}
+      {detail.difference!==0 && <div className="debit-gap">
+        <div className="debit-gap-amount"><span>内訳確認中</span><b>{money(detail.difference)}</b></div>
+        <details className="debit-evidence"><summary>確認状況 <i aria-hidden="true">›</i></summary>
+          {detail.review ? <><p>{detail.review.note}</p><p>{detail.review.evidenceSummary}</p></>
+            : <p>{detail.difference>0 ? '予定額と、取得できた内訳との差額です。' : '利用候補・登録予定の合計が予定額を超えています。'} 請求月のずれや分割への変更などは未照合です。</p>}
+        </details>
+      </div>}
+      {detail.debtLines.some(line=>line.label!=='利用先未登録') && <ul className="debit-plan-items" aria-label="分割・登録予定の内訳">{detail.debtLines.map(line=><li key={line.id}><span>{line.label}</span><b>{money(line.amount)}</b></li>)}</ul>}
       {!!detail.lines.length && <>
-        <div className="debit-detail-title"><h4>{bill.fromFeed || bill.status === 'confirmed' ? '対象の利用候補' : '利用明細'}</h4><small>金額順 · 利用日から推定</small></div>
-        {detail.groups.length>1 && <div className="debit-categories" aria-label="利用候補の用途別金額">{detail.groups.map(group=><div key={group.label}>
-          <span>{group.label}</span><b>{group.amount<0?'−':''}{yen(Math.abs(group.amount))}</b>
-          <i aria-hidden="true" style={{width:`${100*Math.abs(group.amount)/max}%`}}/>
-        </div>)}</div>}
+        <div className="debit-detail-title debit-merchants-title"><h4>利用先 <small>{detail.lines.length}件</small></h4><small>金額順</small></div>
         <ul className="debit-purchases" aria-label={bill.label+'の利用明細'}>{visible.map(line=><li key={line.id}>
           <time dateTime={line.date}>{shortDate(line.date)}</time>
           <span>{line.label}{bill.label==='SAISON' && <small>{line.account}</small>}</span>
-          <b>{line.amount<0 && <small>返金 </small>}{signed(line.amount)}</b>
+          <b>{line.amount<0 && <small>返金 </small>}{money(line.amount)}</b>
         </li>)}</ul>
         {detail.lines.length>preview && <button className="debit-more" aria-expanded={showAll} onClick={()=>setShowAll(!showAll)}>{showAll?'3件に戻す':`残り${detail.lines.length-preview}件`} <span aria-hidden="true">›</span></button>}
       </>}
-      <dl className="debit-reconcile">
-        {!!detail.lines.length && <div><dt>利用・返金{detail.groups.some(row=>row.label==='カード積立')?'・積立':''}</dt><dd>{signed(detail.purchaseTotal)}</dd></div>}
-        {!!detail.debtTotal && <div><dt>分割・登録予定</dt><dd>{signed(detail.debtTotal)}</dd></div>}
-        {detail.fixedLines.map(line=><div key={line.id}><dt>{line.label}<small>定期費の予定</small></dt><dd>{signed(line.amount)}</dd></div>)}
-        {detail.difference!==0 && <div className="debit-gap"><dt>内訳確認中</dt><dd>{signed(detail.difference)}</dd></div>}
-        <div className="debit-detail-total"><dt>引き落とし予定</dt><dd>{yen(bill.amount)}</dd></div>
-      </dl>
-      {detail.debtLines.length>0 && <div className="debit-plan-items">{detail.debtLines.some(line=>line.label!=='利用先未登録')
-        ? detail.debtLines.map(line=><div key={line.id}><span>{line.label}</span><b>{yen(line.amount)}</b></div>)
-        : <p>分割・登録予定は利用先の記録なし</p>}</div>}
-      {detail.review ? <div className="debit-review"><p>{detail.review.note}</p><small>{detail.review.evidenceSummary}</small></div>
-        : detail.difference!==0 && <p className="debit-gap-note">{detail.difference>0 ? '予定額のうち、内訳と結びついていない金額。' : '利用候補・登録予定の合計が予定額を超えています。'} 請求月のずれ・分割への変更などは未照合です。</p>}
-      {!!detail.lines.length && (bill.fromFeed || bill.status==='confirmed') && <p className="debit-gap-note">利用候補は締め日による推定。請求への反映は未照合です。</p>}
     </div>
   </details>;
 }

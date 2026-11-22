@@ -1,40 +1,45 @@
 .debit-disclosure {border-top:1px solid var(--hairline,var(--line)); min-width:0;}
 .debit-disclosure:first-of-type {border-top:0;}
-.ledger-app .debit-disclosure>summary.debit-item {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:4px 12px; padding:14px 0; min-height:60px; cursor:pointer; list-style:none;}
-.debit-disclosure>summary::before,.debit-disclosure>summary::after {display:none!important;}
-.debit-disclosure>summary::-webkit-details-marker {display:none;}
-.debit-card-name i {display:inline-block; font-style:normal; margin-left:3px; transition:transform .18s ease;}
-.debit-disclosure[open] .debit-card-name i {transform:rotate(90deg);}
-.debit-disclosure .debit-preview {grid-column:1/-1; display:block; font-size:12px; line-height:1.5; color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+.ledger-app .debit-disclosure>summary.debit-item {display:grid; grid-template-columns:minmax(0,1fr) max-content 12px; gap:4px 10px; padding:18px 0; min-height:60px; cursor:pointer; list-style:none;}
+.debit-disclosure>summary::before,.debit-disclosure>summary::after,.debit-evidence>summary::before,.debit-evidence>summary::after {display:none!important;}
+.debit-disclosure>summary::-webkit-details-marker,.debit-evidence>summary::-webkit-details-marker {display:none;}
+.debit-chevron,.debit-evidence summary i {display:inline-block; font-style:normal; color:var(--muted); transition:transform .18s ease;}
+.debit-disclosure[open]>summary .debit-chevron,.debit-evidence[open]>summary i {transform:rotate(90deg);}
+.ledger-app .debit-disclosure .debit-card-name {font-weight:600;}
+.ledger-app .debit-disclosure .debit-card-name small {margin-top:3px; font-size:12px;}
+.debit-disclosure .debit-preview {grid-column:1/3; display:grid; gap:5px; padding-top:8px; color:var(--muted); font-size:12px; line-height:1.5;}
+.debit-preview>span {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:12px;}
+.debit-preview>span>span:first-child {overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+.debit-preview>span>span:nth-child(2) {font-family:var(--num-font); font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right;}
 .debit-disclosure[open] .debit-preview {display:none;}
-.debit-detail {padding:0 0 16px; min-width:0;}
-.debit-detail-title {display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin:8px 0 14px;}
+.debit-detail {padding:0 22px 20px 0; min-width:0;}
+.debit-detail-title {display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin:4px 0 16px;}
 .debit-detail-title h4 {font-family:inherit; font-weight:600; line-height:1.4; margin:0; font-size:14px;}
-.debit-detail-title small,.debit-plan-items p,.debit-gap-note {font-size:12px; color:var(--muted); line-height:1.6;}
-.debit-categories {display:grid; gap:12px; margin-bottom:18px;}
-.debit-categories>div {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:5px 12px; font-size:13px;}
-.debit-categories i {height:3px; background:var(--accent); opacity:.65; grid-column:1/-1;}
+.debit-detail-title small {font-size:12px; font-weight:400; color:var(--muted); line-height:1.5;}
+.debit-detail-title h4 small {margin-left:6px;}
+.debit-composition {display:grid; gap:16px; margin:0;}
+.debit-composition>div {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:7px 12px; font-size:14px; line-height:1.5;}
+.debit-composition dt {overflow-wrap:anywhere;}
+.debit-composition dd {margin:0;}
+.debit-track {height:4px; background:var(--hairline,var(--line)); grid-column:1/-1; overflow:hidden; border-radius:2px;}
+.debit-track i {display:block; height:100%; background:var(--accent); opacity:.8;}
+.debit-detail :is(b,dd) {font-family:var(--num-font); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; font-weight:500;}
+.debit-gap {margin-top:20px; padding-top:14px; border-top:1px dashed var(--muted);}
+.debit-gap-amount,.debit-plan-items li {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:12px; font-size:14px; line-height:1.5;}
+.debit-evidence>summary {display:flex; align-items:center; gap:8px; min-height:44px; width:fit-content; padding:0; font-size:12px; color:var(--muted); cursor:pointer; list-style:none;}
+.debit-evidence p {font-size:13px; line-height:1.65; margin:0 0 8px; color:var(--muted); overflow-wrap:anywhere;}
+.debit-merchants-title {margin-top:26px; margin-bottom:2px;}
 .debit-purchases {list-style:none; padding:0; margin:0;}
-.debit-purchases li {display:grid; grid-template-columns:3.2em minmax(0,1fr) max-content; gap:8px; padding:12px 0; align-items:start; border-bottom:1px solid var(--hairline,var(--line)); font-size:13px; line-height:1.5;}
-.debit-purchases time {color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.debit-purchases li {display:grid; grid-template-columns:3.2em minmax(0,1fr) max-content; gap:8px; padding:14px 0; align-items:start; border-bottom:1px solid var(--hairline,var(--line)); font-size:14px; line-height:1.5;}
+.debit-purchases time {color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; font-size:12px; padding-top:2px;}
 .debit-purchases li>span {overflow-wrap:anywhere; min-width:0;}
 .debit-purchases small {display:block; color:var(--muted); font-size:11px;}
-.debit-detail :is(b,dd) {font-family:var(--num-font); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; font-weight:500;}
-.debit-purchases b small {display:inline;}
+.debit-purchases b small {display:block;}
 .debit-more {display:block; background:none; border:0; padding:10px 0; min-height:44px; font:inherit; font-size:13px; color:var(--accent); cursor:pointer;}
 .debit-more[aria-expanded=true] span {display:inline-block; transform:rotate(90deg);}
-.debit-reconcile {margin:18px 0 0; font-size:14px;}
-.debit-reconcile>div,.debit-plan-items>div {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:12px; padding:7px 0;}
-.debit-reconcile dt {overflow-wrap:anywhere;}
-.debit-reconcile dd {margin:0;}
-.debit-reconcile dt small {display:block; font-size:11px; color:var(--muted);}
-.debit-detail-total {border-top:1px solid var(--hairline,var(--line)); margin-top:8px; padding-top:12px!important;}
-.debit-detail-total :is(dt,dd) {font-weight:600;}
-.debit-gap {color:var(--muted);}
-.debit-plan-items {font-size:12px; color:var(--muted); margin-top:10px;}
-.debit-gap-note {margin:10px 0 0;}
-.debit-review {margin-top:12px; font-size:13px; line-height:1.6;}
-.debit-review p {margin:0 0 4px;}
-.debit-review small {display:block; color:var(--muted); font-size:12px;}
-.debit-disclosure>summary:focus-visible,.debit-more:focus-visible {outline:2px solid var(--accent); outline-offset:3px;}
-@media(prefers-reduced-motion:reduce) {.debit-card-name i {transition:none;}}
+.debit-plan-items {list-style:none; padding:0; margin:14px 0 0; color:var(--muted);}
+.debit-plan-items li {padding:8px 0; font-size:12px;}
+.debit-plan-items span {overflow-wrap:anywhere; min-width:0;}
+.debit-disclosure>summary:focus-visible,.debit-more:focus-visible,.debit-evidence>summary:focus-visible {outline:2px solid var(--accent); outline-offset:3px;}
+@media(max-width:360px) {.debit-purchases li {grid-template-columns:2.9em minmax(0,1fr) max-content; gap:6px; font-size:13px;} .debit-detail {padding-right:22px;}}
+@media(prefers-reduced-motion:reduce) {.debit-chevron,.debit-evidence summary i {transition:none;}}
