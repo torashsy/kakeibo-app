@@ -18,8 +18,8 @@ function DebitDetails({bill, context}) {
   const visible = showAll ? detail.lines : detail.lines.slice(0,preview);
   return <details className="debit-disclosure">
     <summary className="debit-item">
-      <span className="debit-card-name">{bill.label}<small>{bill.fromFeed ? 'MF予定額' : bill.status === 'confirmed' ? '確定' : '見込み'}</small></span>
-      <b>{yen(bill.amount)}</b><i className="debit-chevron" aria-hidden="true">›</i>
+      <span className="debit-card-name">{bill.label} <i className="debit-chevron" aria-hidden="true">›</i><small>{bill.fromFeed ? 'MF予定額' : bill.status === 'confirmed' ? '確定' : '見込み'}</small></span>
+      <b>{yen(bill.amount)}</b>
       <span className="debit-preview">{leading.length ? leading.map(line=><span key={line.id}><span>{line.label}</span><span>{money(line.amount)}</span></span>) : <span><span>{detail.debtTotal ? '分割・登録予定' : detail.fixedLines.length ? detail.fixedLines.map(row=>row.label).join('・') : '内訳の取得待ち'}</span></span>}</span>
     </summary>
     <div className="debit-detail">

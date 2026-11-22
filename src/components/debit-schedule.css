@@ -1,6 +1,6 @@
 .debit-disclosure {border-top:1px solid var(--hairline,var(--line)); min-width:0;}
 .debit-disclosure:first-of-type {border-top:0;}
-.ledger-app .debit-disclosure>summary.debit-item {display:grid; grid-template-columns:minmax(0,1fr) max-content 12px; gap:4px 10px; padding:18px 0; min-height:60px; cursor:pointer; list-style:none;}
+.ledger-app .debit-disclosure>summary.debit-item {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:4px 10px; padding:18px 0; min-height:60px; cursor:pointer; list-style:none;}
 .debit-disclosure>summary::before,.debit-disclosure>summary::after,.debit-evidence>summary::before,.debit-evidence>summary::after {display:none!important;}
 .debit-disclosure>summary::-webkit-details-marker,.debit-evidence>summary::-webkit-details-marker {display:none;}
 .debit-chevron,.debit-evidence summary i {display:inline-block; font-style:normal; color:var(--muted); transition:transform .18s ease;}
@@ -12,7 +12,7 @@
 .debit-preview>span>span:first-child {overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
 .debit-preview>span>span:nth-child(2) {font-family:var(--num-font); font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right;}
 .debit-disclosure[open] .debit-preview {display:none;}
-.debit-detail {padding:0 22px 20px 0; min-width:0;}
+.debit-detail {padding:0 0 20px; min-width:0;}
 .debit-detail-title {display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin:4px 0 16px;}
 .debit-detail-title h4 {font-family:inherit; font-weight:600; line-height:1.4; margin:0; font-size:14px;}
 .debit-detail-title small {font-size:12px; font-weight:400; color:var(--muted); line-height:1.5;}
@@ -41,5 +41,5 @@
 .debit-plan-items li {padding:8px 0; font-size:12px;}
 .debit-plan-items span {overflow-wrap:anywhere; min-width:0;}
 .debit-disclosure>summary:focus-visible,.debit-more:focus-visible,.debit-evidence>summary:focus-visible {outline:2px solid var(--accent); outline-offset:3px;}
-@media(max-width:360px) {.debit-purchases li {grid-template-columns:2.9em minmax(0,1fr) max-content; gap:6px; font-size:13px;} .debit-detail {padding-right:22px;}}
+@media(max-width:360px) {.debit-purchases li {grid-template-columns:2.9em minmax(0,1fr) max-content; gap:6px; font-size:13px;}}
 @media(prefers-reduced-motion:reduce) {.debit-chevron,.debit-evidence summary i {transition:none;}}
