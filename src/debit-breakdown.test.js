@@ -36,19 +36,19 @@ it('uses recurring plan lines only when no charge candidates exist, respecting c
 });
 it('attributes a shared SMCC source only to a unique reconciling bill and counts investment once',()=>{
   const cards=[{id:'g',name:'SMCC Gold',cutoffDay:31,paymentDay:26},{id:'s',name:'smcc',cutoffDay:31,paymentDay:26}];
-  const bills=[{id:'g',label:'SMCC Gold',date:'2026-11-26',amount:64410,kind:'card',fromFeed:true},
-    {id:'s',label:'smcc',date:'2026-11-26',amount:294,kind:'card',status:'forecast'}];
+  const bills=[{id:'g',label:'SMCC Gold',date:'2026-11-26',amount:59000,kind:'card',fromFeed:true},
+    {id:'s',label:'smcc',date:'2026-11-26',amount:300,kind:'card',status:'forecast'}];
   const investments=[{id:'mf-invest:i',account:'三井住友カード',kind:'card',broker:'SBI証券',date:'2026-10-14',amount:-20000}];
-  const purchases=[{id:'p',account:'三井住友カード',date:'2026-10-01',amount:-9544,description:'利用'}];
-  const debt={'SMCC Gold':{'2026-11':34866},smcc:{'2026-11':294}};
+  const purchases=[{id:'p',account:'三井住友カード',date:'2026-10-01',amount:-9000,description:'利用'}];
+  const debt={'SMCC Gold':{'2026-11':30000},smcc:{'2026-11':300}};
   const context={cards,bills,purchases,investments,debt,cutoff:10};
   const d=debitBreakdown(bills[0],context);
   expect(d.familyMatched).toBe(true);expect(d.difference).toBe(0);
   expect(d.groups).toContainEqual({label:'カード積立',amount:20000});
   expect(debitBreakdown(bills[1],context).lines).toHaveLength(0);
   const duplicate={...investments[0],id:'mf-card:i',description:'SBI積立',spendingCategory:'投資'};
-  expect(debitBreakdown(bills[0],{...context,purchases:[...purchases,duplicate]}).purchaseTotal).toBe(29544);
-  const ambiguous=[bills[0],{...bills[1],amount:29838,fromFeed:true}];
+  expect(debitBreakdown(bills[0],{...context,purchases:[...purchases,duplicate]}).purchaseTotal).toBe(29000);
+  const ambiguous=[bills[0],{...bills[1],amount:29300,fromFeed:true}];
   expect(debitBreakdown(bills[0],{...context,bills:ambiguous}).familyMatched).toBe(false);
 });
 it('keeps card-family purchases together for SAISON but does not turn an MF partial card into a full-family bill',()=>{
