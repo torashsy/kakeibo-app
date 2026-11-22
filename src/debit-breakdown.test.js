@@ -2,6 +2,19 @@ import {expect,it} from 'vitest';
 import {debitBreakdown} from './debit-breakdown';
 import {upcomingDebits} from './utils';
 
+it('shows an unresolved review only for its exact bill and unchanged candidate amounts',()=>{
+  const cards=[{id:'v',name:'VIEW',cutoffDay:5,paymentDay:4}];
+  const bill={id:'v',kind:'card',label:'VIEW',date:'2026-12-04',amount:8000,fromFeed:true};
+  const purchases=[{id:'x',account:'VIEW CARD',date:'2026-10-20',amount:-5000,description:'交通'}];
+  const review={status:'unresolved',billAmount:8000,difference:3000,candidates:[{id:'x',date:'2026-10-20',amount:5000}],note:'過去分の可能性（未確定）'};
+  const context={cards,purchases,reviews:{'VIEW|2026-12-04':review}};
+  const result=debitBreakdown(bill,context);
+  expect(result.review).toEqual(review);expect(result.difference).toBe(3000);expect(result.detailTotal).toBe(5000);
+  expect(debitBreakdown({...bill,amount:9000},context).review).toBeNull();
+  expect(debitBreakdown(bill,{...context,purchases:[{...purchases[0],id:'other'}]}).review).toBeNull();
+  expect(debitBreakdown({...bill,date:'2027-01-04'},context).review).toBeNull();
+});
+
 const cards=[{id:'j',name:'JCB',cutoffDay:15,paymentDay:10}];
 const base={id:'card|2026-11|JCB',label:'JCB',date:'2026-12-10',amount:13000,kind:'card',status:'forecast'};
 const purchases=[

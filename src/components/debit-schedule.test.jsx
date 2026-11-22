@@ -23,13 +23,13 @@ it('opens each bill in place, shows signed refunds and keeps month switching and
     expect(disclosure.open).toBe(true);
     expect(host.querySelectorAll('.debit-purchases li')).toHaveLength(3);
     expect(host.querySelector('.debit-detail').textContent).toContain('返金 −¥1,000');
-    expect(host.querySelector('.debit-detail').textContent).not.toContain('内訳未照合');
+    expect(host.querySelector('.debit-detail').textContent).not.toContain('内訳確認中');
     expect(location.href).toBe(url);
     await act(()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='次月分').click());
     expect(host.querySelector('.debit-disclosure').open).toBe(false);
     expect(host.querySelector('.debit-schedule>header').textContent).toContain('¥3,000');
     expect(host.querySelectorAll('.debit-purchases li')).toHaveLength(0);
-    expect(host.textContent).toContain('内訳未照合');
+    expect(host.textContent).toContain('内訳確認中');
     expect(location.href).toBe(url);
   }finally{await act(()=>root.unmount());}
 });

@@ -58,7 +58,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
-      {showOutlook && <DebitSchedule investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
+      {showOutlook && <DebitSchedule reviews={snapshot?.cardDebitReviews} investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
       <SpendingPurpose compact purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       </>}
       {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
@@ -78,7 +78,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
 
       {!showOutlook && !hasBal && <p>この月の口座残高は未登録です。</p>}
       {!showOutlook && <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />}
-      {showOutlook && <DebitSchedule investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
+      {showOutlook && <DebitSchedule reviews={snapshot?.cardDebitReviews} investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
       {showOutlook && <section className="k-group">
         <h3>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</h3>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],

@@ -2,7 +2,7 @@ import { cardForPurchase, cardPaymentDate, cycleYm, debtValueTotal, plannedFixed
 import { purchaseLabel, spendingGroup } from './spending-groups';
 
 // Display only: never turn charge candidates or a reconciliation gap into ledger entries.
-export function debitBreakdown(bill, {cards = [], debt = {}, subs = [], purchases = [], investments = [], bills = [], cutoff = 0} = {}) {
+export function debitBreakdown(bill, {cards = [], debt = {}, subs = [], purchases = [], investments = [], bills = [], reviews = {}, cutoff = 0} = {}) {
   const card = cards.find(card => card.name === bill.label);
   const ym = cycleYm(bill.date, cutoff);
   const purchaseIds = new Set(purchases.map(row=>row.id));
@@ -39,10 +39,16 @@ export function debitBreakdown(bill, {cards = [], debt = {}, subs = [], purchase
   const detailTotal = purchaseTotal + debtTotal + fixedTotal;
   const groups = new Map();
   for (const line of lines) groups.set(line.group, (groups.get(line.group) || 0) + line.amount);
+  const savedReview = reviews?.[`${bill.label}|${bill.date}`];
+  // A note about one bill is not evidence for another bill or newly arrived charges.
+  const fingerprint = rows => rows.map(row=>`${row.id}|${row.date}|${row.amount}`).sort().join('\n');
+  const review = savedReview?.status==='unresolved' && savedReview.billAmount===bill.amount &&
+    savedReview.difference===bill.amount-detailTotal && Array.isArray(savedReview.candidates) &&
+    fingerprint(savedReview.candidates)===fingerprint(lines) ? savedReview : null;
   return {
     lines, debtLines, fixedLines, purchaseTotal, debtTotal, fixedTotal, detailTotal,
     difference: bill.amount - detailTotal,
     groups: [...groups].map(([label,amount]) => ({label,amount})).sort((a,b)=>b.amount-a.amount),
-    inferred: bill.kind === 'card', familyMatched,
+    inferred: bill.kind === 'card', familyMatched, review,
   };
 }

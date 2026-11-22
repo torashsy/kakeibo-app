@@ -37,21 +37,22 @@ function DebitDetails({bill, context}) {
         {!!detail.lines.length && <div><dt>利用・返金{detail.groups.some(row=>row.label==='カード積立')?'・積立':''}</dt><dd>{signed(detail.purchaseTotal)}</dd></div>}
         {!!detail.debtTotal && <div><dt>分割・登録予定</dt><dd>{signed(detail.debtTotal)}</dd></div>}
         {detail.fixedLines.map(line=><div key={line.id}><dt>{line.label}<small>定期費の予定</small></dt><dd>{signed(line.amount)}</dd></div>)}
-        {detail.difference!==0 && <div className="debit-gap"><dt>内訳未照合</dt><dd>{signed(detail.difference)}</dd></div>}
+        {detail.difference!==0 && <div className="debit-gap"><dt>内訳確認中</dt><dd>{signed(detail.difference)}</dd></div>}
         <div className="debit-detail-total"><dt>引き落とし予定</dt><dd>{yen(bill.amount)}</dd></div>
       </dl>
       {detail.debtLines.length>0 && <div className="debit-plan-items">{detail.debtLines.some(line=>line.label!=='利用先未登録')
         ? detail.debtLines.map(line=><div key={line.id}><span>{line.label}</span><b>{yen(line.amount)}</b></div>)
         : <p>分割・登録予定は利用先の記録なし</p>}</div>}
-      {detail.difference!==0 && <p className="debit-gap-note">{detail.difference>0 ? '予定額のうち、内訳と結びついていない金額。' : '利用候補・登録予定の合計が予定額を超えています。'} 請求月のずれ・分割への変更などは未照合です。</p>}
+      {detail.review ? <div className="debit-review"><p>{detail.review.note}</p><small>{detail.review.evidenceSummary}</small></div>
+        : detail.difference!==0 && <p className="debit-gap-note">{detail.difference>0 ? '予定額のうち、内訳と結びついていない金額。' : '利用候補・登録予定の合計が予定額を超えています。'} 請求月のずれ・分割への変更などは未照合です。</p>}
       {!!detail.lines.length && (bill.fromFeed || bill.status==='confirmed') && <p className="debit-gap-note">利用候補は締め日による推定。請求への反映は未照合です。</p>}
     </div>
   </details>;
 }
 
-export function DebitSchedule({rows,following=[],end,missingCount=0,onOpenCards,cards=[],debt={},subs=[],purchases=[],investments=[],cutoff=0}) {
+export function DebitSchedule({rows,following=[],end,missingCount=0,onOpenCards,cards=[],debt={},subs=[],purchases=[],investments=[],reviews={},cutoff=0}) {
   const [later,setLater] = useState(false);
-  const context = useMemo(()=>({cards,debt,subs,purchases,investments,cutoff,bills:[...rows,...following]}),[cards,debt,subs,purchases,investments,cutoff,rows,following]);
+  const context = useMemo(()=>({cards,debt,subs,purchases,investments,reviews,cutoff,bills:[...rows,...following]}),[cards,debt,subs,purchases,investments,reviews,cutoff,rows,following]);
   const visible = later ? following : rows;
   const dates = [...new Set(visible.map(row=>row.date))];
   return <section className="debit-schedule" aria-label="引き落とし予定">
