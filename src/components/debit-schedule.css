@@ -26,7 +26,7 @@
 .debit-detail :is(b,dd) {font-family:var(--num-font); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; font-weight:500;}
 .debit-gap {margin-top:20px; padding-top:14px; border-top:1px dashed var(--muted);}
 .debit-gap-amount,.debit-plan-items li {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:12px; font-size:14px; line-height:1.5;}
-.debit-evidence>summary {display:flex; align-items:center; gap:8px; min-height:44px; width:fit-content; padding:0; font-size:12px; color:var(--muted); cursor:pointer; list-style:none;}
+.ledger-app .debit-evidence>summary {display:flex; align-items:center; gap:8px; min-height:44px; width:fit-content; padding:0; font-size:12px; color:var(--muted); cursor:pointer; list-style:none;}
 .debit-evidence p {font-size:13px; line-height:1.65; margin:0 0 8px; color:var(--muted); overflow-wrap:anywhere;}
 .debit-merchants-title {margin-top:26px; margin-bottom:2px;}
 .debit-purchases {list-style:none; padding:0; margin:0;}
