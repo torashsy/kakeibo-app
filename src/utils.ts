@@ -708,9 +708,9 @@ const balanceCoveredThrough = (monthEntries: Entry[], ym: string, cutoffDay: num
 
 // カードに紐づく定期費のうち、この家計月度に引き落とされる既知額。
 // カード請求の実績がまだ無いときだけ「見込み」として使い、実績との二重加算はしない。
-const plannedFixedForCard = (subs: Sub[] | null | undefined, cards: Card[] | null | undefined, cardName: string, ym: string, cutoffDay: number): number => {
-  return (subs || []).reduce((sum, s) => {
-    if (s.card !== cardName) return sum;
+export const plannedFixedItemsForCard = (subs: Sub[] | null | undefined, cards: Card[] | null | undefined, cardName: string, ym: string, cutoffDay: number): {id: string; label: string; amount: number}[] => {
+  return (subs || []).flatMap(s => {
+    if (s.card !== cardName) return [];
     const card = (cards || []).find((c) => c.name === cardName);
     const amount = Number(s.amount) || 0;
     let subtotal = 0;
@@ -723,9 +723,19 @@ const plannedFixedForCard = (subs: Sub[] | null | undefined, cards: Card[] | nul
       else if (!validDate(s.renewal)) subtotal += amount / 12;
       else if (s.renewal.slice(5, 7) === serviceYm.slice(5, 7)) subtotal += amount;
     }
-    return sum + subtotal;
-  }, 0);
+    return subtotal ? [{id: s.id, label: s.name, amount: subtotal}] : [];
+  });
 };
+const plannedFixedForCard = (subs: Sub[] | null | undefined, cards: Card[] | null | undefined, cardName: string, ym: string, cutoffDay: number): number =>
+  plannedFixedItemsForCard(subs, cards, cardName, ym, cutoffDay).reduce((sum, row) => sum + row.amount, 0);
+
+// Forecasts and their displayed detail must use the same card-account mapping.
+export function cardForPurchase(account: string | undefined, cards: Card[] | null | undefined): Card | undefined {
+  const source = account?.toLowerCase() || "";
+  const sourceName = (name: string) => (({ VIEW: "view card", EPOS: "epos card" } as Record<string, string>)[name] || name.toLowerCase());
+  return cards?.find(c => sourceName(c.name) === source ||
+    (c.name === "SAISON" && (source.includes("saison") || source === "likeme" || source === "muji card")));
+}
 
 // 入力済み請求・口座残高の基準日・既知の計画額から、カードごとの支払状態を作る。
 export function cardClaimStates(cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, monthEntries: Entry[], ym: string, cutoffDay: number = 0, includeEmpty = false): CardClaimState[] {
@@ -781,12 +791,9 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
   const start = targetRange && targetRange.start > today ? targetRange.start : today;
   const end = targetRange?.end || addDays(today, Math.max(0, days));
   const startYm = targetYm || cycleYm(today, cutoffDay);
-  const sourceName = (name: string) => (({ VIEW: "view card", EPOS: "epos card" } as Record<string, string>)[name] || name.toLowerCase());
   const estimates = new Map<string, number>();
   for (const purchase of purchases) {
-    const source = purchase.account?.toLowerCase() || "";
-    const card = cards?.find(c => sourceName(c.name) === source ||
-      (c.name === "SAISON" && (source.includes("saison") || source === "likeme" || source === "muji card")));
+    const card = cardForPurchase(purchase.account, cards);
     if (!card) continue;
     const due = cardPaymentDate(purchase.date, card);
     if (!due || due < start || due > end) continue;

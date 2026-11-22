@@ -1,0 +1,37 @@
+.debit-disclosure {border-top:1px solid var(--hairline,var(--line)); min-width:0;}
+.debit-disclosure:first-of-type {border-top:0;}
+.ledger-app .debit-disclosure>summary.debit-item {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:4px 12px; padding:14px 0; min-height:60px; cursor:pointer; list-style:none;}
+.debit-disclosure>summary::before,.debit-disclosure>summary::after {display:none!important;}
+.debit-disclosure>summary::-webkit-details-marker {display:none;}
+.debit-card-name i {display:inline-block; font-style:normal; margin-left:3px; transition:transform .18s ease;}
+.debit-disclosure[open] .debit-card-name i {transform:rotate(90deg);}
+.debit-disclosure .debit-preview {grid-column:1/-1; display:block; font-size:12px; line-height:1.5; color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+.debit-disclosure[open] .debit-preview {display:none;}
+.debit-detail {padding:0 0 16px; min-width:0;}
+.debit-detail-title {display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin:8px 0 14px;}
+.debit-detail-title h4 {font-family:inherit; font-weight:600; line-height:1.4; margin:0; font-size:14px;}
+.debit-detail-title small,.debit-plan-items p,.debit-gap-note {font-size:12px; color:var(--muted); line-height:1.6;}
+.debit-categories {display:grid; gap:12px; margin-bottom:18px;}
+.debit-categories>div {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:5px 12px; font-size:13px;}
+.debit-categories i {height:3px; background:var(--accent); opacity:.65; grid-column:1/-1;}
+.debit-purchases {list-style:none; padding:0; margin:0;}
+.debit-purchases li {display:grid; grid-template-columns:3.2em minmax(0,1fr) max-content; gap:8px; padding:12px 0; align-items:start; border-bottom:1px solid var(--hairline,var(--line)); font-size:13px; line-height:1.5;}
+.debit-purchases time {color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.debit-purchases li>span {overflow-wrap:anywhere; min-width:0;}
+.debit-purchases small {display:block; color:var(--muted); font-size:11px;}
+.debit-detail :is(b,dd) {font-family:var(--num-font); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; font-weight:500;}
+.debit-purchases b small {display:inline;}
+.debit-more {display:block; background:none; border:0; padding:10px 0; min-height:44px; font:inherit; font-size:13px; color:var(--accent); cursor:pointer;}
+.debit-more[aria-expanded=true] span {display:inline-block; transform:rotate(90deg);}
+.debit-reconcile {margin:18px 0 0; font-size:14px;}
+.debit-reconcile>div,.debit-plan-items>div {display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:12px; padding:7px 0;}
+.debit-reconcile dt {overflow-wrap:anywhere;}
+.debit-reconcile dd {margin:0;}
+.debit-reconcile dt small {display:block; font-size:11px; color:var(--muted);}
+.debit-detail-total {border-top:1px solid var(--hairline,var(--line)); margin-top:8px; padding-top:12px!important;}
+.debit-detail-total :is(dt,dd) {font-weight:600;}
+.debit-gap {color:var(--muted);}
+.debit-plan-items {font-size:12px; color:var(--muted); margin-top:10px;}
+.debit-gap-note {margin:10px 0 0;}
+.debit-disclosure>summary:focus-visible,.debit-more:focus-visible {outline:2px solid var(--accent); outline-offset:3px;}
+@media(prefers-reduced-motion:reduce) {.debit-card-name i {transition:none;}}

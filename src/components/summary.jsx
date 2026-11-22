@@ -1,6 +1,7 @@
 import { homeSections } from "../page-navigation";
 import { SearchField } from "./search-field";
 import { spendingGroup, purchaseLabel, needsPurposeReview } from "../spending-groups";
+import { DebitSchedule } from "./debit-schedule";
 import { IncomeLines } from "./income-lines";
 import { PendingPurchases } from "./pending-purchases";
 import { CashComparison } from "./cash-comparison";
@@ -57,7 +58,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
-      {showOutlook && <DebitSchedule rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
+      {showOutlook && <DebitSchedule investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
       <SpendingPurpose compact purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       </>}
       {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
@@ -77,7 +78,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
 
       {!showOutlook && !hasBal && <p>この月の口座残高は未登録です。</p>}
       {!showOutlook && <AccountBalances shown={shown} hasBal={hasBal} total={balTotalNow} change={balChange} partialAccounts={partialAccounts} config={config} ym={ym} net={summary.net + summary.invest} />}
-      {showOutlook && <DebitSchedule rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
+      {showOutlook && <DebitSchedule investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} missingCount={claimStates.filter((row) => !row.due).length} onOpenCards={onOpenCards} />}
       {showOutlook && <section className="k-group">
         <h3>{periodLabel(ym, config.cycleCutoffDay)}の収支見込み　{yen(forecast.net)}</h3>
         {[["給与",forecast.salaryIncome,forecast.salaryRecorded], ["その他収入",forecast.otherIncome,forecast.otherRecorded],
@@ -406,36 +407,6 @@ function CardClaimStatusList({ rows }) {
     </div>
   );
 }
-function DebitSchedule({ rows, following = [], end, missingCount = 0, onOpenCards }) {
-  const [later, setLater] = useState(false);
-  const visible = later ? following : rows;
-  const total = visible.reduce((sum, row) => sum + row.amount, 0);
-  const dates = [...new Set(visible.map(row => row.date))];
-  return <section className="debit-schedule" aria-label="引き落とし予定">
-    <header><h3>引き落とし予定</h3><strong>{yen(total)}</strong></header>
-    <div className="debit-period" role="group" aria-label="引落予定の期間">
-      <button aria-pressed={!later} onClick={() => setLater(false)}>{shortDate(end)}まで</button>
-      <button aria-pressed={later} onClick={() => setLater(true)}>次月分</button>
-    </div>
-    {dates.map(date => {
-      const bills = visible.filter(row => row.date === date);
-      return <div className="debit-day" key={date}>
-        <div className="debit-date"><time dateTime={date}>{shortDate(date)}</time><b>{yen(bills.reduce((sum,row) => sum + row.amount, 0))}</b></div>
-        {bills.map(row => <div className="debit-item" key={row.id}>
-          <span>{row.label}<small>{row.fromFeed ? "MF予定額" : row.status === "confirmed" ? "確定" : "見込み"}</small></span>
-          <b>{yen(row.amount)}</b>
-        </div>)}
-      </div>;
-    })}
-    {!visible.length && <p className="debit-empty">予定額はまだありません</p>}
-    {visible.some(row => !row.fromFeed && row.status === "forecast") && <details className="debit-basis">
-      <summary>見込みの計算 <span aria-hidden="true">›</span></summary>
-      <p>取得済みの利用額・返金と登録済みの分割予定から計算。利用明細がないカードは登録済みの定期費も含みます。今後の利用で変わります。</p>
-    </details>}
-    {missingCount > 0 && <button className="debit-empty" onClick={onOpenCards}>引落日未設定 {missingCount}枚 ›</button>}
-  </section>;
-}
-
 function BreakdownGroup({ label, total, rows, valueKey, showMemos = false }) {
   return (
     <div>
