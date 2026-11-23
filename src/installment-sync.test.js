@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {reconcileInstallments} from './installment-sync';
+import {reconcileInstallments,installmentPreviews} from './installment-sync';
 import {upcomingDebits,cycleYm} from './utils';
 import {debitBreakdown} from './debit-breakdown';
 const today='2026-11-23',cards=[{id:'view',name:'VIEW',cutoffDay:5,paymentDay:4}];
@@ -7,6 +7,17 @@ const source={id:'statement',card:'VIEW',date:'2026-12-04',asOf:today,amount:120
   items:[{id:'contract',label:'商品A',amount:1200,purchaseDate:'2026-08-01',installmentNumber:4,totalInstallments:12}]};
 const feed=s=>({installmentSchedules:{[s.id]:s}});
 const merge=(saved,s=source)=>reconcileInstallments(saved,feed(s),cards,10,[],today);
+it('displays provisional itemized statements without changing debt and compares holiday payments to the nominal month',()=>{
+  const c=[{name:'Example',paymentDay:10}],saved={Example:{'2026-12':900,'2027-01':777}};
+  const s={...source,id:'preview',card:'Example',date:'2027-01-12',kind:'issuer-itemized-preview',confirmed:false,statementTotal:1700,ordinaryAmount:500,items:[{...source.items[0],paymentType:'installment'}]};
+  const f={installmentCollection:{statements:{preview:s}}};
+  const result=installmentPreviews(f.installmentCollection,c,saved,10,today);
+  expect(result).toHaveLength(1);expect(result[0].manualYm).toBe('2026-12');expect(result[0].difference).toBe(300);
+  expect(reconcileInstallments(saved,f,c,10,[],today).debt).toEqual(saved);
+  expect(installmentPreviews({statements:{preview:{...s,amount:1500}}},c,saved,10,today)).toEqual([]);
+  expect(installmentPreviews({statements:{preview:{...s,confirmed:true}}},c,saved,10,today)).toEqual([]);
+  expect(installmentPreviews({statements:{preview:{...s,items:[...s.items,...s.items]}}},c,saved,10,today)).toEqual([]);
+});
 it('verifies issuer monthly totals without changing manual payments or adding annual-overlap payments',()=>{
   const saved={VIEW:{'2026-11':1200,'FY:2026':10000}};
   const summary={id:'issuer',kind:'issuer-monthly-summary',card:'VIEW',complete:true,evidence:'issuer-table',asOf:today,months:[{paymentMonth:'2026-12',amount:1200,remaining:10000},{paymentMonth:'2027-01',amount:1200,remaining:8800}]};

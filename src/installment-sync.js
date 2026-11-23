@@ -1,6 +1,25 @@
 import {cycleYm,cardPaymentDate,cardForPurchase,debtValueTotal,nextBankBusinessDay} from './utils';
 import {localDay,validDay} from './deadlines';
 
+// Provisional issuer statements are evidence for display, never confirmed debt.
+export function installmentPreviews(collection,cards=[],saved={},cutoff=0,today=localDay()) {
+  return Object.values(collection?.statements||{}).filter(s=>{
+    const ids=new Set();
+    return s.kind==='issuer-itemized-preview'&&s.confirmed===false&&s.complete===true&&s.evidence&&validDay(s.asOf)&&s.asOf<=today&&validDay(s.date)&&cards.some(c=>c.name===s.card)&&
+      ['amount','ordinaryAmount','statementTotal'].every(k=>Number.isSafeInteger(s[k])&&s[k]>=0)&&Array.isArray(s.items)&&s.items.length>0&&s.items.every(i=>{
+        if(!i.id||ids.has(i.id)||!i.label?.trim()||!Number.isSafeInteger(i.amount)||i.amount<0||!validDay(i.purchaseDate)||i.purchaseDate>s.date||!['skip','installment'].includes(i.paymentType)||!Number.isInteger(i.installmentNumber)||!Number.isInteger(i.totalInstallments)||i.installmentNumber<1||i.installmentNumber>i.totalInstallments)return false;
+        ids.add(i.id);return true;
+      })&&s.items.reduce((n,i)=>n+i.amount,0)===s.amount&&s.amount+s.ordinaryAmount===s.statementTotal;
+  }).map(s=>{
+    const card=cards.find(c=>c.name===s.card);
+    // Legacy manual cells use the nominal payment day. A holiday-shifted date
+    // must not compare January's bill with a different month's manual entry.
+    const ym=cycleYm(`${s.date.slice(0,7)}-${String(card.paymentDay||Number(s.date.slice(8))).padStart(2,'0')}`,cutoff);
+    const cell=saved[s.card]?.[ym];
+    return {...s,manualYm:ym,manualAmount:cell==null?null:debtValueTotal(cell),difference:cell==null?null:s.amount-debtValueTotal(cell)};
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.card.localeCompare(b.card));
+}
+
 // A whole card/month statement replaces a schedule; never add it to a manual total.
 // Purchase amounts and generic acceptance emails cannot supply installment amounts.
 export function reconcileInstallments(saved={},feed,cards=[],cutoff=0,closed=[],today=localDay()) {
