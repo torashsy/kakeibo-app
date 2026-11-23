@@ -20,6 +20,13 @@ it('does not turn aggregate issuer labels into independent contract ownership',(
  const result=auditedCardInventory({cards:[{id:'gold',name:'Gold',status:'issued'},{id:'olive',name:'Olive',status:'issued'}]},{a:{id:'mf-card:a',account:'Common issuer',date:'2026-11-22'}});
  expect(result.used).toHaveLength(0);expect(result.pending).toHaveLength(2);expect(auditedCardInventory(null).records).toEqual([]);
 });
+it('preserves live issuer verification, excludes closed linked IDs and keeps shared bills separate',()=>{
+ const audit={cards:[{id:'gold',name:'Gold',status:'verified',evidenceDate:'2026-11-23',sourceNames:['VIEW']},{id:'jre',name:'JRE',status:'verified',evidenceDate:'2026-11-23'},{id:'closed',name:'Closed but still linked',status:'closed',verifiedAt:'2026-11-23',sourceNames:['VIEW']},{id:'unknown',name:'Unknown',status:'issued'}]};
+ const tx={a:{id:'mf-card:a',account:'VIEW',date:'2026-11-24'}};const before=JSON.stringify({audit,tx});
+ const result=auditedCardInventory(audit,tx);
+ expect(result.verified.map(c=>c.id)).toEqual(['gold','jre']);expect(result.used).toHaveLength(2);expect(result.pending).toHaveLength(1);expect(result.closed).toHaveLength(1);
+ expect(result.verified[0].lastActivity).toBe('2026-11-24');expect(result.verified[1].lastActivity).toBeUndefined();expect(JSON.stringify({audit,tx})).toBe(before);
+});
 it('separates actual card annual fees from merchant memberships and excludes bank records',()=>{
  const r=cardInventory([],{ 'mf-card:a':{account:'VIEW',date:'2026-10-31',amount:-11000,description:'カード年会費'},'mf-card:b':{account:'JAL',date:'2026-07-13',amount:-500,description:'TOHO-ONE 年会費'},'bank:c':{account:'Bank',date:'2026-11-01',amount:-100,description:'カード年会費'}});
  expect(r.feeCharges).toEqual([{id:'mf-card:a',name:'VIEW',date:'2026-10-31',amount:11000}]);expect(r.annualFees).toBe(0);

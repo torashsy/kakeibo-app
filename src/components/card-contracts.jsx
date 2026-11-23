@@ -2,7 +2,7 @@ import React from 'react';
 import { auditedCardInventory } from '../card-inventory';
 import { yen } from '../utils';
 
-const statusLabel={activity:'利用・請求記録',linked:'連携のみ',issued:'発行記録のみ',registered:'登録のみ',closed:'解約済み',ended:'サービス終了',replaced:'切替元'};
+const statusLabel={verified:'会員サイト確認',activity:'利用・請求記録',linked:'連携のみ',issued:'発行記録のみ',registered:'登録のみ',closed:'解約済み',ended:'サービス終了',replaced:'切替元'};
 const dateText=value=>value?.slice(0,10).replaceAll('-','/')||'日付未確認';
 const safeLink=value=>typeof value==='string'&&/^https:\/\//.test(value)?value:undefined;
 
@@ -11,7 +11,7 @@ export function CardContracts({audit,transactions}){
   if(!view.records.length)return null;
   const renderCard=c=><li key={c.id} className="contract-row">
     <div className="contract-title"><strong>{c.name}</strong><span>{c.fee?.label||'年会費未確認'}</span></div>
-    <div className="contract-meta"><span>{c.brand||'ブランド未確認'} · {statusLabel[c.status]||'保有未確認'}</span><time>{dateText(c.lastActivity||c.evidenceDate)}</time></div>
+    <div className="contract-meta"><span>{c.brand||'ブランド未確認'} · {statusLabel[c.status]||'保有未確認'}</span><time>{dateText(c.status==='verified'?c.evidenceDate:c.lastActivity||c.evidenceDate)}</time></div>
     {c.fee?.condition&&<p className="contract-condition">{c.fee.condition}</p>}
     {c.fee?.serviceFee&&<p className="contract-service">未利用時 {yen(c.fee.serviceFee.amount)} · {c.fee.serviceFee.summary}</p>}
     <details className="contract-evidence"><summary><span className="contract-chevron">›</span>確認した内容</summary>
@@ -24,7 +24,7 @@ export function CardContracts({audit,transactions}){
     </details>
   </li>;
   return <section className="card-contracts" aria-label="カードの保有状況">
-    <div className="contract-counts"><div><span>利用・請求の記録</span><strong>{view.used.length}<small>種類</small></strong></div><div><span>保有確認待ち</span><strong>{view.pending.length}<small>種類</small></strong></div></div>
+    <div className="contract-counts"><div><span>会員サイト確認</span><strong>{view.verified.length}<small>枚</small></strong></div><div><span>現契約の確認待ち</span><strong>{view.used.length-view.verified.length+view.pending.length}<small>種類</small></strong></div></div>
     <p className="card-inventory-hint">{dateText(audit.checkedAt)}調査 · 現在の保有総数は未確定</p>
     {[...new Set(view.used.map(c=>c.issuer))].map(issuer=><section key={issuer}><h3>{issuer}</h3><ul>{view.used.filter(c=>c.issuer===issuer).map(renderCard)}</ul></section>)}
     {!!view.pending.length&&<section><h3>保有を確認したいカード</h3><ul>{view.pending.map(renderCard)}</ul></section>}

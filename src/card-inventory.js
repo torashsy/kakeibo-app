@@ -34,8 +34,9 @@ export function auditedCardInventory(audit,transactions={}){
       if(!String(tx?.id||id).startsWith('mf-card:')||!card.sourceNames?.includes(tx.account)||!tx.date)continue;
       if(!card.lastActivity||tx.date>card.lastActivity)card.lastActivity=tx.date;
     }
-    if(card.lastActivity)card.status='activity';
+    if(card.lastActivity&&card.status!=='verified')card.status='activity';
   }
   const all=[...records.values()];
-  return {records:all,used:all.filter(c=>c.status==='activity'),pending:all.filter(c=>c.status!=='activity'&&!closedStatuses.includes(c.status)),closed:all.filter(c=>closedStatuses.includes(c.status))};
+  const used=all.filter(c=>['activity','verified'].includes(c.status));
+  return {records:all,used,verified:all.filter(c=>c.status==='verified'),pending:all.filter(c=>!['activity','verified'].includes(c.status)&&!closedStatuses.includes(c.status)),closed:all.filter(c=>closedStatuses.includes(c.status))};
 }
