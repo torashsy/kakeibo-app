@@ -22,13 +22,14 @@ import { mergeFinanceObservations } from './finance';
 import { FinanceFeedPanel } from './components/finance-feed.jsx';
 import { normalizeContracts, unlinkMissingSubscriptions } from './contracts';
 import { reconcileSubscriptions } from './subscription-sync.js';
+import {reconcileInstallments} from './installment-sync.js';
 import { reconcilePoints } from './point-sync.js';
 
 export default function App() {
   const [entries, setEntries] = useState([]);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [cards, setCards] = useState([]);
-  const [debt, setDebt] = useState({});
+  const [savedDebt, setDebt] = useState({});
   const [memos, setMemos] = useState([]);
   const [savedSubs, setSubs] = useState([]);
   const [contracts, setContracts] = useState([]);
@@ -198,6 +199,8 @@ export default function App() {
   }, [financeRefresh]);
   const financeCanApply = financeState.mode === "on" && !financeState.error && loadedLedgerUserId === financeState.userId && isFinanceSessionCurrent(financeState.userId, financeState.authEpoch);
   const subs = useMemo(() => reconcileSubscriptions(savedSubs, financeCanApply ? financeFeed : null), [savedSubs, financeCanApply, financeFeed]);
+  const installmentMerge = useMemo(() => reconcileInstallments(savedDebt, financeCanApply ? financeFeed : null, cards, config.cycleCutoffDay || 0, closedMonths), [savedDebt, financeCanApply, financeFeed, cards, config.cycleCutoffDay, closedMonths]);
+  const debt = installmentMerge.debt;
   const points = useMemo(() => reconcilePoints(savedPoints, financeCanApply ? financeFeed : null), [savedPoints, financeCanApply, financeFeed]);
   const financeMerge = useMemo(() => mergeFinanceObservations(entries, financeCanApply ? financeFeed : null, config, cards, { closedMonths, suppressed: financeSuppressed }), [entries, financeFeed, financeCanApply, config, cards, closedMonths, financeSuppressed]);
   useEffect(() => {
@@ -464,10 +467,10 @@ export default function App() {
 
       <main key={tab} className="ledger-main" data-view={tab} {...contentMonthSwipe}>
         {tab === "finance" && <><FinanceFeedPanel expanded ledger={financeCanApply ? { entries, cards, memos, debt, cutoff: config.cycleCutoffDay || 0 } : null} accounts={config.accounts} feed={financeFeed} results={financeMerge.results} state={{ ...financeState, needsSync: financeState.mode === "on" && !financeCanApply }} onRefresh={() => setFinanceRefresh((n) => n + 1)} /></>}
-        {tab === "today" && <Summary points={points} onSavePoints={commitPoints} section={page.section} onSection={section=>visit("today",section,!homeSections.includes(section))} forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => drill("plan")} onOpenCards={() => drill("cards")} />}
+        {tab === "today" && <Summary points={points} onSavePoints={commitPoints} pointCollection={financeCanApply ? financeFeed?.pointCollection : null} pointExpiryChecks={financeCanApply ? financeFeed?.pointExpiryChecks : null} section={page.section} onSection={section=>visit("today",section,!homeSections.includes(section))} forecasts={forecasts} paySlips={financeCanApply ? financeFeed?.paySlips : null} snapshot={financeCanApply ? financeFeed?.bankSnapshot : null} scheduledDebits={financeCanApply ? financeFeed?.bankSnapshot?.upcomingCardDebits : null} summary={summary} balancesNow={balancesAsOf(reportEntries, ym)} prevBalTotal={prevBalTotal} plans={plans} subs={subs} config={config} cards={cards} debt={debt} memos={memos} monthEntries={reportMonth} entries={reportEntries} closedMonths={closedMonths} ym={ym} onOpenPlan={() => drill("plan")} onOpenCards={() => drill("cards")} />}
         {tab === "records" && <Detail monthEntries={monthEntries} entries={entries} ym={ym} config={config} cards={cards} memos={memos} onSaveMemos={commitMemos} onEdit={(e) => { setEditing(e); setSheet(e.cat === "salary" ? "salaryEdit" : e.cat); }} />}
         {tab === "plan" && <PlanView forecasts={forecasts} plans={plans} onSave={commitPlans} subs={subs} cards={cards} debt={debt} entries={entries} config={config} ym={ym} closedMonths={closedMonths} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} onOpenRecurring={(view) => { setRecurringView(view); drill("recurring"); }} />}
-        {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} initialView={recurringView} />}
+        {tab === "recurring" && <Recurring subs={subs} onSaveSubs={commitSubs} contracts={contracts} onSaveContracts={commitContracts} onCommitContracts={commitContractBundle} cards={cards} debt={debt} ym={ym} onSaveDebt={commitDebt} installmentReviews={installmentMerge.reviews} installmentCollection={financeCanApply ? financeFeed?.installmentCollection : null} initialView={recurringView} />}
         {tab === "settings" && <div className="sync-link"><CloudBadge /><button onClick={()=>drill("finance")}>同期状態を見る ›</button></div>}
         {tab === "settings" && <Settings points={points} config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => drill("design")} onOpenCards={() => drill("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} />}

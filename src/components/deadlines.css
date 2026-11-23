@@ -36,4 +36,27 @@
 .rakuten-lots .deadline-value {font-size:17px;}
 .rakuten-lots time {font-size:15px;}
 .point-edit-chevron {display:inline-block;width:16px;margin-left:8px;color:var(--muted);font-weight:400;text-align:right;}
+.point-management .point-service {border-bottom:1px solid var(--hairline);}
+.point-management .point-service:last-child {border-bottom:0;}
+.point-management .point-service>summary {display:grid;grid-template-columns:minmax(0,1fr) auto 12px;gap:10px;align-items:center;padding:14px 0;list-style:none;cursor:pointer;min-height:44px;}
+.point-management .point-service>summary::-webkit-details-marker {display:none;}
+.point-service summary>span:first-child {font-size:15px;}
+.point-service small {display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:4px;}
+.point-service strong {font-size:18px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.point-service-chevron {transition:transform .18s ease;color:var(--muted);}
+.point-service[open] .point-service-chevron {transform:rotate(90deg);}
+.point-service-details {padding:0 0 14px;font-size:13px;color:var(--muted);}
+.point-service-details p {margin:8px 0;}
+.point-service-details dl {margin:8px 0;}
+.point-service-details dl>div {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;margin:8px 0;}
+.point-service-details dd {margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);}
+@media(prefers-reduced-motion:reduce){.point-service-chevron{transition:none}}
+.installment-management {margin-bottom:16px;}
+.installment-status-row {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:14px 0;align-items:center;}
+.installment-status-row .deadline-value {font-size:17px;}
+.installment-status-row .deadline-value small {display:block;}
+.installment-issues {font-size:13px;color:var(--muted);}
+.installment-issues summary {cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:space-between;list-style:none;}
+.installment-issues summary::-webkit-details-marker {display:none;}
+.installment-issues[open] summary span {transform:rotate(90deg);}
 @media(max-width:359px){.deadline-section{padding:16px}.deadline-list button{gap:8px}.deadline-name{font-size:14px}.deadline-value b{font-size:14px}}

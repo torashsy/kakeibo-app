@@ -8,7 +8,8 @@ export function debitBreakdown(bill, {cards = [], debt = {}, subs = [], purchase
   const purchaseIds = new Set(purchases.map(row=>row.id));
   const investmentRows = investments.filter(row=>row.kind==='card' && !purchaseIds.has(row.id.replace(/^mf-invest:/,'mf-card:')))
     .map(row=>({...row,description:`${row.broker} カード積立`,spendingCategory:'投資'}));
-  const allPurchases = [...purchases,...investmentRows];
+  const excluded=debt?.[card?.name]?.[ym]?.installmentSync?.purchaseIds||[];
+  const allPurchases = [...purchases,...investmentRows].filter(row=>!excluded.includes(row.id));
   const isSMCC = name => /^(SMCC Gold|smcc)$/i.test(name || '');
   const familyRows = target => allPurchases.filter(row=>row.account==='三井住友カード' && cardPaymentDate(row.date,target)===bill.date);
   // The two SMCC cards share an MF source name. Attribute that source only if the

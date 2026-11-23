@@ -782,7 +782,7 @@ const addDays = (date: string, amount: number): string => {
 
 // 選択月度内の未引落カードと、カードを使わない定期費を日付順に返す。
 // targetYm が無い呼び出しは、従来どおり今日から指定日数内を対象にする。
-export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, targetYm?: string, todayValue?: string, days: number = 30, scheduled?: {card: string; date: string; amount: number}[] | null, purchases: {account?: string; date: string; amount: number}[] = []): UpcomingDebit[] {
+export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefined, debt: Record<string, Record<string, unknown>> | null | undefined, subs: Sub[] | null | undefined, cutoffDay: number = 0, targetYm?: string, todayValue?: string, days: number = 30, scheduled?: {card: string; date: string; amount: number}[] | null, purchases: {id?:string; account?: string; date: string; amount: number}[] = []): UpcomingDebit[] {
   const today = validDate(todayValue) ? todayValue : (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -797,6 +797,8 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
     if (!card) continue;
     const due = cardPaymentDate(purchase.date, card);
     if (!due || due < start || due > end) continue;
+    const cell=debt?.[card.name]?.[cycleYm(due,cutoffDay)] as {installmentSync?:{purchaseIds?:string[]}}|undefined;
+    if(purchase.id && cell?.installmentSync?.purchaseIds?.includes(purchase.id))continue;
     const key = card.name + "|" + due;
     estimates.set(key, (estimates.get(key) || 0) - purchase.amount);
   }

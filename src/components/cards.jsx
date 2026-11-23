@@ -38,7 +38,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   const emptyCards = cards.filter((card) => remaining(card.name) === 0);
   const visibleCards = showEmpty ? [...debtCards, ...emptyCards] : debtCards;
   const amountRefs = useRef([]);
-  const fiscalYearOf = (key) => key.startsWith("FY:") ? Number(key.slice(3)) : /^\d{4}$/.test(key) ? Number(key) : null;
+  const fiscalYearOf = (key) => key.startsWith("FY:") ? Number(key.slice(3)) : /^\d{4}$/.test(key) ? Number(key) : /^\d{4}-\d{2}$/.test(key) ? Number(key.slice(0,4))-(Number(key.slice(5))<4?1:0) : null;
   const fiscalAggregateEntries = (name, period) => {
     const fromYear = Number(period.slice(4));
     return Object.entries(debt[name] || {}).filter(([key]) => fiscalYearOf(key) != null && fiscalYearOf(key) >= fromYear);

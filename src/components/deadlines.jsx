@@ -3,12 +3,13 @@ import {deadlineEvents,daysBetween,localDay,normalizePoints,validDay,rakutenExpi
 import {yen,uid} from '../utils';
 import {EntrySheet} from './entry-sheet';
 import './deadlines.css';
+import {PointManagement} from './point-management';
 
 const count=n=>Number(n).toLocaleString('ja-JP');
 const pointUnit=p=>p.unit==='mile'?'マイル':p.unit==='yenEquivalent'?'円相当':'pt';
 const eventAmount=e=>e.unit==='yen'?yen(e.amount):`${count(e.amount)} ${pointUnit(e)}`;
 const relative=days=>days<0?`${-days}日経過`:days===0?'今日':`あと${days}日`;
-export function Deadlines({points=[],subs=[],onSavePoints,onEditSub,mode='all'}) {
+export function Deadlines({points=[],subs=[],onSavePoints,onEditSub,mode='all',pointCollection,pointExpiryChecks}) {
   const [edit,setEdit]=useState(null),[range,setRange]=useState('soon'),[showUsed,setShowUsed]=useState(false),[deleteId,setDeleteId]=useState(null);
   const today=localDay(),all=normalizePoints(points).filter(p=>!p.hidden);
   const rakuten=rakutenExpiry(mode==='subscriptions'?[]:all,today),rakutenIds=new Set(rakuten.lots.map(p=>p.id));
@@ -24,6 +25,7 @@ export function Deadlines({points=[],subs=[],onSavePoints,onEditSub,mode='all'})
   };
   const canSave=edit && edit.name.trim() && /^\d+$/.test(String(edit.amount).trim()) && Number.isSafeInteger(Number(edit.amount)) && (edit.expiryMode!=='date'||validDay(edit.expiresOn));
   return <div className="deadline-manager">
+    {mode==='points'&&<PointManagement points={points} collection={pointCollection} checks={pointExpiryChecks}/>}
     {!!rakuten.lots.length&&<section className="deadline-section rakuten-expiry" aria-label="楽天ポイントの期限別残高">
       <header><h2>楽天ポイント</h2><span>期間限定</span></header>
       <div className="point-expiry-overview">

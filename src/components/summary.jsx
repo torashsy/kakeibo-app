@@ -15,7 +15,7 @@ import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
 
-export function Summary({ section, onSection, points=[], onSavePoints, forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
+export function Summary({ section, onSection, points=[], onSavePoints, pointCollection, pointExpiryChecks, forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
   const [direction, setDirection] = useState(1);
   const [fundsView,setFundsView] = useState('accounts');
   const setSection = next => {
@@ -80,7 +80,7 @@ export function Summary({ section, onSection, points=[], onSavePoints, forecasts
         <button aria-pressed={fundsView==='accounts'} onClick={()=>setFundsView('accounts')}>口座</button>
         <button aria-pressed={fundsView==='points'} onClick={()=>setFundsView('points')}>ポイント・マイル</button>
       </div>
-      {fundsView==='points' ? <Deadlines mode="points" points={points} onSavePoints={onSavePoints}/> : <>
+      {fundsView==='points' ? <Deadlines mode="points" points={points} onSavePoints={onSavePoints} pointCollection={pointCollection} pointExpiryChecks={pointExpiryChecks}/> : <>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
       {!showOutlook && !hasBal && <p>この月の口座残高は未登録です。</p>}
