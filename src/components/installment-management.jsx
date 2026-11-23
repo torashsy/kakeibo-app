@@ -12,6 +12,7 @@ export function InstallmentManagement({debt,cards,reviews=[],collection,ym}) {
       const cell=debt[card.name]?.[ym];
       return <li key={card.id} className="installment-status-row"><span className="deadline-name">{card.name}<small>{issue?.reason|| (ok.length?`${ok.length}か月分を照合済み`:'手入力を保持・支払予定明細待ち')}</small></span><b className="deadline-value">{cell==null?'—':yen(debtValueTotal(cell))}<small>{Number(ym.slice(5))}月度</small></b></li>;
     })}</ul>
+    {Object.values(collection?.summaries||{}).map(s=><details key={s.id} className="installment-issues"><summary>{s.card} の支払予定表 <span aria-hidden="true">›</span></summary><small>{s.asOf?.replaceAll('-','/')}発行・以後の新規利用を除く</small><table className="installment-source-table"><thead><tr><th>支払月</th><th>分割等の予定額</th><th>支払後の残額</th></tr></thead><tbody>{s.months.map(row=><tr key={row.paymentMonth}><td>{row.paymentMonth.replace('-','/')}</td><td>{yen(row.amount)}</td><td>{yen(row.remaining)}</td></tr>)}</tbody></table></details>)}
     {!!collection?.issues?.length&&<details className="installment-issues"><summary>確認待ち <span aria-hidden="true">›</span></summary>{collection.issues.map((i,n)=><p key={n}>{i.card||i.source}：{i.reason}</p>)}</details>}
   </section>;
 }

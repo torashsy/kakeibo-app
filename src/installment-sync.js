@@ -1,4 +1,4 @@
-import {cycleYm,cardPaymentDate,cardForPurchase,debtValueTotal} from './utils';
+import {cycleYm,cardPaymentDate,cardForPurchase,debtValueTotal,nextBankBusinessDay} from './utils';
 import {localDay,validDay} from './deadlines';
 
 // A whole card/month statement replaces a schedule; never add it to a manual total.
@@ -45,6 +45,23 @@ export function reconcileInstallments(saved={},feed,cards=[],cutoff=0,closed=[],
     value.installmentSync={id:s.id,asOf:s.asOf,evidence:s.evidence,purchaseIds,items:value.items.map(i=>({...i})),sourceItems:items.map(i=>({...i}))};
     debt[s.card]={...debt[s.card],[ym]:value};
     report(old!=null&&!unchanged?'matched':'synced',old!=null&&!unchanged?'手入力と一致':'確定予定を自動反映');
+  }
+  // Issuer aggregate tables verify existing cells only. They cannot identify first
+  // purchases, so never use them to add payments or replace a manual annual total.
+  for(const s of Object.values(feed?.installmentCollection?.summaries||{})){
+    const card=cards.find(c=>c.name===s.card);
+    if(!card?.paymentDay||s.kind!=='issuer-monthly-summary'||s.complete!==true||!s.evidence||!validDay(s.asOf)||s.asOf>today)continue;
+    for(const row of s.months||[]){
+      if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(row.paymentMonth)||!Number.isSafeInteger(row.amount)||row.amount<0)continue;
+      const [year,month]=row.paymentMonth.split('-').map(Number);
+      const date=nextBankBusinessDay(`${row.paymentMonth}-${String(Math.min(card.paymentDay,new Date(year,month,0).getDate())).padStart(2,'0')}`);
+      const ym=cycleYm(date,cutoff),key=`${s.card}|${ym}`;
+      if(date<today||closed.includes(ym)||reviews.some(r=>r.key===key))continue;
+      const old=debt[s.card]?.[ym];
+      if(old==null)continue;
+      const matched=debtValueTotal(old)===row.amount;
+      reviews.push({key,card:s.card,ym,date,asOf:s.asOf,amount:row.amount,status:matched?'matched':'conflict',reason:matched?'カード会社の予定表と一致':'カード会社の予定額と差額あり・手入力を保持'});
+    }
   }
   return {debt,reviews};
 }

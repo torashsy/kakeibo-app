@@ -7,6 +7,17 @@ const source={id:'statement',card:'VIEW',date:'2026-12-04',asOf:today,amount:120
   items:[{id:'contract',label:'商品A',amount:1200,purchaseDate:'2026-08-01',installmentNumber:4,totalInstallments:12}]};
 const feed=s=>({installmentSchedules:{[s.id]:s}});
 const merge=(saved,s=source)=>reconcileInstallments(saved,feed(s),cards,10,[],today);
+it('verifies issuer monthly totals without changing manual payments or adding annual-overlap payments',()=>{
+  const saved={VIEW:{'2026-11':1200,'FY:2026':10000}};
+  const summary={id:'issuer',kind:'issuer-monthly-summary',card:'VIEW',complete:true,evidence:'issuer-table',asOf:today,months:[{paymentMonth:'2026-12',amount:1200,remaining:10000},{paymentMonth:'2027-01',amount:1200,remaining:8800}]};
+  const f={installmentCollection:{summaries:{issuer:summary}}};
+  const result=reconcileInstallments(saved,f,cards,10,[],today);
+  expect(result.debt).toEqual(saved);expect(result.reviews).toHaveLength(1);expect(result.reviews[0].status).toBe('matched');
+  summary.months[0].amount=1300;
+  expect(reconcileInstallments(saved,f,cards,10,[],today).reviews[0].status).toBe('conflict');
+  expect(reconcileInstallments(saved,f,cards,10,['2026-11'],today).reviews).toEqual([]);
+  expect(saved.VIEW['2026-11']).toBe(1200);
+});
 it('imports complete future schedules without adding them to matching manual amounts',()=>{
   const initial=merge({});expect(initial.debt.VIEW['2026-11'].items[0].amount).toBe(1200);
   expect(merge(initial.debt).debt).toEqual(initial.debt);
