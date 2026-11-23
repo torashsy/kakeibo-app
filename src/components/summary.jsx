@@ -2,6 +2,7 @@ import { homeSections } from "../page-navigation";
 import { SearchField } from "./search-field";
 import { spendingGroup, purchaseLabel, needsPurposeReview } from "../spending-groups";
 import { DebitSchedule } from "./debit-schedule";
+import { Deadlines } from "./deadlines";
 import { IncomeLines } from "./income-lines";
 import { PendingPurchases } from "./pending-purchases";
 import { CashComparison } from "./cash-comparison";
@@ -14,8 +15,9 @@ import { PayrollReport } from "./payroll-report";
 import { bankTransactions } from "../bank-feed";
 import { styles } from '../styles.js';
 
-export function Summary({ section, onSection, forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
+export function Summary({ section, onSection, points=[], onSavePoints, forecasts, paySlips, snapshot, scheduledDebits, summary, balancesNow, prevBalTotal, plans, subs, config, cards, debt, memos, monthEntries, entries, closedMonths, ym, onOpenPlan, onOpenCards }) {
   const [direction, setDirection] = useState(1);
+  const [fundsView,setFundsView] = useState('accounts');
   const setSection = next => {
     setDirection(homeSections.indexOf(next) >= homeSections.indexOf(section) ? 1 : -1);
     onSection(next);
@@ -58,7 +60,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </section>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} compact shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
-      {showOutlook && <DebitSchedule reviews={snapshot?.cardDebitReviews} investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
+      {showOutlook && <DebitSchedule compact reviews={snapshot?.cardDebitReviews} investments={Object.values(snapshot?.investmentCardRows || {})} cards={cards} debt={debt} subs={subs} purchases={purchases} cutoff={config.cycleCutoffDay} rows={upcoming} following={following} end={cycleEndDate(ym, config.cycleCutoffDay)} />}
       <SpendingPurpose compact purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />
       </>}
       {section === "spend" && <SpendingPurpose purchases={purchases} ym={ym} cutoff={config.cycleCutoffDay} />}
@@ -74,6 +76,11 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       <MonthlyNetChart entries={entries || []} ym={ym} />
       </>}
       {section === "funds" && <>
+      <div className="funds-switch" role="group" aria-label="残高の種類">
+        <button aria-pressed={fundsView==='accounts'} onClick={()=>setFundsView('accounts')}>口座</button>
+        <button aria-pressed={fundsView==='points'} onClick={()=>setFundsView('points')}>ポイント・マイル</button>
+      </div>
+      {fundsView==='points' ? <Deadlines mode="points" points={points} onSavePoints={onSavePoints}/> : <>
       {showOutlook && <BalanceTimeline cards={cards} onOpenCards={onOpenCards} shown={shown} upcoming={upcoming} slips={paySlips} forecast={forecast} ym={ym} cutoff={config.cycleCutoffDay} />}
 
       {!showOutlook && !hasBal && <p>この月の口座残高は未登録です。</p>}
@@ -87,7 +94,7 @@ export function Summary({ section, onSection, forecasts, paySlips, snapshot, sch
       </section>}
       {showOutlook && <SpendingMeter plans={plans} subs={subs} cards={cards} debt={debt} monthEntries={monthEntries} ym={ym} startDay={config.cycleCutoffDay} />}
       {showOutlook && <AnnualOutlookCard forecasts={forecasts} plans={plans} subs={subs} cards={cards} debt={debt} entries={entries} closedMonths={closedMonths} config={config} ym={ym} onOpenPlan={onOpenPlan} />}
-
+      </>}
       </>}
       {section === "invest" && <InvestmentDetails entries={monthEntries} snapshot={snapshot} ym={ym} cutoff={config.cycleCutoffDay} />}
       {section === "pay" && <PayrollReport key={ym} slips={paySlips} ym={ym} />}
@@ -145,9 +152,11 @@ function BalanceTimeline({ cards, onOpenCards, compact, shown, upcoming, slips, 
         <div><time dateTime={nextDate}>{shortDate(nextDate)}</time><h3>引落後の残高見込み</h3></div><strong>{yen(afterDebit.amount)}</strong>
         <BalanceSteps points={points.slice(0,points.indexOf(afterDebit)+1)}/>
       </header>}
-      <div className="all-balances">
-      <span>現在の残高 <small>{accounts.length}口座</small></span><b>{yen(start)}</b></div>
+      <details className="home-accounts-disclosure">
+      <summary className="all-balances">
+      <span>現在の残高 <small>{accounts.length}口座 <i aria-hidden="true">›</i></small></span><b>{yen(start)}</b></summary>
       <div className="inline-accounts" aria-label="口座別の現在残高">{accounts.map(([name,row])=><div key={name}><span>{name}</span><b>{yen(row.amount)}</b></div>)}</div>
+      </details>
       {depositsBeforeDebit.map((event,index)=><div className="before-debit" key={event.date+index}>
         <span><time className="date-slot">{shortDate(event.date)}</time>{event.label.startsWith("給与（計画")?"給与入金見込み":event.label}</span><b>＋{yen(event.change)}</b>
       </div>)}
@@ -279,19 +288,21 @@ export function SpendingPurpose({ compact, purchases, ym, cutoff, initialView })
           const key = [ym,view,g.label].join('|');
           const expanded = expandedGroups[key] ?? (initialView?.ym === ym && initialView?.label === g.label);
           const previewCount = g.rows.length <= 6 ? g.rows.length : 3;
-          return <div className="purchase-group" key={g.label}>
-            <div className="purchase-rank">
-              <span className="purchase-name">{g.label}</span>
+          const Rank=compact?'summary':'div';
+          const Group=compact?'details':'div';
+          return <Group className="purchase-group" key={key}>
+            <Rank className="purchase-rank">
+              <span className="purchase-name">{g.label}{compact&&<i className="purchase-chevron" aria-hidden="true">›</i>}</span>
               <b>{g.amount < 0 && <small>返金超過 </small>}{yen(g.amount)}</b>
               <span className="purchase-track" aria-hidden="true"><i data-refund={g.amount < 0}
                 style={{width: 100 * Math.abs(g.amount) / max + "%"}}/></span>
-            </div>
+            </Rank>
             {(view === "category" && g.label === "サブスク" ? <SubscriptionServices rows={g.rows}/> : <>
               <PurchaseLines rows={expanded ? g.rows : g.rows.slice(0,previewCount)} merchant={view === "merchant" ? g.label : undefined} apple={view === "merchant" && g.label === "Apple"} showCategory={view === "category" && g.label === "生活・サービス"}/>
               {g.rows.length>previewCount && <button className="purchase-more" aria-expanded={!!expanded} aria-label={g.label+"の明細を"+(expanded?"3件に戻す":"すべて見る")}
                 onClick={()=>setExpandedGroups(previous=>({...previous,[key]:!expanded}))}>{expanded ? "3件に戻す" : `残り${g.rows.length-previewCount}件を見る`} ›</button>}
             </>)}
-          </div>;
+          </Group>;
         })}
       {pending && <PendingPurchases key={ym} rows={pending.rows}/>}
     </> : <p>この月度のカード利用明細はありません。</p>}

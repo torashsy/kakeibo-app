@@ -43,3 +43,14 @@
 .debit-disclosure>summary:focus-visible,.debit-more:focus-visible,.debit-evidence>summary:focus-visible {outline:2px solid var(--accent); outline-offset:3px;}
 @media(max-width:360px) {.debit-purchases li {grid-template-columns:2.9em minmax(0,1fr) max-content; gap:6px; font-size:13px;}}
 @media(prefers-reduced-motion:reduce) {.debit-chevron,.debit-evidence summary i {transition:none;}}
+.debit-schedule[data-compact=true] .debit-preview {display:none;}
+.ledger-app .debit-schedule[data-compact=true] .debit-disclosure>summary.debit-item {padding-block:12px;}
+.ledger-app .later-debits>summary {display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:12px;align-items:center;min-height:52px;padding:8px 0;font-size:14px;list-style:none;}
+.later-debits>summary::before,.later-debits>summary::after {display:none!important;}
+.later-debits>summary::-webkit-details-marker {display:none;}
+.later-debits>summary b {text-align:right;font-family:var(--num-font);font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500;}
+.later-debits>summary small {color:var(--muted);margin-left:4px;}
+.later-debits>summary i {display:inline-block;font-style:normal;color:var(--muted);transition:transform .18s ease;}
+.later-debits[open]>summary i {transform:rotate(90deg);}
+.later-debits>summary:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+@media(prefers-reduced-motion:reduce) {.later-debits>summary i {transition:none;}}

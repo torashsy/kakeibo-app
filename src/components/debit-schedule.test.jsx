@@ -59,3 +59,23 @@ it('keeps the amount gap visible while separating optional evidence from the spe
     expect(host.querySelectorAll('.debit-purchases li')).toHaveLength(1);
   }finally{await act(()=>root.unmount());}
 });
+
+it('keeps the next date visible on home and expands later debits without leaving the page',async()=>{
+ const host=document.createElement('div'),root=createRoot(host);
+ const rows=[{id:'later',date:'2026-12-10',label:'JCB',amount:9000,kind:'card'},
+   {id:'next',date:'2026-11-26',label:'SMCC',amount:2000,kind:'card'}];
+ try {
+  await act(()=>root.render(<DebitSchedule compact rows={rows} end="2026-12-10"/>));
+  const more=host.querySelector('.later-debits');
+  expect(more.open).toBe(false);
+  expect(host.querySelector('.debit-date time').dateTime).toBe('2026-11-26');
+  expect(more.querySelector('summary').textContent).toContain('1件');
+  expect(more.querySelector('summary').textContent).toContain('¥9,000');
+  expect(host.querySelector('.debit-schedule>header strong').textContent).toBe('¥11,000');
+  const url=location.href;
+  await act(()=>more.querySelector('summary').click());
+  expect(more.open).toBe(true);
+  expect(more.querySelector('.debit-date time').dateTime).toBe('2026-12-10');
+  expect(location.href).toBe(url);
+ }finally{await act(()=>root.unmount());}
+});

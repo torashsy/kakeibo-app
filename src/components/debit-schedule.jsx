@@ -49,24 +49,31 @@ function DebitDetails({bill, context}) {
   </details>;
 }
 
-export function DebitSchedule({rows,following=[],end,missingCount=0,onOpenCards,cards=[],debt={},subs=[],purchases=[],investments=[],reviews={},cutoff=0}) {
+export function DebitSchedule({compact=false,rows,following=[],end,missingCount=0,onOpenCards,cards=[],debt={},subs=[],purchases=[],investments=[],reviews={},cutoff=0}) {
   const [later,setLater] = useState(false);
   const context = useMemo(()=>({cards,debt,subs,purchases,investments,reviews,cutoff,bills:[...rows,...following]}),[cards,debt,subs,purchases,investments,reviews,cutoff,rows,following]);
   const visible = later ? following : rows;
-  const dates = [...new Set(visible.map(row=>row.date))];
-  return <section className="debit-schedule" aria-label="引き落とし予定">
+  const dates = [...new Set(visible.map(row=>row.date))].sort();
+  const renderDate=date=>{
+    const bills=visible.filter(row=>row.date===date);
+    return <div className="debit-day" key={date}>
+      <div className="debit-date"><time dateTime={date}>{shortDate(date)}</time><b>{yen(bills.reduce((sum,row)=>sum+row.amount,0))}</b></div>
+      {bills.map(row=><DebitDetails key={row.id+'|'+row.date} bill={row} context={context}/>)}
+    </div>;
+  };
+  const remaining=visible.filter(row=>row.date!==dates[0]);
+  return <section className="debit-schedule" data-compact={compact} aria-label="引き落とし予定">
     <header><h3>引き落とし予定</h3><strong>{yen(visible.reduce((sum,row)=>sum+row.amount,0))}</strong></header>
     <div className="debit-period" role="group" aria-label="引落予定の期間">
       <button aria-pressed={!later} onClick={()=>setLater(false)}>{shortDate(end)}まで</button>
       <button aria-pressed={later} onClick={()=>setLater(true)}>次月分</button>
     </div>
-    <div key={later?'following':'current'}>{dates.map(date=>{
-      const bills=visible.filter(row=>row.date===date);
-      return <div className="debit-day" key={date}>
-        <div className="debit-date"><time dateTime={date}>{shortDate(date)}</time><b>{yen(bills.reduce((sum,row)=>sum+row.amount,0))}</b></div>
-        {bills.map(row=><DebitDetails key={row.id+'|'+row.date} bill={row} context={context}/>)}
-      </div>;
-    })}</div>
+    <div key={later?'following':'current'}>{(compact?dates.slice(0,1):dates).map(renderDate)}
+      {compact&&dates.length>1&&<details className="later-debits">
+        <summary><span>その後の予定 <small>{remaining.length}件</small> <i aria-hidden="true">›</i></span><b>{yen(remaining.reduce((sum,row)=>sum+row.amount,0))}</b></summary>
+        {dates.slice(1).map(renderDate)}
+      </details>}
+    </div>
     {!visible.length && <p className="debit-empty">予定額はまだありません</p>}
     {missingCount>0 && <button className="debit-empty" onClick={onOpenCards}>引落日未設定 {missingCount}枚 ›</button>}
   </section>;

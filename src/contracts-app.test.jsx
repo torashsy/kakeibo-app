@@ -157,7 +157,7 @@ it("計画の編集はナビより上に開き、閉じると元の位置と入�
 
 describe("契約台帳の保存・バックアップ", () => {
   it("ポイントを入力して保存し、ダイアログは本文の重なりから独立する",async()=>{
-    await mount();await click('定期費');await click('ポイント・期限');await click('＋ ポイントを追加');
+    await mount();await click('ホーム');await click('残高');await click('ポイント・マイル');await click('＋ ポイントを追加');
     const form=container.querySelector('.deadline-editor');
     const fields=form.querySelectorAll('input');
     const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
@@ -172,7 +172,7 @@ describe("契約台帳の保存・バックアップ", () => {
     await click('保存');
     expect(container.querySelector('.deadline-editor')).toBeNull();
     expect(JSON.parse(stored.get('points'))[0]).toMatchObject({name:'新しいポイント',amount:3456,expiresOn:'2026-11-10'});
-    expect(container.querySelector('.ledger-main').dataset.view).toBe('recurring');
+    expect(container.querySelector('.ledger-main').dataset.view).toBe('today');
     await act(()=>container.querySelector('.point-balances button').click());
     await click('記録を削除');
     expect(JSON.parse(stored.get('points'))).toHaveLength(1);
@@ -180,7 +180,7 @@ describe("契約台帳の保存・バックアップ", () => {
     expect(JSON.parse(stored.get('points'))).toEqual([]);
   });
   it("期限一覧から定期費を開き、期限だけ更新して料金を保持する",async()=>{
-    await mount();await click('定期費');await click('ポイント・期限');await click('すべて');
+    await mount();await click('定期費');await click('更新・期限');await click('すべて');
     await act(()=>[...container.querySelectorAll('.deadline-list button')].find(n=>n.textContent.includes('検証通信費')).click());
     const dialog=container.querySelector('[role="dialog"]');
     expect(dialog.closest('.ledger-main')).toBeNull();
@@ -198,7 +198,7 @@ describe("契約台帳の保存・バックアップ", () => {
     const point={id:'p1',name:'検証ポイント',amount:1200,expiryMode:'date',expiresOn:'2026-11-10',status:'active',note:'期間限定'};
     stored.set('points',JSON.stringify([point]));
     const before=stored.get('entries');
-    await mount();await click('定期費');await click('ポイント・期限');
+    await mount();await click('ホーム');await click('残高');await click('ポイント・マイル');
     expect(container.textContent).toContain('検証ポイント');
     const row=container.querySelector('.point-balances button');
     await act(()=>row.click());await click('利用済みにする');
