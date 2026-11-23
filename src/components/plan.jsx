@@ -52,7 +52,7 @@ export function PlanView({ forecasts, plans, onSave, subs, cards, debt, entries,
         : k === "spending" ? plannedSpending(plans, subs, mo, debt, cards, config?.cycleCutoffDay || 0)
           : k === "variable" ? plannedVariable(plans, mo)
             : k === "fixed" ? fixedForMonth(subs, mo, cards, config?.cycleCutoffDay || 0)
-              : k === "debt" ? plannedDebt(debt, mo)
+              : k === "debt" ? plannedDebt(debt, mo, config?.cycleCutoffDay || 0)
                 : k === "invest" ? plannedInvest(plans, mo)
                   : k === "net" ? plannedNet(plans, subs, mo, debt, cards, config?.cycleCutoffDay || 0) : 0
   );

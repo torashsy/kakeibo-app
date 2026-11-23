@@ -1,7 +1,11 @@
 import {cycleYm,cardPaymentDate,cardForPurchase,debtValueTotal,nextBankBusinessDay} from './utils';
 import {localDay,validDay} from './deadlines';
+const nominalMonth=(source,cards,cutoff)=>{
+  const card=cards.find(c=>c.name===source.card);
+  return cycleYm(`${source.date.slice(0,7)}-${String(card?.paymentDay||Number(source.date.slice(8))).padStart(2,'0')}`,cutoff);
+};
 
-// Provisional issuer statements are evidence for display, never confirmed debt.
+// Provisional issuer statements remain forecasts, never ledger transactions.
 export function installmentPreviews(collection,cards=[],saved={},cutoff=0,today=localDay()) {
   return Object.values(collection?.statements||{}).filter(s=>{
     const ids=new Set();
@@ -16,7 +20,7 @@ export function installmentPreviews(collection,cards=[],saved={},cutoff=0,today=
     // must not compare January's bill with a different month's manual entry.
     const ym=cycleYm(`${s.date.slice(0,7)}-${String(card.paymentDay||Number(s.date.slice(8))).padStart(2,'0')}`,cutoff);
     const cell=saved[s.card]?.[ym];
-    return {...s,manualYm:ym,manualAmount:cell==null?null:debtValueTotal(cell),difference:cell==null?null:s.amount-debtValueTotal(cell)};
+    return {...s,manualYm:ym,manualAmount:cell==null?null:debtValueTotal(cell),difference:cell==null?null:s.amount-debtValueTotal(cell),supplement:cell?.installmentForecast};
   }).sort((a,b)=>a.date.localeCompare(b.date)||a.card.localeCompare(b.card));
 }
 
@@ -28,15 +32,15 @@ export function reconcileInstallments(saved={},feed,cards=[],cutoff=0,closed=[],
   const groups=new Map();
   for(const source of sources){
     if(!source || !validDay(source.date))continue;
-    const ym=cycleYm(source.date,cutoff),key=`${source.card}|${ym}`;
+    const ym=nominalMonth(source,cards,cutoff),key=`${source.card}|${ym}`;
     if(!groups.has(key))groups.set(key,[]);groups.get(key).push(source);
   }
   for(const [key,rows] of groups){
-    const s=rows[0],card=cards.find(c=>c.name===s.card),ym=cycleYm(s.date,cutoff);
+    const s=rows[0],card=cards.find(c=>c.name===s.card),ym=nominalMonth(s,cards,cutoff);
     const report=(status,reason)=>reviews.push({key,card:s.card,ym,date:s.date,status,reason,asOf:s.asOf,amount:s.amount});
     if(rows.length!==1){report('review','同じ月の資料が重複');continue;}
     if(!card||!s.id||!s.evidence||!validDay(s.asOf)||s.asOf>today||s.confirmed!==true||s.complete!==true||s.scope!=='card-month-installments'||!Array.isArray(s.items)||!Number.isSafeInteger(s.amount)||s.amount<0){report('review','カード・回数別の確定資料が不足');continue;}
-    if(closed.includes(ym)||s.date<today){report('history','過去分は保持');continue;}
+    if(closed.includes(ym)||closed.includes(cycleYm(s.date,cutoff))||s.date<today){report('history','過去分は保持');continue;}
     const ids=new Set(),purchaseIds=[];
     const valid=s.items.every(item=>{
       if(!item.id||ids.has(item.id)||!item.label?.trim()||!Number.isSafeInteger(item.amount)||item.amount<0||!validDay(item.purchaseDate)||item.purchaseDate>s.date)return false;
@@ -61,10 +65,12 @@ export function reconcileInstallments(saved={},feed,cards=[],cutoff=0,closed=[],
     const items=s.items.map(i=>({...i,id:`installment:${s.id}:${i.id}`}));
     // Matched manual cells keep their IDs and notes. Only a source-owned cell updates automatically.
     const value=old!=null&&!unchanged?{...(typeof old==='object'?old:{items:[{id:`manual:${key}`,label:'手入力',amount:oldTotal}]})}:{items};
-    value.installmentSync={id:s.id,asOf:s.asOf,evidence:s.evidence,purchaseIds,items:value.items.map(i=>({...i})),sourceItems:items.map(i=>({...i}))};
+    delete value.installmentForecast;
+    value.installmentSync={id:s.id,date:s.date,asOf:s.asOf,evidence:s.evidence,purchaseIds,items:value.items.map(i=>({...i})),sourceItems:items.map(i=>({...i}))};
     debt[s.card]={...debt[s.card],[ym]:value};
     report(old!=null&&!unchanged?'matched':'synced',old!=null&&!unchanged?'手入力と一致':'確定予定を自動反映');
   }
+  supplementPreviews(debt,feed,cards,cutoff,closed,today,reviews);
   // Issuer aggregate tables verify existing cells only. They cannot identify first
   // purchases, so never use them to add payments or replace a manual annual total.
   for(const s of Object.values(feed?.installmentCollection?.summaries||{})){
@@ -83,4 +89,63 @@ export function reconcileInstallments(saved={},feed,cards=[],cutoff=0,closed=[],
     }
   }
   return {debt,reviews};
+}
+
+const itemSignature=items=>JSON.stringify((items||[]).map(i=>[i.id,i.label||'',Number(i.amount)]));
+const amounts=items=>items.map(i=>Number(i.amount)).sort((a,b)=>a-b).join(',');
+// Only complete issuer statements can fill omissions. Matching a whole skip-payment
+// group by its multiset also handles separate equal-price charges without collapsing them.
+function supplementPreviews(debt,feed,cards,cutoff,closed,today,reviews){
+  const previews=installmentPreviews(feed?.installmentCollection,cards,debt,cutoff,today);
+  for(const s of previews){
+    const ym=s.manualYm,key=`${s.card}|${ym}`,card=cards.find(c=>c.name===s.card);
+    const report=(status,reason)=>reviews.push({key,card:s.card,ym,date:s.date,asOf:s.asOf,amount:s.amount,status,reason});
+    if(s.date<today||closed.includes(ym)||closed.includes(cycleYm(s.date,cutoff)))continue;
+    if(previews.filter(p=>p.card===s.card&&p.date===s.date).length!==1){report('review','同じ支払日の資料が重複');continue;}
+    if(Object.values(feed?.installmentSchedules||{}).some(x=>x.card===s.card&&x.date===s.date))continue;
+    const old=debt[s.card]?.[ym],base=old?.installmentForecast;
+    if(old?.installmentSync||old?.installmentForecastOverride?.date===s.date)continue;
+    if(base?.asOf>s.asOf)continue;
+    if(base&&itemSignature(old.items)!==itemSignature(base.items)){
+      debt[s.card]={...debt[s.card],[ym]:{...old,installmentForecast:undefined,installmentForecastOverride:{date:s.date,asOf:base.asOf}}};
+      report('conflict','編集した予定を保持');continue;
+    }
+    const fiscal=Number(ym.slice(0,4))-(Number(ym.slice(5))<4?1:0);
+    if(old==null&&(debt[s.card]?.[`FY:${fiscal}`]!=null||debt[s.card]?.[String(fiscal)]!=null)){report('conflict','年度合計との重複を確認');continue;}
+    const manual=base?base.manualItems:old==null?[]:Array.isArray(old.items)?old.items: [{id:`manual:${key}`,label:'',amount:debtValueTotal(old)}];
+    const total=manual.reduce((n,i)=>n+Number(i.amount),0);
+    let missing=[];
+    if(total===s.amount){missing=[];}
+    else if(!manual.length){missing=s.items;}
+    else {
+      const skip=s.items.filter(i=>i.paymentType==='skip');
+      if(manual.every(i=>!i.label?.trim())&&skip.length===manual.length&&amounts(skip)===amounts(manual))missing=s.items.filter(i=>i.paymentType!=='skip');
+      else {
+        const rest=[...s.items];let matched=true;
+        for(const item of manual){
+          const matches=rest.filter(i=>Number(item.amount)===i.amount&&(item.sourceId===i.id||item.label?.trim()===i.label.trim())&&(!item.purchaseDate||item.purchaseDate===i.purchaseDate));
+          if(matches.length!==1){matched=false;break;}
+          rest.splice(rest.indexOf(matches[0]),1);
+        }
+        if(!matched){report('conflict','手入力の内訳との対応を確認');continue;}missing=rest;
+      }
+    }
+    if(total+missing.reduce((n,i)=>n+i.amount,0)!==s.amount){report('conflict','手入力との差額を確認');continue;}
+    const purchaseIds=[];
+    const safe=s.items.every(i=>{
+      if(cardPaymentDate(i.purchaseDate,card)!==s.date)return true;
+      const tx=feed?.bankSnapshot?.transactions?.[i.transactionId];
+      if(!i.transactionId?.startsWith('mf-card:')||!tx||tx.date!==i.purchaseDate||cardForPurchase(tx.account,cards)?.name!==s.card)return false;
+      purchaseIds.push(i.transactionId);return true;
+    });
+    if(!safe){report('review','初回利用との重複を確認');continue;}
+    const added=missing.map(i=>({...i,sourceId:i.id,id:`preview:${s.id}:${i.id}`}));
+    const items=[...manual.map(i=>({...i})),...added];
+    debt[s.card]={...debt[s.card],[ym]:{...(typeof old==='object'?old:{}),items,installmentForecast:{
+      id:s.id,date:s.date,asOf:s.asOf,evidence:s.evidence,confirmed:false,statementTotal:s.statementTotal,
+      ordinaryAmount:s.ordinaryAmount,purchaseIds,manualItems:manual.map(i=>({...i})),items:items.map(i=>({...i})),
+      addedCount:added.length,addedAmount:added.reduce((n,i)=>n+i.amount,0)
+    }}};
+    report(missing.length?'supplemented':'matched',missing.length?`${missing.length}件を支払見込みに補完`:'手入力と一致');
+  }
 }

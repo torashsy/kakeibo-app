@@ -5,6 +5,13 @@ import {expect,it} from 'vitest';
 import {DebitSchedule} from './debit-schedule';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+it('labels issuer forecasts as unconfirmed rather than Money Forward or final bills',async()=>{
+ const host=document.createElement('div'),root=createRoot(host);
+ try{
+  await act(()=>root.render(<DebitSchedule rows={[{id:'issuer',date:'2026-12-10',label:'JCB',amount:1000,kind:'card',status:'forecast',fromFeed:true,source:'issuer'}]} end="2026-12-10"/>));
+  expect(host.textContent).toContain('カード会社・未確定');expect(host.textContent).not.toContain('MF予定額');
+ }finally{await act(()=>root.unmount());}
+});
 it('opens each bill in place, shows signed refunds and keeps month switching and totals intact',async()=>{
   const host=document.createElement('div'),root=createRoot(host);
   const row={id:'j',date:'2026-12-10',label:'JCB',amount:6000,kind:'card',fromFeed:true};

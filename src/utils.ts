@@ -461,7 +461,7 @@ export function computeSummary(monthEntries: Entry[]): Summary {
 }
 
 export function migrateCard(raw: any): Card {
-  if (typeof raw === "string") return { id: uid(), name: raw, brand: "", note: "", annualFee: 0 };
+  if (typeof raw === "string") return { id: uid(), name: raw, brand: "", note: "" };
   const source = raw && typeof raw === "object" ? raw : {};
   const day = (value: unknown) => {
     const n = Math.round(Number(value) || 0);
@@ -473,7 +473,7 @@ export function migrateCard(raw: any): Card {
     name: source.name || "",
     brand: source.brand || "",
     note: source.note || "",
-    annualFee: Number(source.annualFee) || 0,
+    annualFee: source.annualFee==null||source.annualFee===''?undefined:Number(source.annualFee)||0,
     cutoffDay: day(source.cutoffDay),
     paymentDay: day(source.paymentDay),
   };
@@ -772,6 +772,18 @@ export interface UpcomingDebit {
   status: Exclude<CardClaimStatus, "paid">;
   kind: "card" | "fixed";
   fromFeed?: boolean;
+  source?: 'mf' | 'issuer' | 'installment';
+}
+
+// Source-backed forecasts keep legacy manual month keys, but cash moves on the
+// issuer's actual payment date (which can cross a household-cycle boundary).
+export function debtCellForPayment(debt: any, card: string, date: string, cutoff = 0): any {
+  const cells = Object.values(debt?.[card] || {}) as any[];
+  const exact = cells.find(cell => (cell?.installmentForecast?.date||cell?.installmentSync?.date) === date);
+  if (exact) return exact;
+  const fallback = debt?.[card]?.[cycleYm(date, cutoff)];
+  const sourcedDate=fallback?.installmentForecast?.date||fallback?.installmentSync?.date;
+  return sourcedDate && sourcedDate !== date ? undefined : fallback;
 }
 
 const addDays = (date: string, amount: number): string => {
@@ -797,8 +809,8 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
     if (!card) continue;
     const due = cardPaymentDate(purchase.date, card);
     if (!due || due < start || due > end) continue;
-    const cell=debt?.[card.name]?.[cycleYm(due,cutoffDay)] as {installmentSync?:{purchaseIds?:string[]}}|undefined;
-    if(purchase.id && cell?.installmentSync?.purchaseIds?.includes(purchase.id))continue;
+    const cell=debtCellForPayment(debt,card.name,due,cutoffDay);
+    if(purchase.id && [...(cell?.installmentSync?.purchaseIds||[]),...(cell?.installmentForecast?.purchaseIds||[])].includes(purchase.id))continue;
     const key = card.name + "|" + due;
     estimates.set(key, (estimates.get(key) || 0) - purchase.amount);
   }
@@ -820,6 +832,24 @@ export function upcomingDebits(entries: Entry[], cards: Card[] | null | undefine
       const amount = row.status === "forecast" && net !== undefined ? Math.max(0, net + debtAmount) : row.amount;
       cardRows.push({ id: `card|${ym}|${row.name}`, date: row.due, label: row.name, amount, status: row.status, kind: "card" });
     }
+  }
+
+  for (const [name, schedule] of Object.entries(debt || {})) for (const [manualYm, raw] of Object.entries(schedule)) {
+    const preview = (raw as any)?.installmentForecast||(raw as any)?.installmentSync;
+    if (!preview || !validDate(preview.date)) continue;
+    const date = preview.date, nominalId = `card|${manualYm}|${name}`;
+    // Replace the legacy forecast, never add a second bill beside it.
+    for (let i=cardRows.length-1;i>=0;i--) if(cardRows[i].label===name && cardRows[i].status==='forecast' && !cardRows[i].fromFeed && (cardRows[i].id===nominalId||cardRows[i].date===date)) cardRows.splice(i,1);
+    if(date<start||date>end||cardRows.some(r=>r.label===name&&r.date===date))continue;
+    const actualYm=cycleYm(date,cutoffDay);
+    const actual=cardClaimStates(cards,{},[],(entries||[]).filter(e=>e.ym===actualYm),actualYm,cutoffDay,true).find(r=>r.name===name);
+    if(actual?.status==='paid')continue;
+    const observed=scheduled?.find(s=>s.card===name&&s.date===date&&Number.isSafeInteger(s.amount)&&s.amount>=0);
+    const card=cards?.find(c=>c.name===name);
+    const later=purchases.filter(p=>p.date>preview.asOf&&cardForPurchase(p.account,cards)?.name===name&&cardPaymentDate(p.date,card)===date).reduce((n,p)=>n-p.amount,0);
+    const estimate=Number.isSafeInteger(preview.statementTotal)?preview.statementTotal+later:(estimates.get(name+'|'+date)??plannedFixedForCard(subs,cards,name,actualYm,cutoffDay))+debtValueTotal(raw);
+    const amount=actual?.status==='confirmed'?actual.amount:observed?.amount??Math.max(0,estimate);
+    cardRows.push({id:`card|${actualYm}|${name}|${date}`,date,label:name,amount,status:actual?.status==='confirmed'?'confirmed':'forecast',kind:'card',fromFeed:true,source:observed?'mf':Number.isSafeInteger(preview.statementTotal)?'issuer':'installment'});
   }
 
   const fixedRows: UpcomingDebit[] = [];
@@ -939,8 +969,11 @@ export const plannedVariable = (plan: Plan, ym: string): number => {
 };
 export const plannedInvest = (plan: Plan, ym: string): number => planValue(plan, PLAN_INVEST, ym);
 // 支出見込み総額 = 固定費(subs) + 変動費見込み
-export const plannedDebt = (debt: Record<string, Record<string, unknown>> | null | undefined, ym: string): number => {
-  const direct = Object.values(debt || {}).reduce((sum, schedule) => sum + debtValueTotal(schedule && schedule[ym]), 0);
+export const plannedDebt = (debt: Record<string, Record<string, unknown>> | null | undefined, ym: string, cutoffDay = 0): number => {
+  const direct = Object.values(debt || {}).reduce((sum, schedule) => sum + Object.entries(schedule||{}).reduce((n,[key,cell])=>{
+    const date=(cell as any)?.installmentForecast?.date||(cell as any)?.installmentSync?.date;
+    return n+((date?cycleYm(date,cutoffDay):key)===ym?debtValueTotal(cell):0);
+  },0), 0);
   if (direct) return direct;
   const fy = fyStartOf(ym);
   const annual = Object.values(debt || {}).reduce((sum, schedule) => sum + debtValueTotal(schedule && schedule[`FY:${fy}`]), 0);
@@ -948,7 +981,7 @@ export const plannedDebt = (debt: Record<string, Record<string, unknown>> | null
 };
 
 export const plannedSpending = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): number =>
-  fixedForMonth(subs, ym, cards, cutoffDay) + plannedVariable(plan, ym) + plannedDebt(debt, ym);
+  fixedForMonth(subs, ym, cards, cutoffDay) + plannedVariable(plan, ym) + plannedDebt(debt, ym, cutoffDay);
 // 計画の収支 = 収入 − 支出
 export const plannedNet = (plan: Plan, subs: Sub[] | null | undefined, ym: string, debt?: Record<string, Record<string, unknown>> | null, cards?: Card[] | null, cutoffDay: number = 0): number => plannedIncome(plan, ym) - plannedSpending(plan, subs, ym, debt, cards, cutoffDay);
 

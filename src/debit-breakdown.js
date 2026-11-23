@@ -1,4 +1,4 @@
-import { cardForPurchase, cardPaymentDate, cycleYm, debtValueTotal, plannedFixedItemsForCard } from './utils';
+import { cardForPurchase, cardPaymentDate, cycleYm, debtValueTotal, debtCellForPayment, plannedFixedItemsForCard } from './utils';
 import { purchaseLabel, spendingGroup } from './spending-groups';
 
 // Display only: never turn charge candidates or a reconciliation gap into ledger entries.
@@ -8,7 +8,8 @@ export function debitBreakdown(bill, {cards = [], debt = {}, subs = [], purchase
   const purchaseIds = new Set(purchases.map(row=>row.id));
   const investmentRows = investments.filter(row=>row.kind==='card' && !purchaseIds.has(row.id.replace(/^mf-invest:/,'mf-card:')))
     .map(row=>({...row,description:`${row.broker} カード積立`,spendingCategory:'投資'}));
-  const excluded=debt?.[card?.name]?.[ym]?.installmentSync?.purchaseIds||[];
+  const sourceCell=debtCellForPayment(debt,card?.name,bill.date,cutoff);
+  const excluded=[...(sourceCell?.installmentSync?.purchaseIds||[]),...(sourceCell?.installmentForecast?.purchaseIds||[])];
   const allPurchases = [...purchases,...investmentRows].filter(row=>!excluded.includes(row.id));
   const isSMCC = name => /^(SMCC Gold|smcc)$/i.test(name || '');
   const familyRows = target => allPurchases.filter(row=>row.account==='三井住友カード' && cardPaymentDate(row.date,target)===bill.date);
@@ -28,7 +29,7 @@ export function debitBreakdown(bill, {cards = [], debt = {}, subs = [], purchase
     amount: -row.amount, group: spendingGroup(row)?.[0] || (row.spendingCategory === '投資' ? 'カード積立' : 'チャージ'),
   })).sort((a,b) => Math.abs(b.amount)-Math.abs(a.amount) || a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
   const purchaseTotal = lines.reduce((sum, row) => sum + row.amount, 0);
-  const rawDebt = bill.kind === 'card' ? debt?.[card?.name]?.[ym] : null;
+  const rawDebt = bill.kind === 'card' ? sourceCell : null;
   const debtTotal = debtValueTotal(rawDebt);
   const debtLines = Array.isArray(rawDebt?.items)
     ? rawDebt.items.filter(row => Number(row.amount)).map((row,i) => ({id:row.id || `debt-${i}`, label:row.label?.trim() || '利用先未登録', amount:Number(row.amount)}))

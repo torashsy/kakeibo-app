@@ -14,6 +14,10 @@ import {
 } from "./utils";
 
 describe("migrateCard", () => {
+  it("年会費の空欄を無料と解釈しない",()=>{
+    expect(migrateCard({name:'未確認'}).annualFee).toBeUndefined();
+    expect(migrateCard({name:'無料',annualFee:0}).annualFee).toBe(0);
+  });
   it("締日と引き落とし日を保持する", () => {
     expect(migrateCard({
       id: "card-1", name: "JCB", brand: "JCB", annualFee: "11000",

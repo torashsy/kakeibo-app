@@ -3,6 +3,8 @@ import { MUTED, RED } from '../theme.js';
 import { yen, num, ymLabel, uid, addMonth, debtValueTotal, evalAmount } from '../utils';
 import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
+import {cardInventory} from '../card-inventory';
+import './card-inventory.css';
 
 export function Cards({ cards, debt, ym, entries, onSaveCards, onSaveDebt, onRemoveCard }) {
   const [view, setView] = useState("debt");
@@ -78,8 +80,9 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
       });
       savePeriod = `FY:${fromYear}`;
     }
-    if (!items.length) delete next[edit.name][savePeriod];
-    else next[edit.name][savePeriod] = { items };
+    const previous=next[edit.name][savePeriod];
+    if (!items.length&&!previous?.installmentForecast) delete next[edit.name][savePeriod];
+    else next[edit.name][savePeriod] = { ...(typeof previous==='object'?previous:{}), items };
     onSaveDebt(next); setEdit(null);
   };
   return (
@@ -129,37 +132,44 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   );
 }
 
-export function CardList({ accounts = [], cards, onSaveCards, onRemoveCard }) {
+export function CardList({ accounts = [], cards, transactions={}, onSaveCards, onRemoveCard }) {
   const [edit, setEdit] = useState(null);
+  const inventory=useMemo(()=>cardInventory(cards,transactions),[cards,transactions]);
   const commit = () => {
     if (!edit.name.trim()) return;
     const day = (value) => { const n = Math.round(Number(value) || 0); return n >= 1 && n <= 31 ? n : undefined; };
-    const card = { ...edit, annualFee: Math.round(evalAmount(edit.annualFee) || 0), cutoffDay: day(edit.cutoffDay), paymentDay: day(edit.paymentDay) };
+    const card = { ...edit, annualFee: edit.annualFee==null||edit.annualFee===''?undefined:Math.round(evalAmount(edit.annualFee) || 0), cutoffDay: day(edit.cutoffDay), paymentDay: day(edit.paymentDay) };
     const next = edit.id ? cards.map((c) => (c.id === edit.id ? card : c)) : [...cards, { ...card, id: uid() }];
     onSaveCards(next); setEdit(null);
   };
   const dayText = (value) => Number(value) === 31 ? "末" : Number(value) || "—";
   return (
     <div>
-      <div style={styles.detailHead}><span>所有カード（{cards.length}枚）</span><button style={styles.addBtn} onClick={() => setEdit({ name: "", brand: "", note: "", annualFee: "" })}>＋ 追加</button></div>
+      <div className="card-inventory-overview"><div><span>登録カード</span><strong>{inventory.registered}<small>件</small></strong></div><div><span>年会費 · 登録額</span><strong>{yen(inventory.annualFees)}<small>/年</small></strong></div></div>
+      {inventory.feeMonthsMissing>0&&<p className="card-inventory-hint">年会費の請求月：{inventory.feeMonthsMissing}件未登録</p>}
+      <div style={styles.detailHead}><span>カード一覧</span><button style={styles.addBtn} onClick={() => setEdit({ name: "", brand: "", note: "", annualFee: "" })}>＋ 追加</button></div>
       <div style={styles.detailCard}>
         {cards.map((c) => (
-          <button key={c.id} style={styles.cardListRow} onClick={() => setEdit({ ...c })}>
-            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <button key={c.id} style={{...styles.cardListRow,gap:12}} onClick={() => setEdit({ ...c })}>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start",minWidth:0,overflowWrap:'anywhere' }}>
               <span style={{ fontSize: 14.5, fontWeight: 600 }}>{c.name}</span>
               {c.note && <span style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>{c.note}</span>}
+              <span className="card-inventory-meta">{c.purpose||'用途未登録'} · {c.paymentAccount||'引落口座未登録'}</span>
             </span>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
               <span style={styles.brandTag}>{c.brand || "—"}</span>
               <span style={{ fontSize: 11.5, color: Number(c.annualFee) > 0 ? MUTED : "var(--income)", fontVariantNumeric: "tabular-nums" }}>
-                {Number(c.annualFee) > 0 ? `年会費 ${yen(c.annualFee)}` : "年会費 無料"}
+                {c.annualFee==null?'年会費未登録':`登録 ${yen(c.annualFee)}/年`}
               </span>
+              {c.annualFeeMonth&&<span className="card-inventory-meta">年会費 {c.annualFeeMonth}月</span>}
               {(c.cutoffDay || c.paymentDay) && <span style={{ fontSize: 11, color: MUTED }}>{[c.cutoffDay && `${dayText(c.cutoffDay)}日締`, c.paymentDay && `翌月${dayText(c.paymentDay)}日引落`].filter(Boolean).join("・")}</span>}
             </span>
           </button>
         ))}
         {cards.length === 0 && <div style={{ color: MUTED, fontSize: 13, padding: 6 }}>まだカードがありません</div>}
       </div>
+      {!!inventory.sources.length&&<details className="card-inventory-sources"><summary>明細にあるカード名 <span>{inventory.sources.length}種類 ›</span></summary><p>集約・旧カードを含むため、保有枚数とは別です。</p><ul>{inventory.sources.map(s=><li key={s.name}><span>{s.name}</span><small>最終利用 {s.lastUsed?.replaceAll('-','/')}</small></li>)}</ul></details>}
+      {!!inventory.feeCharges.length&&<details className="card-inventory-sources"><summary>年会費の請求履歴 <span>{inventory.feeCharges.length}件 ›</span></summary><ul>{inventory.feeCharges.map(f=><li key={f.id}><div className="card-fee-line"><span>{f.name}</span><b>{yen(f.amount)}</b></div><small>明細日 {f.date.replaceAll('-','/')}</small></li>)}</ul></details>}
       {edit && (
         <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
           <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
@@ -171,6 +181,9 @@ export function CardList({ accounts = [], cards, onSaveCards, onRemoveCard }) {
             <div style={styles.optionRow}>{["VISA", "Master", "JCB", "AMEX", "Diners"].map((b) => <button key={b} style={{ ...styles.optionChip, ...(edit.brand === b ? styles.optionChipActive : {}) }} onClick={() => setEdit({ ...edit, brand: b })}>{b}</button>)}</div>
             <label style={styles.fieldLabel}>年会費（円・任意）</label>
             <AmountField value={edit.annualFee ?? ""} onChange={(v) => setEdit({ ...edit, annualFee: v })} placeholder="0（無料）" />
+            <label style={styles.fieldLabel}>年会費の請求月<select style={styles.textInput} value={edit.annualFeeMonth||''} onChange={e=>setEdit({...edit,annualFeeMonth:Number(e.target.value)||undefined})}><option value="">未確認</option>{Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{i+1}月</option>)}</select></label>
+            <label style={styles.fieldLabel}>無料・優遇条件</label><input value={edit.feeCondition||''} onChange={e=>setEdit({...edit,feeCondition:e.target.value})} placeholder="確認できた条件だけ記録" style={styles.textInput}/>
+            <label style={styles.fieldLabel}>使い道</label><input value={edit.purpose||''} onChange={e=>setEdit({...edit,purpose:e.target.value})} placeholder="普段使い・積立・旅行など" style={styles.textInput}/>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <label style={styles.fieldLabel}><span>締日</span><input type="number" inputMode="numeric" min="1" max="31" value={edit.cutoffDay ?? ""} onChange={(e) => setEdit({ ...edit, cutoffDay: e.target.value })} placeholder="例 15" style={{ ...styles.textInput, marginTop: 6, textAlign: "right" }} /></label>
               <label style={styles.fieldLabel}><span>引き落とし日</span><input type="number" inputMode="numeric" min="1" max="31" value={edit.paymentDay ?? ""} onChange={(e) => setEdit({ ...edit, paymentDay: e.target.value })} placeholder="例 10" style={{ ...styles.textInput, marginTop: 6, textAlign: "right" }} /></label>
