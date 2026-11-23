@@ -474,7 +474,7 @@ export default function App() {
         {tab === "settings" && <div className="sync-link"><CloudBadge /><button onClick={()=>drill("finance")}>同期状態を見る ›</button></div>}
         {tab === "settings" && <Settings points={points} config={config} onSave={commitConfig} onConvertTransfers={convertTransfers} onRemoveEntries={removeEntriesByIds} onToggleClosedMonth={toggleClosedMonth} onClearEntries={clearAllEntries} entries={entries} cards={cards} debt={debt} memos={memos} subs={subs} contracts={contracts} plans={plans} closedMonths={closedMonths} financeSuppressed={financeSuppressed} theme={theme} onImport={importData} onOpenDesign={() => drill("design")} onOpenCards={() => drill("cards")} onRemoveItem={removeConfigItem} />}
         {tab === "design" && <ThemeEditor theme={theme} onSave={commitTheme} />}
-        {tab === "cards" && <><CardList accounts={config.accounts} cards={cards} transactions={financeCanApply?financeFeed?.bankSnapshot?.transactions:null} onSaveCards={commitCards} onRemoveCard={removeCard} /></>}
+        {tab === "cards" && <><CardList accounts={config.accounts} cards={cards} transactions={financeCanApply?financeFeed?.bankSnapshot?.transactions:null} contractAudit={financeCanApply?financeFeed?.cardInventory:null} onSaveCards={commitCards} onRemoveCard={removeCard} /></>}
       </main>
 
       <nav className="ledger-nav" aria-label="メインメニュー">

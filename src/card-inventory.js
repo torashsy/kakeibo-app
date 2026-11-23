@@ -17,3 +17,25 @@ export function cardInventory(cards=[],transactions={}){
     feeCharges:feeCharges.sort((a,b)=>b.date.localeCompare(a.date)),
   };
 }
+
+// Contract evidence is separate from accounting groups: never create bills or
+// count an aggregate/old alias as another physical card. Closed records stay closed.
+export function auditedCardInventory(audit,transactions={}){
+  const records=new Map();
+  for(const card of Array.isArray(audit?.cards)?audit.cards:[]){
+    if(!card?.id||!card.name)continue;
+    const existing=records.get(card.id);
+    if(!existing||String(card.evidenceDate||'')>String(existing.evidenceDate||''))records.set(card.id,{...card});
+  }
+  const closedStatuses=['closed','ended','replaced'];
+  for(const card of records.values()){
+    if(closedStatuses.includes(card.status))continue;
+    for(const [id,tx] of Object.entries(transactions||{})){
+      if(!String(tx?.id||id).startsWith('mf-card:')||!card.sourceNames?.includes(tx.account)||!tx.date)continue;
+      if(!card.lastActivity||tx.date>card.lastActivity)card.lastActivity=tx.date;
+    }
+    if(card.lastActivity)card.status='activity';
+  }
+  const all=[...records.values()];
+  return {records:all,used:all.filter(c=>c.status==='activity'),pending:all.filter(c=>c.status!=='activity'&&!closedStatuses.includes(c.status)),closed:all.filter(c=>closedStatuses.includes(c.status))};
+}

@@ -12,3 +12,12 @@
 .card-inventory-sources li{padding:12px 0;border-bottom:1px solid var(--hairline);overflow-wrap:anywhere}
 .card-inventory-sources small{display:block;margin-top:4px;color:var(--muted);font-variant-numeric:tabular-nums}
 .card-fee-line{display:flex;justify-content:space-between;gap:16px}.card-fee-line b{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.card-contracts{min-width:0}.card-contracts h3{font-size:14px;font-weight:600;margin:28px 0 6px;color:var(--muted)}
+.card-contracts ul{list-style:none;padding:0;margin:0}.card-contracts .contract-row{padding:16px 0;border-bottom:1px solid var(--hairline)}
+.contract-counts{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:16px 0}.contract-counts span{font-size:12px;color:var(--muted)}.contract-counts strong{display:block;font-size:32px;font-weight:600;font-variant-numeric:tabular-nums}.contract-counts small{font-size:12px;margin-left:5px;color:var(--muted)}
+.contract-title{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start}.contract-title strong{font-size:15px;font-weight:600;overflow-wrap:anywhere}.contract-title>span{font-size:13px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.contract-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums}
+.card-contracts p{font-size:12px;line-height:1.6;margin:8px 0 0;overflow-wrap:anywhere}.contract-service,.contract-evidence{color:var(--muted)}
+.contract-evidence summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;list-style:none}.contract-evidence summary::-webkit-details-marker{display:none}.contract-chevron{display:inline-block;transition:transform .18s ease;margin-right:5px}details[open]>.contract-evidence summary>.contract-chevron,.contract-evidence[open]>summary>.contract-chevron{transform:rotate(90deg)}
+.contract-evidence a{color:var(--accent);text-underline-offset:3px}.contract-issues li{padding:12px 0;border-bottom:1px solid var(--hairline)}.contract-issues strong{font-size:13px;font-weight:600}
+@media(prefers-reduced-motion:reduce){.contract-chevron{transition:none}}

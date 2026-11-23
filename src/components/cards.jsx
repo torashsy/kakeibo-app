@@ -5,6 +5,7 @@ import { styles } from '../styles.js';
 import { AmountField } from './amount.jsx';
 import {cardInventory} from '../card-inventory';
 import './card-inventory.css';
+import {CardContracts} from './card-contracts';
 
 export function Cards({ cards, debt, ym, entries, onSaveCards, onSaveDebt, onRemoveCard }) {
   const [view, setView] = useState("debt");
@@ -132,7 +133,7 @@ export function DebtTable({ cards, debt, ym, onSaveDebt }) {
   );
 }
 
-export function CardList({ accounts = [], cards, transactions={}, onSaveCards, onRemoveCard }) {
+export function CardList({ accounts = [], cards, transactions={}, contractAudit=null, onSaveCards, onRemoveCard }) {
   const [edit, setEdit] = useState(null);
   const inventory=useMemo(()=>cardInventory(cards,transactions),[cards,transactions]);
   const commit = () => {
@@ -145,7 +146,10 @@ export function CardList({ accounts = [], cards, transactions={}, onSaveCards, o
   const dayText = (value) => Number(value) === 31 ? "末" : Number(value) || "—";
   return (
     <div>
-      <div className="card-inventory-overview"><div><span>登録カード</span><strong>{inventory.registered}<small>件</small></strong></div><div><span>年会費 · 登録額</span><strong>{yen(inventory.annualFees)}<small>/年</small></strong></div></div>
+      <CardContracts audit={contractAudit} transactions={transactions}/>
+      <details className="card-inventory-sources" open={!contractAudit?.cards?.length}>
+      <summary><span>› 家計簿の集計・支払設定</span><span>{inventory.registered}件</span></summary>
+      <div className="card-inventory-overview"><div><span>集計用の登録</span><strong>{inventory.registered}<small>件</small></strong></div><div><span>年会費 · 手入力額</span><strong>{yen(inventory.annualFees)}<small>/年</small></strong></div></div>
       {inventory.feeMonthsMissing>0&&<p className="card-inventory-hint">年会費の請求月：{inventory.feeMonthsMissing}件未登録</p>}
       <div style={styles.detailHead}><span>カード一覧</span><button style={styles.addBtn} onClick={() => setEdit({ name: "", brand: "", note: "", annualFee: "" })}>＋ 追加</button></div>
       <div style={styles.detailCard}>
@@ -170,6 +174,7 @@ export function CardList({ accounts = [], cards, transactions={}, onSaveCards, o
       </div>
       {!!inventory.sources.length&&<details className="card-inventory-sources"><summary>明細にあるカード名 <span>{inventory.sources.length}種類 ›</span></summary><p>集約・旧カードを含むため、保有枚数とは別です。</p><ul>{inventory.sources.map(s=><li key={s.name}><span>{s.name}</span><small>最終利用 {s.lastUsed?.replaceAll('-','/')}</small></li>)}</ul></details>}
       {!!inventory.feeCharges.length&&<details className="card-inventory-sources"><summary>年会費の請求履歴 <span>{inventory.feeCharges.length}件 ›</span></summary><ul>{inventory.feeCharges.map(f=><li key={f.id}><div className="card-fee-line"><span>{f.name}</span><b>{yen(f.amount)}</b></div><small>明細日 {f.date.replaceAll('-','/')}</small></li>)}</ul></details>}
+      </details>
       {edit && (
         <div style={styles.sheetBackdrop} onClick={() => setEdit(null)}>
           <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
