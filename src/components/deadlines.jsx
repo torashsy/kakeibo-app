@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {deadlineEvents,daysBetween,localDay,normalizePoints,validDay} from '../deadlines';
+import {deadlineEvents,daysBetween,localDay,normalizePoints,validDay,rakutenExpiry} from '../deadlines';
 import {yen,uid} from '../utils';
 import {EntrySheet} from './entry-sheet';
 import './deadlines.css';
@@ -11,8 +11,9 @@ const relative=days=>days<0?`${-days}日経過`:days===0?'今日':`あと${days}
 export function Deadlines({points=[],subs=[],onSavePoints,onEditSub,mode='all'}) {
   const [edit,setEdit]=useState(null),[range,setRange]=useState('soon'),[showUsed,setShowUsed]=useState(false),[deleteId,setDeleteId]=useState(null);
   const today=localDay(),all=normalizePoints(points).filter(p=>!p.hidden);
-  const events=deadlineEvents(subs,all,today),visible=events.filter(e=>range==='all'||e.days<=30);
-  const balances=all.filter(p=>p.kind!=='benefit'&&(showUsed||p.status!=='used'));
+  const rakuten=rakutenExpiry(mode==='subscriptions'?[]:all,today),rakutenIds=new Set(rakuten.lots.map(p=>p.id));
+  const events=deadlineEvents(subs,all.filter(p=>!rakutenIds.has(p.id)),today),visible=events.filter(e=>range==='all'||e.days<=30);
+  const balances=all.filter(p=>!rakutenIds.has(p.id)&&p.kind!=='benefit'&&(showUsed||p.status!=='used'));
   const benefits=all.filter(p=>p.kind==='benefit'&&(showUsed||p.status!=='used'));
   const undated=subs.filter(s=>!s.hidden&&s.subscriptionSync?.status!=='canceled'&&(!s.endDate||s.endDate>=today)&&![s.renewal,s.trialEndDate,s.cancelBy,s.endDate].some(validDay));
   const save=()=>{
@@ -23,6 +24,21 @@ export function Deadlines({points=[],subs=[],onSavePoints,onEditSub,mode='all'})
   };
   const canSave=edit && edit.name.trim() && /^\d+$/.test(String(edit.amount).trim()) && Number.isSafeInteger(Number(edit.amount)) && (edit.expiryMode!=='date'||validDay(edit.expiresOn));
   return <div className="deadline-manager">
+    {!!rakuten.lots.length&&<section className="deadline-section rakuten-expiry" aria-label="楽天ポイントの期限別残高">
+      <header><h2>楽天ポイント</h2><span>期間限定</span></header>
+      <div className="point-expiry-overview">
+        <div data-urgent={rakuten.thisMonth>0}><span>今月失効</span><strong>{count(rakuten.thisMonth)} <small>pt</small></strong></div>
+        <div><span>期限未確認</span><strong>{count(rakuten.unknown)} <small>pt</small></strong></div>
+      </div>
+      <ul className="deadline-list point-balances rakuten-lots">{rakuten.lots.map(p=>{
+        const days=daysBetween(p.expiresOn,today),dated=!!p.expiresOn;
+        const label=dated?`${p.expiresOn.slice(0,4)}/${Number(p.expiresOn.slice(5,7))}/${Number(p.expiresOn.slice(8))}まで`:p.expiryMode==='none'?'期限なし':'期限未確認';
+        return <li key={p.id}><button aria-label={`楽天ポイント ${label} ${count(p.amount)}ポイントを編集`} onClick={()=>setEdit({...p,amount:String(p.amount)})}>
+          <span className="deadline-name">{dated?<time dateTime={p.expiresOn}>{label}</time>:label}<small data-urgent={dated&&days<=7}>{dated?(days<0?'期限経過・残高更新待ち':relative(days)):'期限未登録'}{p.pointSync?.asOf?` · ${p.pointSync.asOf.replaceAll('-','/')}時点`:''}</small></span>
+          <b className="deadline-value">{count(p.amount)} <small>pt</small><span className="point-edit-chevron" aria-hidden="true">›</span></b>
+        </button></li>;
+      })}</ul>
+    </section>}
     <section className="deadline-section"><header><h2>{mode==='points'?'ポイント・特典の期限':'期限・更新日'}</h2><span>{visible.length}件</span></header>
       <div className="deadline-filter" role="group" aria-label="期限の表示期間">{[['soon','30日以内'],['all','すべて']].map(([id,label])=><button key={id} aria-pressed={range===id} onClick={()=>setRange(id)}>{label}</button>)}</div>
       {visible.length?<ul className="deadline-list">{visible.map(event=><li key={event.id}><button onClick={()=>event.source==='point'?setEdit(all.find(p=>p.id===event.sourceId)):onEditSub(event.sourceId)}>

@@ -27,4 +27,13 @@
 .deadline-editor button {background:none;border:0;color:var(--income);font:inherit;cursor:pointer;min-height:44px;}
 .deadline-editor .deadline-save {background:var(--income);color:var(--paper);border-radius:10px;font-weight:600;}
 .deadline-editor button:disabled {opacity:.4;}
+.point-expiry-overview {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:20px 0 8px;padding-bottom:20px;border-bottom:1px solid var(--hairline);}
+.point-expiry-overview>div {min-width:0;}
+.point-expiry-overview>div>span {display:block;font-size:13px;color:var(--muted);margin-bottom:8px;}
+.point-expiry-overview strong {display:block;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.point-expiry-overview small {font-size:12px;font-weight:400;color:var(--muted);}
+.point-expiry-overview [data-urgent=true] strong,.rakuten-lots small[data-urgent=true] {color:var(--expense);}
+.rakuten-lots .deadline-value {font-size:17px;}
+.rakuten-lots time {font-size:15px;}
+.point-edit-chevron {display:inline-block;width:16px;margin-left:8px;color:var(--muted);font-weight:400;text-align:right;}
 @media(max-width:359px){.deadline-section{padding:16px}.deadline-list button{gap:8px}.deadline-name{font-size:14px}.deadline-value b{font-size:14px}}

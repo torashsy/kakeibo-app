@@ -23,6 +23,15 @@ export function normalizePoints(raw) {
   }));
 }
 
+// Keep expiry lots separate; an absent date is never an unlimited expiry.
+export function rakutenExpiry(points,today=localDay()) {
+  const lots=normalizePoints(points).filter(p=>!p.hidden && p.status!=='used' && p.amount>0 && p.kind!=='benefit' && (!p.unit||p.unit==='pt') && /楽天/.test(p.name) && /期間限定/.test(p.name))
+    .sort((a,b)=>(a.expiresOn||'9999').localeCompare(b.expiresOn||'9999')||a.id.localeCompare(b.id));
+  return {lots,
+    thisMonth:lots.filter(p=>p.expiresOn>=today && p.expiresOn.slice(0,7)===today.slice(0,7)).reduce((n,p)=>n+p.amount,0),
+    unknown:lots.filter(p=>p.expiryMode==='unknown').reduce((n,p)=>n+p.amount,0)};
+}
+
 // Dates describe reminders only; they never create spending or convert points to yen.
 export function deadlineEvents(subs=[],points=[],today=localDay()) {
   const events=[];
