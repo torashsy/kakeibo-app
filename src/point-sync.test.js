@@ -36,3 +36,22 @@ it('ignores future, invalid and evidence-free observations without clearing data
  const saved=[{id:'manual',name:'Other',amount:10}];expect(reconcilePoints(saved,null,today)).toBe(saved);
  const before=JSON.stringify(point);reconcilePoints([],feed([point]),today);expect(JSON.stringify(point)).toBe(before);
 });
+
+it('selects current expiry lots from successful source snapshots without erasing history or user edits',()=>{
+ const previous={...point,sourceKey:'source:example',sourceUpdatedAt:'2026-11-16T07:00:00+09:00'};
+ const initial=reconcilePoints([],feed([previous]),today);
+ const next={...previous,id:'new-lot',asOf:'2026-11-18',sourceUpdatedAt:'2026-11-18T07:00:00+09:00',amount:100,expiresOn:'2027-01-01'};
+ const update={...feed([previous,next]),pointCollection:{sources:{'source:example':{sourceUpdatedAt:next.sourceUpdatedAt,pointIds:[next.id]}}}};
+ const snapshot=JSON.stringify(update);
+ expect(reconcilePoints(initial,update,today).map(r=>r.pointSync.key)).toEqual(['new-lot']);
+ expect(reconcilePoints([],update,today).map(r=>r.pointSync.key)).toEqual(['new-lot']);
+ expect(reconcilePoints([{...initial[0],note:'manual correction'}],update,today)).toHaveLength(2);
+ expect(JSON.stringify(update)).toBe(snapshot);
+ expect(reconcilePoints(initial,{...update,pointCollection:{sources:{}}},today)).toHaveLength(2);
+});
+
+it('does not roll back points to an earlier acquisition within the same day',()=>{
+ const latest={...point,sourceUpdatedAt:'2026-11-16T10:00:00+09:00'};
+ const saved=reconcilePoints([],feed([latest]),today);
+ expect(reconcilePoints(saved,feed([{...latest,sourceUpdatedAt:'2026-11-16T07:00:00+09:00',amount:10}]),today)).toEqual(saved);
+});
