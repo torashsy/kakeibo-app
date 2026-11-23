@@ -216,7 +216,7 @@ export function Settings({ config, onSave, onConvertTransfers, onRemoveEntries, 
       <button style={styles.navRow} onClick={onOpenCards}>
         <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <span style={{ fontSize: 14.5, fontWeight: 600 }}>カード管理</span>
-          <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{(cards || []).length}枚</span>
+          <span style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>登録{(cards || []).length}件</span>
         </span>
         <span style={{ color: MUTED, fontSize: 20 }}>›</span>
       </button>
