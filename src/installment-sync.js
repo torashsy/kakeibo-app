@@ -54,9 +54,23 @@ export function reconcileInstallments(saved={},feed,cards=[],cutoff=0,closed=[],
       return true;
     });
     if(!valid||s.items.reduce((n,i)=>n+i.amount,0)!==s.amount){report('review','分割内訳・合計・元明細の確認が必要');continue;}
-    const old=saved[s.card]?.[ym],oldTotal=debtValueTotal(old),base=old?.installmentSync;
+    let old=saved[s.card]?.[ym];
+    // A phone may never have persisted the derived preview. Rebuild only an
+    // identical, verified preview before promoting it, preserving manual items.
+    if(old!=null&&!old.installmentSync&&debtValueTotal(old)!==s.amount){
+      const sameItems=(items)=>JSON.stringify(items.map(i=>[i.id,i.label,i.purchaseDate,i.amount,i.installmentNumber,i.totalInstallments]).sort((a,b)=>a[0].localeCompare(b[0])));
+      const previews=installmentPreviews(feed?.installmentCollection,cards,saved,cutoff,today)
+        .filter(p=>p.card===s.card&&p.date===s.date&&p.asOf<=s.asOf&&p.amount===s.amount&&sameItems(p.items)===sameItems(s.items));
+      if(previews.length===1){
+        const prior=previews[0],candidate={...saved};
+        supplementPreviews(candidate,{...feed,installmentSchedules:{},installmentCollection:{statements:{[prior.id]:prior}}},cards,cutoff,closed,today,[]);
+        const rebuilt=candidate[s.card]?.[ym];
+        if(rebuilt?.installmentForecast&&debtValueTotal(rebuilt)===s.amount)old=rebuilt;
+      }
+    }
+    const oldTotal=debtValueTotal(old),base=old?.installmentSync;
     if(base?.asOf>s.asOf){report('history','新しい資料を保持');continue;}
-    const unchanged=base&&JSON.stringify(old.items)===JSON.stringify(base.items);
+    const unchanged=base&&!base.manualItemsPreserved&&JSON.stringify(old.items)===JSON.stringify(base.items);
     if(old!=null&&!unchanged&&oldTotal!==s.amount){report('conflict','手入力との差額あり・元の予定を保持');continue;}
     const fiscal=Number(ym.slice(0,4))-(Number(ym.slice(5))<4?1:0);
     if(old==null&&(saved[s.card]?.[`FY:${fiscal}`]!=null||saved[s.card]?.[String(fiscal)]!=null)){
@@ -66,7 +80,7 @@ export function reconcileInstallments(saved={},feed,cards=[],cutoff=0,closed=[],
     // Matched manual cells keep their IDs and notes. Only a source-owned cell updates automatically.
     const value=old!=null&&!unchanged?{...(typeof old==='object'?old:{items:[{id:`manual:${key}`,label:'手入力',amount:oldTotal}]})}:{items};
     delete value.installmentForecast;
-    value.installmentSync={id:s.id,date:s.date,asOf:s.asOf,evidence:s.evidence,purchaseIds,items:value.items.map(i=>({...i})),sourceItems:items.map(i=>({...i}))};
+    value.installmentSync={id:s.id,date:s.date,asOf:s.asOf,evidence:s.evidence,purchaseIds,...(old!=null&&!unchanged?{manualItemsPreserved:true}:{}),items:value.items.map(i=>({...i})),sourceItems:items.map(i=>({...i}))};
     debt[s.card]={...debt[s.card],[ym]:value};
     report(old!=null&&!unchanged?'matched':'synced',old!=null&&!unchanged?'手入力と一致':'確定予定を自動反映');
   }

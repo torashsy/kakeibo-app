@@ -122,3 +122,18 @@ it('transitions a pending forecast to a confirmed schedule without retaining two
  const bills=upcomingDebits([],previewCards,r.debt,[],10,'2026-12','2026-12-11');
  expect(bills).toHaveLength(1);expect(bills[0].amount).toBe(2200);
 });
+it('promotes an identical preview even when the phone has not persisted its derived supplement',()=>{
+ const confirmed={...pending,kind:undefined,confirmed:true,scope:'card-month-installments'};
+ const f={...previewFeed(pending),...feed(confirmed)},before=structuredClone(manual);
+ const r=reconcileInstallments(manual,f,previewCards,10,[],today);
+ const cell=r.debt.Example['2026-12'];
+ expect(debtValueTotal(cell)).toBe(2200);
+ expect(cell.items.slice(0,2)).toEqual(manual.Example['2026-12'].items);
+ expect(cell.installmentForecast).toBeUndefined();expect(cell.installmentSync).toBeDefined();
+ expect(reconcileInstallments(r.debt,f,previewCards,10,[],today).debt).toEqual(r.debt);
+ expect(manual).toEqual(before);
+ const changed={...confirmed,items:confirmed.items.map(i=>i.id==='c'?{...i,label:'別の店'}:i)};
+ expect(reconcileInstallments(manual,{...previewFeed(pending),...feed(changed)},previewCards,10,[],today).debt).toEqual(manual);
+ const edited=supplement().debt;edited.Example['2026-12'].items[2].amount=100;
+ expect(reconcileInstallments(edited,f,previewCards,10,[],today).debt).toEqual(edited);
+});

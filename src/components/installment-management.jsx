@@ -3,7 +3,7 @@ import {yen,debtValueTotal} from '../utils';
 import {installmentPreviews} from '../installment-sync';
 import './deadlines.css';
 export function InstallmentManagement({debt,cards,reviews=[],collection,ym,cutoff=0}) {
-  const previews=installmentPreviews(collection,cards,debt,cutoff).filter(s=>s.manualYm>=ym);
+  const previews=installmentPreviews(collection,cards,debt,cutoff).filter(s=>s.manualYm>=ym&&debt[s.card]?.[s.manualYm]?.installmentSync?.date!==s.date);
   const rows=cards.filter(c=>Object.keys(debt[c.name]||{}).length||reviews.some(r=>r.card===c.name));
   return <section className="deadline-section installment-management" aria-label="分割払いの自動照合">
     <header><h2>分割払いの照合</h2><span>{collection?.checkedAt?`${collection.checkedAt.slice(0,10).replaceAll('-','/')}確認`:'資料待ち'}</span></header>

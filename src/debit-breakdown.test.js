@@ -2,6 +2,29 @@ import {expect,it} from 'vitest';
 import {debitBreakdown} from './debit-breakdown';
 import {upcomingDebits} from './utils';
 
+it('marks only explicitly confirmed issuer bills as confirmed without adding paid entries',()=>{
+  const cards=[{id:'v',name:'VIEW',cutoffDay:5,paymentDay:4}];
+  const source={card:'VIEW',date:'2026-12-04',amount:3000};
+  const check=s=>upcomingDebits([],cards,{},[],10,'2026-11','2026-11-26',30,[s]);
+  expect(check(source)[0].status).toBe('forecast');
+  const confirmed=check({...source,confirmed:true});
+  expect(confirmed).toHaveLength(1);expect(confirmed[0].amount).toBe(3000);expect(confirmed[0].status).toBe('confirmed');
+});
+
+it('uses verified installment detail for matched manual totals but preserves later user edits',()=>{
+  const card={name:'VIEW',cutoffDay:5,paymentDay:4};
+  const bill={kind:'card',label:'VIEW',date:'2026-12-04',amount:3000};
+  const items=[{id:'manual',label:'Registered total',amount:3000}];
+  const cell={items,installmentSync:{date:bill.date,items:structuredClone(items),sourceItems:[{id:'s1',label:'Train',amount:1000},{id:'s2',label:'Restaurant',amount:2000}]}};
+  const context={cards:[card],debt:{VIEW:{'2026-11':cell}},cutoff:10};
+  const before=JSON.stringify(context);
+  expect(debitBreakdown(bill,context).debtLines.map(i=>i.label)).toEqual(['Train','Restaurant']);
+  expect(debitBreakdown(bill,context).difference).toBe(0);
+  expect(JSON.stringify(context)).toBe(before);
+  cell.items[0].label='Edited by user';
+  expect(debitBreakdown(bill,context).debtLines[0].label).toBe('Edited by user');
+});
+
 it('shows an unresolved review only for its exact bill and unchanged candidate amounts',()=>{
   const cards=[{id:'v',name:'VIEW',cutoffDay:5,paymentDay:4}];
   const bill={id:'v',kind:'card',label:'VIEW',date:'2026-12-04',amount:8000,fromFeed:true};

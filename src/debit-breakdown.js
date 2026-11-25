@@ -31,8 +31,13 @@ export function debitBreakdown(bill, {cards = [], debt = {}, subs = [], purchase
   const purchaseTotal = lines.reduce((sum, row) => sum + row.amount, 0);
   const rawDebt = bill.kind === 'card' ? sourceCell : null;
   const debtTotal = debtValueTotal(rawDebt);
-  const debtLines = Array.isArray(rawDebt?.items)
-    ? rawDebt.items.filter(row => Number(row.amount)).map((row,i) => ({id:row.id || `debt-${i}`, label:row.label?.trim() || '利用先未登録', amount:Number(row.amount)}))
+  const sourceItems=rawDebt?.installmentSync?.sourceItems;
+  const verifiedItems=rawDebt?.installmentSync?.date===bill.date&&Array.isArray(sourceItems)&&sourceItems.length&&
+    sourceItems.every(row=>Number.isSafeInteger(row.amount)&&row.amount>=0&&row.label?.trim())&&
+    sourceItems.reduce((sum,row)=>sum+row.amount,0)===debtTotal&&
+    JSON.stringify(rawDebt.items)===JSON.stringify(rawDebt.installmentSync.items)?sourceItems:rawDebt?.items;
+  const debtLines = Array.isArray(verifiedItems)
+    ? verifiedItems.filter(row => Number(row.amount)).map((row,i) => ({id:row.id || `debt-${i}`, label:row.label?.trim() || '利用先未登録', amount:Number(row.amount)}))
     : debtTotal ? [{id:'debt', label:'利用先未登録', amount:debtTotal}] : [];
   // A recurring plan substitutes for absent purchases; it is not added again to actual charges.
   const fixedLines = bill.kind === 'fixed' ? [{id:bill.id, label:bill.label, amount:bill.amount}]
